@@ -1,0 +1,133 @@
+package com.phuzle.labs.messages.ui.thread
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.phuzle.labs.messages.ui.AppViewModel
+import com.phuzle.labs.messages.ui.components.AvatarBubble
+import com.phuzle.labs.messages.ui.components.FlatTextField
+import com.phuzle.labs.messages.ui.components.GlassBar
+import com.phuzle.labs.messages.ui.model.AppUiState
+import com.phuzle.labs.messages.ui.model.MessageUi
+import com.phuzle.labs.messages.ui.theme.MessagesTheme
+import com.phuzle.labs.messages.ui.theme.ShapeMedium
+
+@Composable
+fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
+    val tokens = MessagesTheme.tokens
+    val thread = state.currentThread ?: return
+
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(top = 70.dp, bottom = 84.dp, start = 14.dp, end = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(state.currentThreadMessages, key = { it.id }) { message -> MessageBubble(message) }
+            if (thread.isOtp && thread.latestOtpCode != null) {
+                item {
+                    Text(
+                        if (state.threadOtpCopied) "Copied ✓" else "Copy Code",
+                        color = tokens.accent,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .background(tokens.accentSoft, RoundedCornerShape(9.dp))
+                            .clickable(onClick = viewModel::copyThreadCode)
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+            }
+        }
+
+        GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 56.dp) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(36.dp).clickable(onClick = viewModel::goBack), contentAlignment = Alignment.Center) {
+                    Text("←", color = tokens.textPrimary, fontSize = 20.sp)
+                }
+                Row(
+                    modifier = Modifier.clickable(onClick = viewModel::openThreadInfo).padding(start = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    AvatarBubble(thread.initials, thread.avatarColor, thread.isBusiness, size = 34.dp)
+                    Text(thread.displayName, color = tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+
+        if (thread.isReplyable) {
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(tokens.barBg)) {
+                if (state.settings.showCharCount) {
+                    Text(
+                        "${state.threadInput.length} characters", color = tokens.textTertiary, fontSize = 11.sp,
+                        modifier = Modifier.padding(start = 14.dp, top = 4.dp),
+                    )
+                }
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FlatTextField(
+                        value = state.threadInput,
+                        onValueChange = viewModel::onThreadInputChange,
+                        placeholder = "Message",
+                        filled = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Box(
+                        Modifier.size(38.dp).background(tokens.accent, ShapeMedium).clickable(onClick = viewModel::sendThreadMessage),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("→", color = tokens.accentText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        } else {
+            Box(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(tokens.barBg).padding(14.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("This sender doesn't accept replies", color = tokens.textTertiary, fontSize = 12.5.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MessageBubble(message: MessageUi) {
+    val tokens = MessagesTheme.tokens
+    val bg = if (message.isScheduled) tokens.surfaceAlt else if (message.isMine) tokens.accent else tokens.surfaceAlt
+    val fg = if (message.isScheduled) tokens.textSecondary else if (message.isMine) tokens.accentText else tokens.textPrimary
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (message.isMine) Arrangement.End else Arrangement.Start) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = 280.dp)
+                .background(bg, RoundedCornerShape(16.dp))
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+        ) {
+            Text(message.text, color = fg, fontSize = 14.sp, lineHeight = 19.sp)
+            Text(message.timeLabel, color = fg.copy(alpha = 0.65f), fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+}

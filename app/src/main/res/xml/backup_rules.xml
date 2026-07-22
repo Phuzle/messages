@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <exclude domain="database" path="messages.db" />
+    <exclude domain="database" path="messages.db-wal" />
+    <exclude domain="database" path="messages.db-shm" />
+</full-backup-content>

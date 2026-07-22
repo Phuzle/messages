@@ -1,0 +1,26 @@
+{
+  "otp": {
+    "keywords": [
+      "otp", "one-time password", "one time password", "verification code",
+      "security code", "auth code", "authentication code", "passcode",
+      "2fa code", "login code", "access code", "do not share this code"
+    ],
+    "codePattern": "\\b\\d{4,8}\\b"
+  },
+  "transaction": {
+    "keywords": [
+      "debited", "credited", "spent", "withdrawn", "deposited", "payment of",
+      "balance is", "available balance", "posted to your", "transaction of",
+      "charged", "purchase of", "has been credited", "has been debited",
+      "minimum due", "statement is ready"
+    ],
+    "amountPattern": "[$₹€£]\\s?\\d[\\d,]*(\\.\\d{1,2})?"
+  },
+  "promotion": {
+    "keywords": [
+      "% off", "percent off", "sale", "discount", "offer", "coupon",
+      "unsubscribe", "reply stop", "limited time", "free shipping", "deal",
+      "exclusive", "clearance", "promo code"
+    ]
+  }
+}

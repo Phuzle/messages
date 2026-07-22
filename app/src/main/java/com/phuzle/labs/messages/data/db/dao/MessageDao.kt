@@ -1,0 +1,36 @@
+package com.phuzle.labs.messages.data.db.dao
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.Query
+import androidx.room.Update
+import com.phuzle.labs.messages.data.db.entity.MessageEntity
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface MessageDao {
+    @Insert
+    suspend fun insert(message: MessageEntity): Long
+
+    @Update
+    suspend fun update(message: MessageEntity)
+
+    @Query("SELECT * FROM messages WHERE threadId = :threadId ORDER BY timestamp ASC")
+    fun observeForThread(threadId: String): Flow<List<MessageEntity>>
+
+    @Query("SELECT * FROM messages WHERE sent = 0 AND scheduledFor <= :now")
+    suspend fun dueScheduled(now: Long): List<MessageEntity>
+
+    @Query("UPDATE messages SET sent = 1, timestamp = :sentAt WHERE id = :id")
+    suspend fun markSent(id: Long, sentAt: Long)
+
+    @Query("DELETE FROM messages WHERE timestamp < :cutoff AND threadId IN (SELECT id FROM threads WHERE category = 'Otp')")
+    suspend fun purgeOtpMessagesBefore(cutoff: Long)
+
+    /** Drives the 30-second OTP hot-swap modal on app foreground. */
+    @Query(
+        "SELECT m.* FROM messages m JOIN threads t ON m.threadId = t.id " +
+            "WHERE t.category = 'Otp' AND m.outgoing = 0 ORDER BY m.timestamp DESC LIMIT 1"
+    )
+    suspend fun latestIncomingOtpMessage(): MessageEntity?
+}
