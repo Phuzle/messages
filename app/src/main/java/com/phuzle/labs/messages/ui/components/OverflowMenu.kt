@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapeMedium
 
-data class MenuItem(val label: String, val onClick: () -> Unit)
+data class MenuItem(val label: String, val danger: Boolean = false, val onClick: () -> Unit)
 
 @Composable
 fun OverflowMenu(visible: Boolean, onDismiss: () -> Unit, items: List<MenuItem>, modifier: Modifier = Modifier) {
@@ -39,7 +39,7 @@ fun OverflowMenu(visible: Boolean, onDismiss: () -> Unit, items: List<MenuItem>,
                 if (index > 0) SettingsRowDivider()
                 Text(
                     item.label,
-                    color = tokens.textPrimary,
+                    color = if (item.danger) tokens.danger else tokens.textPrimary,
                     fontSize = 13.5.sp,
                     modifier = Modifier
                         .fillMaxWidth()

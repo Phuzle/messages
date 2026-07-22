@@ -4,11 +4,11 @@ import android.Manifest
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import com.phuzle.labs.messages.core.sms.DefaultSmsAppHelper
 import com.phuzle.labs.messages.ui.AppRoot
@@ -18,7 +18,9 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-class MainActivity : ComponentActivity() {
+/** [FragmentActivity], not plain ComponentActivity, because androidx.biometric's BiometricPrompt
+ * (used to gate Passbook account details behind device auth) requires one. */
+class MainActivity : FragmentActivity() {
 
     private val viewModel: AppViewModel by viewModels { AppViewModelFactory(appContainer) }
 

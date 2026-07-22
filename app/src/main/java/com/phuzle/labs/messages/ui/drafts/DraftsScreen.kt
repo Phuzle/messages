@@ -1,9 +1,7 @@
 package com.phuzle.labs.messages.ui.drafts
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -29,16 +27,15 @@ import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.AppViewModel
 import com.phuzle.labs.messages.ui.components.BackBarScaffold
 import com.phuzle.labs.messages.ui.components.EmptyState
+import com.phuzle.labs.messages.ui.components.ListCountHeader
 import com.phuzle.labs.messages.ui.components.roundClickable
 import com.phuzle.labs.messages.ui.components.topBarContentPadding
 import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.model.DraftUi
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
-import com.phuzle.labs.messages.ui.theme.ShapeMedium
 
 @Composable
 fun DraftsScreen(state: AppUiState, viewModel: AppViewModel) {
-    val tokens = MessagesTheme.tokens
     BackBarScaffold(title = "Drafts", onBack = viewModel::goBack) {
         if (state.drafts.isEmpty()) {
             EmptyState(
@@ -50,25 +47,33 @@ fun DraftsScreen(state: AppUiState, viewModel: AppViewModel) {
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(top = topBarContentPadding(68.dp), bottom = 24.dp),
             ) {
+                item {
+                    ListCountHeader(
+                        count = state.drafts.size,
+                        noun = if (state.drafts.size == 1) "draft" else "drafts",
+                        actionLabel = "Delete all",
+                        actionDanger = true,
+                        onAction = viewModel::deleteAllDrafts,
+                    )
+                }
                 items(state.drafts, key = { it.id }) { draft -> DraftRow(draft, viewModel) }
             }
         }
     }
 }
 
+/** Matches the flat, flush ThreadRow look — no card/border — so every list in the app reads the same. */
 @Composable
 private fun DraftRow(draft: DraftUi, viewModel: AppViewModel) {
     val tokens = MessagesTheme.tokens
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(tokens.surface, ShapeMedium)
-            .border(1.dp, tokens.border, ShapeMedium)
+            .background(tokens.bg)
             .clickable(onClick = { viewModel.openDraft(draft.id) })
-            .padding(14.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -77,8 +82,8 @@ private fun DraftRow(draft: DraftUi, viewModel: AppViewModel) {
                 draft.bodyPreview.ifBlank { "No content" }, color = tokens.textTertiary, fontSize = 12.5.sp,
                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp),
             )
-            Text(draft.timeLabel, color = tokens.textTertiary, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
         }
+        Text(draft.timeLabel, color = tokens.textTertiary, fontSize = 11.5.sp, modifier = Modifier.padding(end = 8.dp))
         Box(
             Modifier.size(32.dp).roundClickable(onClick = { viewModel.deleteDraft(draft.id) }),
             contentAlignment = Alignment.Center,

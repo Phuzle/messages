@@ -41,6 +41,7 @@ data class AppUiState(
     val composeCustomScheduleMillis: Long? = null,
     val composeToSuggestions: List<ContactSuggestionUi> = emptyList(),
     val drafts: List<DraftUi> = emptyList(),
+    val undoMessage: String? = null,
 
     val deletedThreads: List<DeletedThreadUi> = emptyList(),
     val archivedThreads: List<DeletedThreadUi> = emptyList(),

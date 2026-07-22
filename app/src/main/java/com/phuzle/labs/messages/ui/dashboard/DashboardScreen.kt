@@ -128,33 +128,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(state.accounts, key = { it.last4 }) { account ->
-                        AccountCard(account = account, onClick = { viewModel.toggleAccountFilter(account.last4) })
-                    }
-                    item {
-                        Text(
-                            if (state.selectedAccountLast4 != null) "ACTIVITY · •• ${state.selectedAccountLast4}" else "RECENT ACTIVITY",
-                            color = tokens.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                            letterSpacing = 0.4.sp, modifier = Modifier.padding(top = 10.dp),
-                        )
-                    }
-                    item {
-                        Column(Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium)) {
-                            state.transactions.forEach { tx ->
-                                Row(
-                                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                ) {
-                                    Column {
-                                        Text(tx.merchant, color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                        Text("${tx.accountLabel} · ${tx.timeLabel}", color = tokens.textTertiary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
-                                    }
-                                    Text(
-                                        tx.amountLabel, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                                        color = if (tx.isCredit) tokens.accent else tokens.textPrimary,
-                                    )
-                                }
-                            }
-                        }
+                        AccountCard(account = account, onClick = { viewModel.openAccountDetail(account.last4) })
                     }
                 }
             }

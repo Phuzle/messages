@@ -58,4 +58,8 @@ interface ThreadDao {
 
     @Query("DELETE FROM threads WHERE deletedAt IS NOT NULL AND deletedAt < :cutoff")
     suspend fun purgeDeletedBefore(cutoff: Long)
+
+    /** Permanent delete (e.g. "Empty recycle bin") — messages cascade via the foreign key. */
+    @Query("DELETE FROM threads WHERE id = :id")
+    suspend fun deleteById(id: String)
 }

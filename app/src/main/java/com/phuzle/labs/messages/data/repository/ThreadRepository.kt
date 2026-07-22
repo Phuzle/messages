@@ -122,7 +122,26 @@ class ThreadRepository(
         return message.copy(id = id)
     }
 
-    suspend fun deleteMessage(id: Long) = messageDao.deleteById(id)
+    /** Deletes the message and recomputes the thread's cached preview so the inbox never shows a
+     * stale last-message after its own last message is removed. Returns the deleted row so the
+     * caller can offer a real "undo" by re-inserting it with [restoreMessage]. */
+    suspend fun deleteMessage(threadId: String, messageId: Long): MessageEntity? {
+        val deleted = messageDao.findById(messageId)
+        messageDao.deleteById(messageId)
+        refreshLastMessage(threadId)
+        return deleted
+    }
+
+    suspend fun restoreMessage(message: MessageEntity) {
+        messageDao.insert(message)
+        refreshLastMessage(message.threadId)
+    }
+
+    private suspend fun refreshLastMessage(threadId: String) {
+        val latest = messageDao.latestForThread(threadId)
+        threadDao.touchLastMessage(threadId, latest?.body ?: "No messages", latest?.timestamp ?: System.currentTimeMillis())
+    }
+
     suspend fun latestIncomingOtpMessage(): MessageEntity? = messageDao.latestIncomingOtpMessage()
     suspend fun dueScheduledMessages(now: Long) = messageDao.dueScheduled(now)
     suspend fun markMessageSent(messageId: Long, sentAt: Long) = messageDao.markSent(messageId, sentAt)
@@ -135,6 +154,7 @@ class ThreadRepository(
     suspend fun softDelete(id: String, whenMillis: Long) = threadDao.setDeletedAt(id, whenMillis)
     suspend fun restore(id: String) = threadDao.setDeletedAt(id, null)
     suspend fun purgeDeletedBefore(cutoffMillis: Long) = threadDao.purgeDeletedBefore(cutoffMillis)
+    suspend fun hardDelete(id: String) = threadDao.deleteById(id)
     suspend fun purgeOtpMessagesBefore(cutoffMillis: Long) = messageDao.purgeOtpMessagesBefore(cutoffMillis)
 
     suspend fun block(number: String) = blockedNumberDao.block(BlockedNumberEntity(number))

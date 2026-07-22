@@ -39,6 +39,13 @@ interface MessageDao {
     @Query("DELETE FROM messages WHERE id = :id")
     suspend fun deleteById(id: Long)
 
+    @Query("SELECT * FROM messages WHERE id = :id LIMIT 1")
+    suspend fun findById(id: Long): MessageEntity?
+
+    /** Used to recompute a thread's cached preview/time after its last message is deleted. */
+    @Query("SELECT * FROM messages WHERE threadId = :threadId ORDER BY timestamp DESC LIMIT 1")
+    suspend fun latestForThread(threadId: String): MessageEntity?
+
     @Query("DELETE FROM messages WHERE timestamp < :cutoff AND threadId IN (SELECT id FROM threads WHERE category = 'Otp')")
     suspend fun purgeOtpMessagesBefore(cutoff: Long)
 

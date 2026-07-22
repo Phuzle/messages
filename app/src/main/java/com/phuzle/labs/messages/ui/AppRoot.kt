@@ -1,14 +1,17 @@
 package com.phuzle.labs.messages.ui
 
 import android.content.Intent
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.phuzle.labs.messages.ui.archived.ArchivedScreen
 import com.phuzle.labs.messages.ui.compose.ComposeScreen
@@ -20,12 +23,14 @@ import com.phuzle.labs.messages.ui.components.NavDrawer
 import com.phuzle.labs.messages.ui.components.OtpModal
 import com.phuzle.labs.messages.ui.components.OverflowMenu
 import com.phuzle.labs.messages.ui.components.SyncingScreen
+import com.phuzle.labs.messages.ui.components.UndoBar
 import com.phuzle.labs.messages.ui.components.UpdateAvailableDialog
 import android.net.Uri
 import com.phuzle.labs.messages.ui.dashboard.DashboardScreen
 import com.phuzle.labs.messages.ui.drafts.DraftsScreen
 import com.phuzle.labs.messages.ui.model.PushedScreen
 import com.phuzle.labs.messages.ui.model.SettingsSub
+import com.phuzle.labs.messages.ui.passbook.AccountDetailScreen
 import com.phuzle.labs.messages.ui.privatechats.PrivateChatsScreen
 import com.phuzle.labs.messages.ui.recyclebin.RecycleBinScreen
 import com.phuzle.labs.messages.ui.settings.SettingsScreen
@@ -38,11 +43,16 @@ fun AppRoot(viewModel: AppViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
+    LaunchedEffect(Unit) {
+        viewModel.toastEvents.collect { message -> Toast.makeText(context, message, Toast.LENGTH_SHORT).show() }
+    }
+
     MessagesTheme(themeMode = state.themeMode, accentHex = state.settings.accentHex) {
         val tokens = MessagesTheme.tokens
 
-        BackHandler(enabled = state.updateInfo != null || state.actionSheet != null || state.overflowMenuOpen || state.showDrawer || state.pushedScreen != null) {
+        BackHandler(enabled = state.undoMessage != null || state.updateInfo != null || state.actionSheet != null || state.overflowMenuOpen || state.showDrawer || state.pushedScreen != null) {
             when {
+                state.undoMessage != null -> viewModel.dismissUndo()
                 state.updateInfo != null -> viewModel.dismissUpdate()
                 state.actionSheet != null -> viewModel.closeActionSheet()
                 state.overflowMenuOpen -> viewModel.closeOverflowMenu()
@@ -67,6 +77,7 @@ fun AppRoot(viewModel: AppViewModel) {
                 PushedScreen.Archived -> ArchivedScreen(state, viewModel)
                 PushedScreen.PrivateChats -> PrivateChatsScreen(state, viewModel)
                 PushedScreen.Drafts -> DraftsScreen(state, viewModel)
+                PushedScreen.AccountDetail -> AccountDetailScreen(state, viewModel)
             }
 
             NavDrawer(
@@ -104,9 +115,9 @@ fun AppRoot(viewModel: AppViewModel) {
                 visible = state.overflowMenuOpen,
                 onDismiss = viewModel::closeOverflowMenu,
                 items = listOf(
-                    MenuItem("Mark all as read", viewModel::markAllAsRead),
-                    MenuItem("Simulate incoming OTP", viewModel::simulateOtp),
-                    MenuItem("Settings", viewModel::openSettings),
+                    MenuItem("Mark all as read", onClick = viewModel::markAllAsRead),
+                    MenuItem("Simulate incoming OTP", onClick = viewModel::simulateOtp),
+                    MenuItem("Settings", onClick = viewModel::openSettings),
                 ),
             )
 
@@ -131,6 +142,13 @@ fun AppRoot(viewModel: AppViewModel) {
                     viewModel.dismissUpdate()
                 },
                 onDismiss = viewModel::dismissUpdate,
+            )
+
+            UndoBar(
+                message = state.undoMessage,
+                onUndo = viewModel::confirmUndo,
+                onDismiss = viewModel::dismissUndo,
+                modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
     }

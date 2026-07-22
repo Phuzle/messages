@@ -6,7 +6,7 @@ import com.phuzle.labs.messages.domain.model.Category
 
 enum class DashboardTab { Messages, Passbook, Reminders }
 
-enum class PushedScreen { Thread, ThreadInfo, Compose, Settings, RecycleBin, Archived, PrivateChats, Drafts }
+enum class PushedScreen { Thread, ThreadInfo, Compose, Settings, RecycleBin, Archived, PrivateChats, Drafts, AccountDetail }
 
 enum class SettingsSub(val title: String) {
     Notifications("Notifications"),

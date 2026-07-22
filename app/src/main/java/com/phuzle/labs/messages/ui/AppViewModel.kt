@@ -42,9 +42,12 @@ import com.phuzle.labs.messages.BuildConfig
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.Dispatchers
@@ -109,11 +112,45 @@ private const val MESSAGE_PAGE_SIZE = 40
 private const val OLDER_MESSAGE_PAGE_SIZE = 30
 /** Once loaded-older messages fall this far behind the visible/live area, drop them to bound memory. */
 private const val TRIM_OLDER_MESSAGES_SLACK = 15
+/** How long a destructive action or an outgoing send stays undoable before it's committed for real. */
+private const val UNDO_WINDOW_MS = 6000L
+
+private data class PendingUndo(val message: String, val undo: suspend () -> Unit)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     private val ephemeral = MutableStateFlow(Ephemeral())
+
+    private val undoState = MutableStateFlow<PendingUndo?>(null)
+    private var undoToken = 0
+
+    private val _toastEvents = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val toastEvents: SharedFlow<String> = _toastEvents.asSharedFlow()
+
+    private fun toast(message: String) {
+        _toastEvents.tryEmit(message)
+    }
+
+    /** Schedules [action] as reversible for [UNDO_WINDOW_MS]; a newer call supersedes any pending one. */
+    private fun offerUndo(message: String, action: suspend () -> Unit) {
+        val token = ++undoToken
+        undoState.value = PendingUndo(message, action)
+        viewModelScope.launch {
+            delay(UNDO_WINDOW_MS)
+            if (undoToken == token) undoState.value = null
+        }
+    }
+
+    fun confirmUndo() = viewModelScope.launch {
+        val pending = undoState.value ?: return@launch
+        undoState.value = null
+        pending.undo()
+    }
+
+    fun dismissUndo() {
+        undoState.value = null
+    }
 
     private val threadsSnapshot: Flow<ThreadsSnapshot> = combine(
         container.threadRepository.observeInbox(),
@@ -163,6 +200,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 )
             })
         }
+        .combine(undoState) { state, undo -> state.copy(undoMessage = undo?.message) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppUiState())
 
     init {
@@ -346,9 +384,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun openPassbookTab() = ephemeral.update { it.copy(activeTab = DashboardTab.Passbook, pushedScreen = null, showDrawer = false) }
     fun openRemindersTab() = ephemeral.update { it.copy(activeTab = DashboardTab.Reminders, pushedScreen = null, showDrawer = false) }
 
-    /** Tapping an account card filters "recent activity" to that group; tapping it again clears the filter. */
-    fun toggleAccountFilter(last4: String) = ephemeral.update {
-        it.copy(selectedAccountLast4 = if (it.selectedAccountLast4 == last4) null else last4)
+    /** Opens the account's own detail page (recent activity lives there now, not inline on the Passbook tab). */
+    fun openAccountDetail(last4: String) = ephemeral.update {
+        it.copy(selectedAccountLast4 = last4, pushedScreen = PushedScreen.AccountDetail)
     }
 
     fun openSettings() = ephemeral.update { it.copy(pushedScreen = PushedScreen.Settings, settingsSub = null, overflowMenuOpen = false, showDrawer = false) }
@@ -374,19 +412,25 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             eph.composeDraftId?.let { container.draftRepository.delete(it) }
             return
         }
-        container.draftRepository.save(eph.composeDraftId, eph.composeTo.trim(), body)
+        // Recipients live as chips (composeRecipients), not the "To" text buffer — persist both
+        // so a draft with an already-added recipient doesn't come back showing "No recipient".
+        val typed = eph.composeTo.trim()
+        val to = (eph.composeRecipients.map { it.number } + listOfNotNull(typed.takeIf { it.isNotEmpty() })).joinToString(",")
+        container.draftRepository.save(eph.composeDraftId, to, body)
+        toast("Saved to drafts")
     }
 
     fun openDraftsScreen() = ephemeral.update { it.copy(pushedScreen = PushedScreen.Drafts, showDrawer = false, overflowMenuOpen = false) }
 
     fun openDraft(id: String) = viewModelScope.launch {
         val draft = container.draftRepository.findById(id) ?: return@launch
+        val recipients = draft.to.split(",").map { it.trim() }.filter { it.isNotEmpty() }.map { ContactSuggestionUi(it, it) }
         ephemeral.update {
             it.copy(
                 pushedScreen = PushedScreen.Compose,
-                composeTo = draft.to,
+                composeTo = "",
                 composeBody = draft.body,
-                composeRecipients = emptyList(),
+                composeRecipients = recipients,
                 composeDraftId = draft.id,
                 composeCustomScheduleMillis = null,
                 composeToSuggestions = emptyList(),
@@ -394,7 +438,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun deleteDraft(id: String) = viewModelScope.launch { container.draftRepository.delete(id) }
+    fun deleteDraft(id: String) = viewModelScope.launch {
+        val draft = container.draftRepository.findById(id) ?: return@launch
+        container.draftRepository.delete(id)
+        offerUndo("Draft deleted") { container.draftRepository.save(draft.id, draft.to, draft.body) }
+    }
 
     fun openRecycleBin() = ephemeral.update { it.copy(pushedScreen = PushedScreen.RecycleBin, showDrawer = false, overflowMenuOpen = false) }
     fun openArchivedScreen() = ephemeral.update { it.copy(pushedScreen = PushedScreen.Archived, showDrawer = false, overflowMenuOpen = false) }
@@ -486,6 +534,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         val id = ephemeral.value.actionSheetThreadId ?: return@launch
         container.threadRepository.archive(id)
         closeActionSheet()
+        offerUndo("Archived") { container.threadRepository.unarchive(id) }
     }
 
     fun sheetTogglePrivate() = viewModelScope.launch {
@@ -499,10 +548,42 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         val id = ephemeral.value.actionSheetThreadId ?: return@launch
         container.threadRepository.softDelete(id, System.currentTimeMillis())
         closeActionSheet()
+        offerUndo("Chat deleted") { container.threadRepository.restore(id) }
     }
 
-    fun restoreThread(id: String) = viewModelScope.launch { container.threadRepository.restore(id) }
-    fun unarchiveThread(id: String) = viewModelScope.launch { container.threadRepository.unarchive(id) }
+    fun restoreThread(id: String) = viewModelScope.launch { container.threadRepository.restore(id); toast("Restored") }
+    fun unarchiveThread(id: String) = viewModelScope.launch { container.threadRepository.unarchive(id); toast("Unarchived") }
+
+    fun unarchiveAll() = viewModelScope.launch {
+        val ids = uiState.value.archivedThreads.map { it.id }
+        if (ids.isEmpty()) return@launch
+        ids.forEach { container.threadRepository.unarchive(it) }
+        offerUndo("${ids.size} ${if (ids.size == 1) "chat" else "chats"} unarchived") { ids.forEach { container.threadRepository.archive(it) } }
+    }
+
+    fun restoreAllDeleted() = viewModelScope.launch {
+        val ids = uiState.value.deletedThreads.map { it.id }
+        if (ids.isEmpty()) return@launch
+        ids.forEach { container.threadRepository.restore(it) }
+        toast("${ids.size} ${if (ids.size == 1) "chat" else "chats"} restored")
+    }
+
+    /** Permanent — not reversible via undo, so callers should confirm with the user first. */
+    fun emptyRecycleBin() = viewModelScope.launch {
+        val ids = uiState.value.deletedThreads.map { it.id }
+        if (ids.isEmpty()) return@launch
+        ids.forEach { container.threadRepository.hardDelete(it) }
+        toast("Recycle bin emptied")
+    }
+
+    fun deleteAllDrafts() = viewModelScope.launch {
+        val drafts = container.draftRepository.observeAll().first()
+        if (drafts.isEmpty()) return@launch
+        drafts.forEach { container.draftRepository.delete(it.id) }
+        offerUndo("${drafts.size} ${if (drafts.size == 1) "draft" else "drafts"} deleted") {
+            drafts.forEach { container.draftRepository.save(it.id, it.to, it.body) }
+        }
+    }
 
     // endregion
 
@@ -566,15 +647,15 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         val scheduleLabel = scheduledFor?.let { formatScheduleTime(it) }
         val now = System.currentTimeMillis()
 
+        data class Sent(val threadId: String, val messageId: Long, val number: String)
+        val sent = mutableListOf<Sent>()
         var lastThreadId: String? = null
         for (recipient in recipients) {
-            val (thread, _) = container.threadRepository.composeOutgoingThread(
+            val (thread, message) = container.threadRepository.composeOutgoingThread(
                 to = recipient.number, body = body, scheduledFor = scheduledFor, scheduleLabel = scheduleLabel, nowMillis = now,
                 displayName = recipient.name, photoUri = recipient.photoUri,
             )
-            if (scheduledFor == null) {
-                runCatching { container.smsSender.send(recipient.number, body) }
-            }
+            sent += Sent(thread.id, message.id, recipient.number)
             lastThreadId = thread.id
         }
         eph.composeDraftId?.let { container.draftRepository.delete(it) }
@@ -590,6 +671,21 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 olderMessages = emptyList(), hasMoreOlderMessages = true, isLoadingOlderMessages = false,
             )
         }
+
+        if (scheduledFor == null) {
+            // Held back for UNDO_WINDOW_MS so "undo send" actually prevents the SMS from going out,
+            // not just the local row — undo cancels this job before it ever calls SmsSender.
+            val sendJob = viewModelScope.launch {
+                delay(UNDO_WINDOW_MS)
+                sent.forEach { runCatching { container.smsSender.send(it.number, body) } }
+            }
+            offerUndo(if (sent.size == 1) "Message sent" else "${sent.size} messages sent") {
+                sendJob.cancel()
+                sent.forEach { container.threadRepository.deleteMessage(it.threadId, it.messageId) }
+            }
+        } else {
+            toast("Scheduled for $scheduleLabel")
+        }
     }
 
     fun onThreadInputChange(value: String) = ephemeral.update { it.copy(threadInput = value) }
@@ -603,9 +699,17 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         if (signature.isNotEmpty()) text = "$text\n$signature"
 
         val thread = container.threadRepository.getThread(threadId) ?: return@launch
-        container.threadRepository.appendOutgoingMessage(threadId, text, null, null, System.currentTimeMillis())
-        runCatching { container.smsSender.send(thread.sender, text) }
+        val message = container.threadRepository.appendOutgoingMessage(threadId, text, null, null, System.currentTimeMillis())
         ephemeral.update { it.copy(threadInput = "") }
+
+        val sendJob = viewModelScope.launch {
+            delay(UNDO_WINDOW_MS)
+            runCatching { container.smsSender.send(thread.sender, text) }
+        }
+        offerUndo("Message sent") {
+            sendJob.cancel()
+            container.threadRepository.deleteMessage(threadId, message.id)
+        }
     }
 
     fun copyThreadCode() = viewModelScope.launch {
@@ -635,6 +739,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         container.threadRepository.archive(id)
         closeThreadOverflowMenu()
         goBack()
+        offerUndo("Archived") { container.threadRepository.unarchive(id) }
     }
 
     fun deleteCurrentThread() = viewModelScope.launch {
@@ -642,6 +747,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         container.threadRepository.softDelete(id, System.currentTimeMillis())
         closeThreadOverflowMenu()
         goBack()
+        offerUndo("Chat deleted") { container.threadRepository.restore(id) }
     }
 
     // endregion
@@ -653,8 +759,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     fun deleteSelectedMessage() = viewModelScope.launch {
         val target = ephemeral.value.messageActionTarget ?: return@launch
-        container.threadRepository.deleteMessage(target.id)
+        val threadId = ephemeral.value.activeThreadId ?: return@launch
         closeMessageActions()
+        val deleted = container.threadRepository.deleteMessage(threadId, target.id)
+        offerUndo("Message deleted") { deleted?.let { container.threadRepository.restoreMessage(it) } }
     }
 
     /** No threaded-quote UI exists in this design, so "reply" prefills the input with a quoted snippet. */

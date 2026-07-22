@@ -95,6 +95,12 @@
             android:name=".core.notifications.ReplyReceiver"
             android:exported="false" />
 
+        <!-- adb-only testing hook (simulate_messages.sh) for injecting a genuine outgoing message
+             through the real repository; not exported, and no-ops outside debug builds. -->
+        <receiver
+            android:name=".core.debug.DebugSimulationReceiver"
+            android:exported="false" />
+
         <!-- Receives server-pushed alerts (app update available, maintenance notices) via FCM -->
         <service
             android:name=".core.push.MessagesFcmService"

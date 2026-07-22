@@ -130,8 +130,8 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
             items = listOf(
                 MenuItem("View contact info") { viewModel.closeThreadOverflowMenu(); viewModel.openThreadInfo() },
                 MenuItem(if (thread.isBlocked) "Unblock" else "Block") { viewModel.closeThreadOverflowMenu(); viewModel.toggleBlockCurrent() },
-                MenuItem("Archive", viewModel::archiveCurrentThread),
-                MenuItem("Delete conversation", viewModel::deleteCurrentThread),
+                MenuItem("Archive", onClick = viewModel::archiveCurrentThread),
+                MenuItem("Delete conversation", danger = true, onClick = viewModel::deleteCurrentThread),
             ),
         )
 
