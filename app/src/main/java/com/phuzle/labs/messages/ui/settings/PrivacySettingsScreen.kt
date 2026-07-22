@@ -68,7 +68,10 @@ fun PrivacySettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("View private chats", color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                Text("${state.privateThreads.size} ›", color = tokens.textTertiary, fontSize = 13.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("${state.privateThreads.size}", color = tokens.textTertiary, fontSize = 13.sp)
+                    com.phuzle.labs.messages.ui.components.ChevronIcon()
+                }
             }
         }
 

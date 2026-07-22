@@ -12,6 +12,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -87,7 +91,10 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text("New message", color = tokens.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                Text("×", color = tokens.textPrimary, fontSize = 22.sp, modifier = Modifier.clickable(onClick = viewModel::closeCompose))
+                Icon(
+                    Icons.Filled.Close, contentDescription = "Close", tint = tokens.textPrimary,
+                    modifier = Modifier.size(22.dp).clickable(onClick = viewModel::closeCompose),
+                )
             }
         }
     }

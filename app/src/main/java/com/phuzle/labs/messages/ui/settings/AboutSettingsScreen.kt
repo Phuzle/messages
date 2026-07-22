@@ -82,7 +82,7 @@ fun AboutSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                         Text("Email support", color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         Text(SUPPORT_EMAIL, color = tokens.textTertiary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
                     }
-                    Text("›", color = tokens.textTertiary, fontSize = 18.sp)
+                    com.phuzle.labs.messages.ui.components.ChevronIcon()
                 }
                 SettingsRowDivider()
                 Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {

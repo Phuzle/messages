@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
 import com.phuzle.labs.messages.appContainer
+import com.phuzle.labs.messages.domain.categorization.TransactionExtractor
 import com.phuzle.labs.messages.domain.model.Category
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +43,18 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                     body = body,
                     timestampMillis = timestamp,
                 )
+
+                if (category == Category.Transactions) {
+                    TransactionExtractor.extract(body, container.regexRules.amountPattern, fallbackMerchant = displayName)?.let { tx ->
+                        container.passbookRepository.recordTransaction(
+                            merchant = tx.merchant,
+                            accountLast4 = tx.accountLast4,
+                            amountCents = tx.amountCents,
+                            isCredit = tx.isCredit,
+                            timestampMillis = timestamp,
+                        )
+                    }
+                }
 
                 if (!container.threadRepository.isBlocked(sender)) {
                     val otpCode = if (category == Category.Otp) container.regexRules.extractCode(body) else null

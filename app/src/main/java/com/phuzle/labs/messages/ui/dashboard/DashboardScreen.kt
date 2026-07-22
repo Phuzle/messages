@@ -9,27 +9,38 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.outlined.Chat as ChatOutlined
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.AccountBalanceWallet as AccountBalanceWalletOutlined
+import androidx.compose.material.icons.outlined.Notifications as NotificationsOutlined
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,12 +49,12 @@ import com.phuzle.labs.messages.ui.components.BarInset
 import com.phuzle.labs.messages.ui.components.CategoryChip
 import com.phuzle.labs.messages.ui.components.FlatTextField
 import com.phuzle.labs.messages.ui.components.GlassBar
-import com.phuzle.labs.messages.ui.components.HamburgerIcon
-import com.phuzle.labs.messages.ui.components.SearchGlyph
 import com.phuzle.labs.messages.ui.components.ThreadRow
 import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.model.DashboardTab
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
+
+private const val BOTTOM_BAR_HEIGHT = 60
 
 @Composable
 fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
@@ -52,7 +63,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
     val statusBarInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val topContentPadding = (if (isMessages) 104.dp else 68.dp) + statusBarInset
-    val bottomContentPadding = 90.dp + navBarInset
+    val bottomContentPadding = (BOTTOM_BAR_HEIGHT + 26).dp + navBarInset
 
     Box(Modifier.fillMaxSize()) {
         when (state.activeTab) {
@@ -140,7 +151,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                     Box(
                         Modifier.size(40.dp).clickable(onClick = viewModel::toggleDrawer),
                         contentAlignment = Alignment.Center,
-                    ) { HamburgerIcon(tokens.textPrimary) }
+                    ) { Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = tokens.textPrimary, modifier = Modifier.size(22.dp)) }
 
                     when (state.activeTab) {
                         DashboardTab.Messages -> Row(
@@ -152,7 +163,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            SearchGlyph(tokens.textTertiary)
+                            Icon(Icons.Filled.Search, contentDescription = null, tint = tokens.textTertiary, modifier = Modifier.size(16.dp))
                             FlatTextField(
                                 value = state.searchQuery,
                                 onValueChange = viewModel::onSearchChange,
@@ -167,7 +178,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                     Box(
                         Modifier.size(40.dp).clickable(onClick = viewModel::toggleOverflowMenu),
                         contentAlignment = Alignment.Center,
-                    ) { Text("⋮", color = tokens.textPrimary, fontSize = 18.sp) }
+                    ) { Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = tokens.textPrimary, modifier = Modifier.size(22.dp)) }
                 }
             }
             if (isMessages) {
@@ -187,36 +198,40 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
             }
         }
 
-        GlassBar(modifier = Modifier.align(Alignment.BottomCenter), height = 64.dp, hairlineAtBottom = false, inset = BarInset.Bottom) {
-            Row(Modifier.fillMaxSize()) {
+        GlassBar(
+            modifier = Modifier.align(Alignment.BottomCenter),
+            height = BOTTOM_BAR_HEIGHT.dp,
+            hairlineAtBottom = false,
+            inset = BarInset.Bottom,
+        ) {
+            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                 BottomTabButton(
                     label = "Messages",
+                    icon = Icons.AutoMirrored.Filled.Chat,
+                    iconOutlined = Icons.AutoMirrored.Outlined.ChatOutlined,
                     active = isMessages,
                     hasUnreadDot = state.hasUnread,
                     onClick = viewModel::openMessagesTab,
                     modifier = Modifier.weight(1f),
-                ) { color -> Box(Modifier.width(20.dp).height(16.dp).background(color, RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp, bottomEnd = 5.dp, bottomStart = 0.dp))) }
+                )
                 BottomTabButton(
                     label = "Passbook",
+                    icon = Icons.Filled.AccountBalanceWallet,
+                    iconOutlined = Icons.Outlined.AccountBalanceWalletOutlined,
                     active = state.activeTab == DashboardTab.Passbook,
                     hasUnreadDot = false,
                     onClick = viewModel::openPassbookTab,
                     modifier = Modifier.weight(1f),
-                ) { color -> Box(Modifier.width(20.dp).height(15.dp).border(2.dp, color, RoundedCornerShape(3.dp))) }
+                )
                 BottomTabButton(
                     label = "Reminders",
+                    icon = Icons.Filled.Notifications,
+                    iconOutlined = Icons.Outlined.NotificationsOutlined,
                     active = state.activeTab == DashboardTab.Reminders,
                     hasUnreadDot = false,
                     onClick = viewModel::openRemindersTab,
                     modifier = Modifier.weight(1f),
-                ) { color ->
-                    Box(
-                        Modifier.size(16.dp).rotate(45f).background(
-                            color,
-                            RoundedCornerShape(topStartPercent = 50, topEndPercent = 50, bottomEndPercent = 50, bottomStartPercent = 0),
-                        ),
-                    )
-                }
+                )
             }
         }
 
@@ -224,13 +239,13 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 80.dp + navBarInset)
+                    .padding(end = 16.dp, bottom = (BOTTOM_BAR_HEIGHT + 16).dp + navBarInset)
                     .size(52.dp)
                     .background(tokens.accent, RoundedCornerShape(16.dp))
                     .clickable(onClick = viewModel::openCompose),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("+", color = tokens.accentText, fontSize = 26.sp, fontWeight = FontWeight.Light)
+                Icon(Icons.Filled.Add, contentDescription = "Compose", tint = tokens.accentText, modifier = Modifier.size(26.dp))
             }
         }
     }
@@ -239,27 +254,30 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
 @Composable
 private fun BottomTabButton(
     label: String,
+    icon: ImageVector,
+    iconOutlined: ImageVector,
     active: Boolean,
     hasUnreadDot: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    icon: @Composable (Color) -> Unit,
 ) {
     val tokens = MessagesTheme.tokens
     val color = if (active) tokens.accent else tokens.textTertiary
-    Box(modifier.clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            icon(color)
+    Box(modifier.fillMaxSize().clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Box {
+                Icon(if (active) icon else iconOutlined, contentDescription = label, tint = color, modifier = Modifier.size(23.dp))
+                if (hasUnreadDot) {
+                    Box(
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = 2.dp, y = (-2).dp)
+                            .size(7.dp)
+                            .background(tokens.danger, CircleShape),
+                    )
+                }
+            }
             Text(label, color = color, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold)
-        }
-        if (hasUnreadDot) {
-            Box(
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(start = 20.dp)
-                    .size(8.dp)
-                    .background(tokens.danger, CircleShape),
-            )
         }
     }
 }

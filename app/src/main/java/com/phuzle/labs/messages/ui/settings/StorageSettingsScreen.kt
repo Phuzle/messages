@@ -67,6 +67,9 @@ private fun CountNavRow(title: String, count: Int, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(title, color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        Text("$count ›", color = tokens.textTertiary, fontSize = 13.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("$count", color = tokens.textTertiary, fontSize = 13.sp)
+            com.phuzle.labs.messages.ui.components.ChevronIcon()
+        }
     }
 }

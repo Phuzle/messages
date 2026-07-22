@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,13 +25,13 @@ data class MenuItem(val label: String, val onClick: () -> Unit)
 fun OverflowMenu(visible: Boolean, onDismiss: () -> Unit, items: List<MenuItem>, modifier: Modifier = Modifier) {
     if (!visible) return
     val tokens = MessagesTheme.tokens
-    Box(modifier.fillMaxSize()) {
+    Box(modifier.fillMaxSize().statusBarsPadding()) {
         Box(Modifier.fillMaxSize().clickable(onClick = onDismiss))
         Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 54.dp, end = 10.dp)
-                .widthIn(min = 200.dp)
+                .padding(top = 56.dp, end = 10.dp)
+                .widthIn(min = 180.dp, max = 240.dp)
                 .background(tokens.surface, ShapeMedium)
                 .border(1.dp, tokens.border, ShapeMedium),
         ) {

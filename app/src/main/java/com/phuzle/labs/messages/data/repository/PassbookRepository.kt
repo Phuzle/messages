@@ -8,15 +8,33 @@ import kotlinx.coroutines.flow.Flow
 import java.util.concurrent.TimeUnit
 
 /**
- * There is no real bank-SMS-to-ledger pipeline in this pass (see PRD Passbook section), so the
- * account/transaction/reminder tables are seeded once with the same sample data the prototype
- * ships with, and read from Room from then on like any other real table.
+ * Bank accounts and reminders still have no real source (deriving a running balance or a due-date
+ * reminder from unstructured SMS text reliably needs the Layer 2/3 AI this pass doesn't implement),
+ * so those two tables stay seeded once with the prototype's sample data. The transaction feed is
+ * real, though: [recordTransaction] is called from [com.phuzle.labs.messages.core.sms.SmsDeliverReceiver]
+ * for every message classified as Transactions, using [com.phuzle.labs.messages.domain.categorization.TransactionExtractor]'s
+ * regex-based amount/merchant/last-4 extraction.
  */
 class PassbookRepository(private val dao: PassbookDao) {
 
     fun observeAccounts(): Flow<List<BankAccountEntity>> = dao.observeAccounts()
     fun observeTransactions(): Flow<List<TransactionEntity>> = dao.observeTransactions()
     fun observeReminders(): Flow<List<ReminderEntity>> = dao.observeReminders()
+
+    suspend fun recordTransaction(merchant: String, accountLast4: String, amountCents: Long, isCredit: Boolean, timestampMillis: Long) {
+        dao.insertTransactions(
+            listOf(
+                TransactionEntity(
+                    id = "tx-" + java.util.UUID.randomUUID(),
+                    merchant = merchant,
+                    accountLast4 = accountLast4,
+                    amountCents = amountCents,
+                    time = timestampMillis,
+                    isCredit = isCredit,
+                ),
+            ),
+        )
+    }
 
     suspend fun seedIfEmpty() {
         if (dao.accountCount() > 0) return

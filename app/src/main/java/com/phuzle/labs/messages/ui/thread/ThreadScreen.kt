@@ -16,6 +16,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -65,7 +69,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
         GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 56.dp, inset = BarInset.Top) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(36.dp).clickable(onClick = viewModel::goBack), contentAlignment = Alignment.Center) {
-                    Text("←", color = tokens.textPrimary, fontSize = 20.sp)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
                 }
                 Row(
                     modifier = Modifier.clickable(onClick = viewModel::openThreadInfo).padding(start = 2.dp),
@@ -102,7 +106,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                         Modifier.size(38.dp).background(tokens.accent, ShapeMedium).clickable(onClick = viewModel::sendThreadMessage),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("→", color = tokens.accentText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = tokens.accentText, modifier = Modifier.size(18.dp))
                     }
                 }
             }

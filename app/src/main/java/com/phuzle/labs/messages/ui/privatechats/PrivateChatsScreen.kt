@@ -9,13 +9,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -64,8 +65,11 @@ fun PrivateChatsScreen(state: AppUiState, viewModel: AppViewModel) {
             Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Box(
-                        Modifier.width(34.dp).height(22.dp).background(tokens.surfaceAlt, RoundedCornerShape(5.dp)).border(1.dp, tokens.border, RoundedCornerShape(5.dp)),
-                    )
+                        Modifier.size(48.dp).background(tokens.surfaceAlt, RoundedCornerShape(14.dp)).border(1.dp, tokens.border, RoundedCornerShape(14.dp)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Filled.Lock, contentDescription = null, tint = tokens.textSecondary, modifier = Modifier.size(22.dp))
+                    }
                     Text("Private chats are locked", color = tokens.textSecondary, fontSize = 14.sp)
                     Text(
                         "Unlock with ${appLockMethodLabel(state.settings.appLockMethod)}",

@@ -10,6 +10,10 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -19,6 +23,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapeMedium
+
+/** The chevron used on every navigable settings/list row. */
+@Composable
+fun ChevronIcon(modifier: Modifier = Modifier) {
+    Icon(
+        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+        contentDescription = null,
+        tint = MessagesTheme.tokens.textTertiary,
+        modifier = modifier.size(20.dp),
+    )
+}
 
 /** A bordered flat card wrapping a column of rows — the design's zero-elevation settings groups. */
 @Composable
@@ -99,6 +114,6 @@ fun SettingsNavRow(
             Text(title, color = MessagesTheme.tokens.textPrimary, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold)
             Text(hint, color = MessagesTheme.tokens.textTertiary, fontSize = 12.sp)
         }
-        Text("›", color = MessagesTheme.tokens.textTertiary, fontSize = 18.sp)
+        ChevronIcon()
     }
 }
