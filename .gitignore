@@ -11,3 +11,6 @@
 /app/build
 /app/schemas
 .idea/
+
+# Firebase config — project-specific, regenerate per environment from the Firebase console
+/app/google-services.json

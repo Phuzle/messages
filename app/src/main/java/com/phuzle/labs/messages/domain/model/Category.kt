@@ -27,4 +27,5 @@ object NotificationChannelIds {
     const val OTP = "ch_otp"
     const val TRANSACTIONS = "ch_transact"
     const val PROMOTIONS = "ch_promo"
+    const val SYSTEM = "ch_system"
 }

@@ -35,7 +35,9 @@ import com.phuzle.labs.messages.ui.model.ReminderUi
 import com.phuzle.labs.messages.ui.model.ScheduleOptionUi
 import com.phuzle.labs.messages.ui.model.SettingsSub
 import com.phuzle.labs.messages.ui.model.TransactionUi
+import com.phuzle.labs.messages.ui.model.UpdateInfoUi
 import com.phuzle.labs.messages.ui.theme.ThemeMode
+import com.phuzle.labs.messages.BuildConfig
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -70,6 +72,7 @@ private data class Ephemeral(
     val privateChatsUnlockedThisSession: Boolean = false,
     val otpModal: OtpModalUi? = null,
     val isDefaultSmsApp: Boolean = true,
+    val updateInfo: UpdateInfoUi? = null,
 )
 
 private data class ThreadsSnapshot(
@@ -130,7 +133,15 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             container.passbookRepository.seedIfEmpty()
         }
+        viewModelScope.launch {
+            val update = container.updateChecker.checkForUpdate(BuildConfig.VERSION_CODE.toLong())
+            if (update != null) {
+                ephemeral.update { it.copy(updateInfo = UpdateInfoUi(update.message)) }
+            }
+        }
     }
+
+    fun dismissUpdate() = ephemeral.update { it.copy(updateInfo = null) }
 
     // region ---- derived state ----
 
@@ -238,6 +249,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             actionSheet = actionSheet,
             otpModal = eph.otpModal,
             isDefaultSmsApp = eph.isDefaultSmsApp,
+            updateInfo = eph.updateInfo,
         )
     }
 

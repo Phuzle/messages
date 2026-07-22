@@ -18,6 +18,8 @@ class MessagesApplication : Application() {
         super.onCreate()
         NotificationChannels.registerAll(this)
         schedulePeriodicWork()
+        container.ensureAnonymousSignIn()
+        container.subscribeToAnnouncements()
     }
 
     private fun schedulePeriodicWork() {

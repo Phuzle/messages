@@ -6,6 +6,7 @@ import com.phuzle.labs.messages.ui.theme.ThemeMode
 
 data class OtpModalUi(val senderLabel: String, val code: String, val copied: Boolean)
 data class ActionSheetUi(val threadId: String, val sender: String, val markReadLabel: String, val privateLabel: String)
+data class UpdateInfoUi(val message: String)
 
 /** The single source of render truth for the whole app — the Compose analogue of the prototype's `state`. */
 data class AppUiState(
@@ -47,6 +48,7 @@ data class AppUiState(
     val overflowMenuOpen: Boolean = false,
     val actionSheet: ActionSheetUi? = null,
     val otpModal: OtpModalUi? = null,
+    val updateInfo: UpdateInfoUi? = null,
 
     val isDefaultSmsApp: Boolean = true,
 )

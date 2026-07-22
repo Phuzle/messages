@@ -1,8 +1,12 @@
 package com.phuzle.labs.messages
 
 import android.content.Context
+import android.util.Log
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.messaging.FirebaseMessaging
 import com.phuzle.labs.messages.core.contacts.ContactLookup
 import com.phuzle.labs.messages.core.notifications.MessageNotifier
+import com.phuzle.labs.messages.core.push.UpdateChecker
 import com.phuzle.labs.messages.core.sms.SmsSender
 import com.phuzle.labs.messages.data.backup.LocalBackupManager
 import com.phuzle.labs.messages.data.db.AppDatabase
@@ -34,6 +38,7 @@ class AppContainer(context: Context) {
     }
     val smsSender: SmsSender by lazy { SmsSender(appContext) }
     val messageNotifier: MessageNotifier by lazy { MessageNotifier(appContext, settingsRepository) }
+    val updateChecker: UpdateChecker by lazy { UpdateChecker() }
 
     fun copyToClipboard(label: String, text: String) {
         val clipboard = appContext.getSystemService(android.content.ClipboardManager::class.java)
@@ -41,6 +46,26 @@ class AppContainer(context: Context) {
     }
 
     fun isDefaultSmsApp(): Boolean = com.phuzle.labs.messages.core.sms.DefaultSmsAppHelper.isDefaultSmsApp(appContext)
+
+    /**
+     * Anonymous sign-in gives every install a stable Firebase Auth UID, so the console's
+     * Authentication > Users tab becomes a real "who's connected" list (creation + last-active
+     * timestamps) with zero login UI. It's pseudonymous by design — swap in Google Sign-In later
+     * if named/identified users are ever needed.
+     */
+    fun ensureAnonymousSignIn() {
+        val auth = FirebaseAuth.getInstance()
+        if (auth.currentUser == null) {
+            auth.signInAnonymously()
+                .addOnFailureListener { e -> Log.w("AppContainer", "Anonymous sign-in failed", e) }
+        }
+    }
+
+    /** Lets us broadcast alerts (update available, maintenance) from the Firebase console with no backend. */
+    fun subscribeToAnnouncements() {
+        FirebaseMessaging.getInstance().subscribeToTopic("announcements")
+            .addOnFailureListener { e -> Log.w("AppContainer", "Topic subscription failed", e) }
+    }
 }
 
 val Context.appContainer: AppContainer

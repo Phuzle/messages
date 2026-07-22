@@ -57,6 +57,16 @@ object NotificationChannels {
                 lockscreenVisibility = android.app.Notification.VISIBILITY_SECRET
             }
         )
+        manager.createNotificationChannel(
+            NotificationChannel(
+                NotificationChannelIds.SYSTEM,
+                "App & Service Alerts",
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = "App updates and service status, pushed from Phuzle"
+                enableVibration(true)
+            }
+        )
     }
 
     /** Deep-links into the system's per-channel settings page, for OS-level control beyond our own toggles. */

@@ -19,6 +19,8 @@ import com.phuzle.labs.messages.ui.components.MenuItem
 import com.phuzle.labs.messages.ui.components.NavDrawer
 import com.phuzle.labs.messages.ui.components.OtpModal
 import com.phuzle.labs.messages.ui.components.OverflowMenu
+import com.phuzle.labs.messages.ui.components.UpdateAvailableDialog
+import android.net.Uri
 import com.phuzle.labs.messages.ui.dashboard.DashboardScreen
 import com.phuzle.labs.messages.ui.model.PushedScreen
 import com.phuzle.labs.messages.ui.model.SettingsSub
@@ -37,8 +39,9 @@ fun AppRoot(viewModel: AppViewModel) {
     MessagesTheme(themeMode = state.themeMode, accentHex = state.settings.accentHex) {
         val tokens = MessagesTheme.tokens
 
-        BackHandler(enabled = state.actionSheet != null || state.overflowMenuOpen || state.showDrawer || state.pushedScreen != null) {
+        BackHandler(enabled = state.updateInfo != null || state.actionSheet != null || state.overflowMenuOpen || state.showDrawer || state.pushedScreen != null) {
             when {
+                state.updateInfo != null -> viewModel.dismissUpdate()
                 state.actionSheet != null -> viewModel.closeActionSheet()
                 state.overflowMenuOpen -> viewModel.closeOverflowMenu()
                 state.showDrawer -> viewModel.closeDrawer()
@@ -108,6 +111,18 @@ fun AppRoot(viewModel: AppViewModel) {
             )
 
             OtpModal(otp = state.otpModal, onCopy = viewModel::copyOtpCode, onDismiss = viewModel::closeOtpModal)
+
+            UpdateAvailableDialog(
+                update = state.updateInfo,
+                onUpdate = {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${context.packageName}")).apply {
+                        setPackage("com.android.vending")
+                    }
+                    context.startActivity(intent)
+                    viewModel.dismissUpdate()
+                },
+                onDismiss = viewModel::dismissUpdate,
+            )
         }
     }
 }
