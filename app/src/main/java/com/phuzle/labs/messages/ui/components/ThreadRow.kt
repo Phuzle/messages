@@ -44,6 +44,9 @@ fun ThreadRow(
 ) {
     val tokens = MessagesTheme.tokens
     val dismissState = rememberSwipeToDismissBoxState(
+        // A vertical fling with a slight horizontal wobble can otherwise cross the default 50%
+        // threshold and fire a swipe action by accident while the user is just scrolling the list.
+        positionalThreshold = { totalWidth -> totalWidth * 0.6f },
         confirmValueChange = { value ->
             when (value) {
                 SwipeToDismissBoxValue.StartToEnd -> onSwipeRight()
@@ -88,7 +91,7 @@ fun ThreadRow(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AvatarBubble(thread.initials, thread.avatarColor, thread.isBusiness)
+            AvatarBubble(thread.initials, thread.avatarColor, thread.isBusiness, photoUri = thread.photoUri)
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
                     Text(

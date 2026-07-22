@@ -27,7 +27,7 @@ const val DATABASE_FILE_NAME = "messages.db"
         ReminderEntity::class,
         DraftEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

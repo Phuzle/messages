@@ -37,8 +37,8 @@ data class AppUiState(
 
     val composeTo: String = "",
     val composeBody: String = "",
-    val composeScheduleKey: String? = null,
-    val scheduleOptions: List<ScheduleOptionUi> = emptyList(),
+    val composeRecipients: List<ContactSuggestionUi> = emptyList(),
+    val composeCustomScheduleMillis: Long? = null,
     val composeToSuggestions: List<ContactSuggestionUi> = emptyList(),
     val drafts: List<DraftUi> = emptyList(),
 
@@ -54,6 +54,11 @@ data class AppUiState(
     val actionSheet: ActionSheetUi? = null,
     val otpModal: OtpModalUi? = null,
     val updateInfo: UpdateInfoUi? = null,
+    val threadOverflowMenuOpen: Boolean = false,
+    val messageActionTarget: MessageActionTargetUi? = null,
 
     val isDefaultSmsApp: Boolean = true,
+    val isImportingHistory: Boolean = false,
+    val importDone: Int = 0,
+    val importTotal: Int = 0,
 )

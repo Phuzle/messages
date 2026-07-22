@@ -14,6 +14,8 @@ data class ThreadEntity(
     val category: String,
     val isBusiness: Boolean,
     val avatarColor: Long,
+    /** Saved-contact avatar (content:// URI), resolved at thread creation time; null if unknown/unsaved. */
+    val photoUri: String? = null,
     val lastMessagePreview: String,
     val lastMessageTime: Long,
     val unread: Boolean,

@@ -23,6 +23,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import com.phuzle.labs.messages.domain.model.Category
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.outlined.Chat as ChatOutlined
@@ -50,6 +60,7 @@ import com.phuzle.labs.messages.ui.AppViewModel
 import com.phuzle.labs.messages.ui.components.BarInset
 import com.phuzle.labs.messages.ui.components.CategoryChip
 import com.phuzle.labs.messages.ui.components.FlatTextField
+import com.phuzle.labs.messages.ui.components.EmptyState
 import com.phuzle.labs.messages.ui.components.GlassBar
 import com.phuzle.labs.messages.ui.components.ThreadRow
 import com.phuzle.labs.messages.ui.components.roundClickable
@@ -74,24 +85,37 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
 
     Box(Modifier.fillMaxSize()) {
         when (state.activeTab) {
-            DashboardTab.Messages -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = topContentPadding, bottom = bottomContentPadding),
-            ) {
-                items(state.threads, key = { it.id }) { thread ->
-                    ThreadRow(
-                        thread = thread,
-                        swipeRightActionKey = state.settings.swipeRightAction,
-                        swipeLeftActionKey = state.settings.swipeLeftAction,
-                        onOpen = { viewModel.openThreadById(thread.id) },
-                        onLongPress = { viewModel.openActionSheet(thread.id) },
-                        onSwipeRight = { viewModel.onSwipeRight(thread.id) },
-                        onSwipeLeft = { viewModel.onSwipeLeft(thread.id) },
-                    )
+            DashboardTab.Messages -> if (state.threads.isEmpty()) {
+                EmptyState(
+                    icon = Icons.AutoMirrored.Filled.Chat,
+                    title = if (state.searchQuery.isNotBlank() || state.activeCategory != Category.All) "No matching messages" else "No messages yet",
+                    detail = if (state.searchQuery.isNotBlank() || state.activeCategory != Category.All) {
+                        "Try a different search or category."
+                    } else {
+                        "Incoming texts will show up here automatically."
+                    },
+                    modifier = Modifier.padding(top = topContentPadding, bottom = bottomContentPadding),
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(top = topContentPadding, bottom = bottomContentPadding),
+                ) {
+                    items(state.threads, key = { it.id }) { thread ->
+                        ThreadRow(
+                            thread = thread,
+                            swipeRightActionKey = state.settings.swipeRightAction,
+                            swipeLeftActionKey = state.settings.swipeLeftAction,
+                            onOpen = { viewModel.openThreadById(thread.id) },
+                            onLongPress = { viewModel.openActionSheet(thread.id) },
+                            onSwipeRight = { viewModel.onSwipeRight(thread.id) },
+                            onSwipeLeft = { viewModel.onSwipeLeft(thread.id) },
+                        )
+                    }
                 }
             }
             DashboardTab.Passbook -> if (state.accounts.isEmpty()) {
-                EmptyTabState(
+                EmptyState(
                     icon = Icons.Filled.AccountBalanceWallet,
                     title = "No transactions yet",
                     detail = "Bank and card messages are captured automatically as they arrive — nothing to show until then.",
@@ -135,7 +159,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                 }
             }
             DashboardTab.Reminders -> if (state.reminders.isEmpty()) {
-                EmptyTabState(
+                EmptyState(
                     icon = Icons.Filled.NotificationsNone,
                     title = "No reminders yet",
                     detail = "Reminders will appear here once we can reliably detect due dates and follow-ups from your messages.",
@@ -189,17 +213,37 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                 }
             }
             if (isMessages) {
+                val categoryScrollState = rememberScrollState()
+                val coroutineScope = rememberCoroutineScope()
+                var rowWidth by remember { mutableIntStateOf(0) }
+                val chipBounds = remember { mutableStateMapOf<Category, Pair<Int, Int>>() }
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(tokens.bg)
                         .border(androidx.compose.foundation.BorderStroke(1.dp, tokens.barBorder))
-                        .horizontalScroll(rememberScrollState())
+                        .onGloballyPositioned { rowWidth = it.size.width }
+                        .horizontalScroll(categoryScrollState)
                         .padding(horizontal = 12.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     state.categories.forEach { chip ->
-                        CategoryChip(chip = chip, onClick = { viewModel.setCategory(chip.category) })
+                        CategoryChip(
+                            chip = chip,
+                            modifier = Modifier.onGloballyPositioned { coords ->
+                                chipBounds[chip.category] = coords.positionInParent().x.toInt() to coords.size.width
+                            },
+                            onClick = {
+                                viewModel.setCategory(chip.category)
+                                chipBounds[chip.category]?.let { (x, width) ->
+                                    val target = (x + width / 2) - rowWidth / 2
+                                    coroutineScope.launch {
+                                        categoryScrollState.animateScrollTo(target.coerceIn(0, categoryScrollState.maxValue))
+                                    }
+                                }
+                            },
+                        )
                     }
                 }
             }
@@ -289,23 +333,6 @@ private fun BottomTabButton(
             }
             Text(label, color = color, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold)
         }
-    }
-}
-
-@Composable
-private fun EmptyTabState(icon: ImageVector, title: String, detail: String, modifier: Modifier = Modifier) {
-    val tokens = MessagesTheme.tokens
-    Column(
-        modifier = modifier.fillMaxSize().padding(horizontal = 40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Box(
-            Modifier.size(64.dp).background(tokens.surfaceAlt, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) { Icon(icon, contentDescription = null, tint = tokens.textTertiary, modifier = Modifier.size(28.dp)) }
-        Text(title, color = tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 14.dp))
-        Text(detail, color = tokens.textTertiary, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
     }
 }
 

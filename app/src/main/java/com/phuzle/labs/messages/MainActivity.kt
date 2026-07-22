@@ -8,14 +8,21 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import com.phuzle.labs.messages.core.sms.DefaultSmsAppHelper
 import com.phuzle.labs.messages.ui.AppRoot
 import com.phuzle.labs.messages.ui.AppViewModel
 import com.phuzle.labs.messages.ui.AppViewModelFactory
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
     private val viewModel: AppViewModel by viewModels { AppViewModelFactory(appContainer) }
+
+    private var keepSplashScreenOn = true
 
     private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
 
@@ -24,7 +31,17 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        splashScreen.setKeepOnScreenCondition { keepSplashScreenOn }
+
+        // Keep the native splash up until the first real combined app state has loaded (not
+        // just the StateFlow's default seed value), so launch never flashes an empty dashboard.
+        lifecycleScope.launch {
+            viewModel.uiState.drop(1).first()
+            keepSplashScreenOn = false
+        }
+
         requestNeededPermissions()
         handleIntent(intent)
         setContent { AppRoot(viewModel) }

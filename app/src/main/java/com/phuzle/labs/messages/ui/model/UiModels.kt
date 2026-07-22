@@ -48,6 +48,7 @@ data class ThreadUi(
     val category: Category,
     val isBusiness: Boolean,
     val avatarColor: Color,
+    val photoUri: String? = null,
     val initials: String,
     val preview: String,
     val timeLabel: String,
@@ -70,6 +71,7 @@ data class CurrentThreadUi(
     val category: Category,
     val isBusiness: Boolean,
     val avatarColor: Color,
+    val photoUri: String? = null,
     val initials: String,
     val kindLabel: String,
     val channelName: String,
@@ -110,8 +112,8 @@ data class DeletedThreadUi(
 
 data class BlockedNumberUi(val number: String)
 
-data class ScheduleOptionUi(val key: String?, val label: String, val active: Boolean)
 data class PillOptionUi(val key: String, val label: String, val active: Boolean)
 
-data class ContactSuggestionUi(val name: String, val number: String)
+data class ContactSuggestionUi(val name: String, val number: String, val photoUri: String? = null)
 data class DraftUi(val id: String, val to: String, val bodyPreview: String, val timeLabel: String)
+data class MessageActionTargetUi(val id: Long, val text: String)

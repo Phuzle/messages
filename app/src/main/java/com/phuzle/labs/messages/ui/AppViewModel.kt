@@ -16,6 +16,7 @@ import com.phuzle.labs.messages.domain.model.initialsFor
 import com.phuzle.labs.messages.ui.format.formatCentsSigned
 import com.phuzle.labs.messages.ui.format.formatDueRelative
 import com.phuzle.labs.messages.ui.format.formatMessageTime
+import com.phuzle.labs.messages.ui.format.formatScheduleTime
 import com.phuzle.labs.messages.ui.format.formatThreadListTime
 import com.phuzle.labs.messages.ui.format.formatTransactionTime
 import com.phuzle.labs.messages.ui.model.AccountUi
@@ -28,11 +29,11 @@ import com.phuzle.labs.messages.ui.model.CurrentThreadUi
 import com.phuzle.labs.messages.ui.model.DashboardTab
 import com.phuzle.labs.messages.ui.model.DeletedThreadUi
 import com.phuzle.labs.messages.ui.model.DraftUi
+import com.phuzle.labs.messages.ui.model.MessageActionTargetUi
 import com.phuzle.labs.messages.ui.model.MessageUi
 import com.phuzle.labs.messages.ui.model.OtpModalUi
 import com.phuzle.labs.messages.ui.model.PushedScreen
 import com.phuzle.labs.messages.ui.model.ReminderUi
-import com.phuzle.labs.messages.ui.model.ScheduleOptionUi
 import com.phuzle.labs.messages.ui.model.SettingsSub
 import com.phuzle.labs.messages.ui.model.TransactionUi
 import com.phuzle.labs.messages.ui.model.UpdateInfoUi
@@ -46,7 +47,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -54,7 +57,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.concurrent.TimeUnit
 
 private data class Ephemeral(
     val pushedScreen: PushedScreen? = null,
@@ -73,7 +75,8 @@ private data class Ephemeral(
     val threadOtpCopied: Boolean = false,
     val composeTo: String = "",
     val composeBody: String = "",
-    val composeScheduleKey: String? = null,
+    val composeRecipients: List<ContactSuggestionUi> = emptyList(),
+    val composeCustomScheduleMillis: Long? = null,
     val composeDraftId: String? = null,
     val composeToSuggestions: List<ContactSuggestionUi> = emptyList(),
     val privateChatsUnlockedThisSession: Boolean = false,
@@ -81,6 +84,11 @@ private data class Ephemeral(
     val isDefaultSmsApp: Boolean = true,
     val updateInfo: UpdateInfoUi? = null,
     val selectedAccountLast4: String? = null,
+    val isImportingHistory: Boolean = false,
+    val importDone: Int = 0,
+    val importTotal: Int = 0,
+    val threadOverflowMenuOpen: Boolean = false,
+    val messageActionTarget: MessageActionTargetUi? = null,
 )
 
 private data class ThreadsSnapshot(
@@ -97,7 +105,6 @@ private data class PassbookSnapshot(
     val reminders: List<ReminderEntity>,
 )
 
-private val SCHEDULE_OPTIONS = listOf(null to "Send now", "1h" to "In 1 hour", "tom9" to "Tomorrow, 9 AM")
 private const val MESSAGE_PAGE_SIZE = 40
 private const val OLDER_MESSAGE_PAGE_SIZE = 30
 /** Once loaded-older messages fall this far behind the visible/live area, drop them to bound memory. */
@@ -223,6 +230,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 category = category,
                 isBusiness = thread.isBusiness,
                 avatarColor = androidx.compose.ui.graphics.Color(thread.avatarColor),
+                photoUri = thread.photoUri,
                 initials = initialsFor(thread.displayName),
                 kindLabel = if (thread.isBusiness) "Business sender" else "Personal contact",
                 channelName = channelNameFor(category),
@@ -258,8 +266,6 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             }
         }
 
-        val scheduleOptions = SCHEDULE_OPTIONS.map { (key, label) -> ScheduleOptionUi(key, label, key == eph.composeScheduleKey) }
-
         return AppUiState(
             settings = settings,
             themeMode = ThemeMode.fromKey(settings.themeMode),
@@ -283,8 +289,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             threadOtpCopied = eph.threadOtpCopied,
             composeTo = eph.composeTo,
             composeBody = eph.composeBody,
-            composeScheduleKey = eph.composeScheduleKey,
-            scheduleOptions = scheduleOptions,
+            composeRecipients = eph.composeRecipients,
+            composeCustomScheduleMillis = eph.composeCustomScheduleMillis,
             composeToSuggestions = eph.composeToSuggestions,
             deletedThreads = threads.deleted.map(::toDeleted),
             archivedThreads = threads.archived.map(::toDeleted),
@@ -297,6 +303,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             otpModal = eph.otpModal,
             isDefaultSmsApp = eph.isDefaultSmsApp,
             updateInfo = eph.updateInfo,
+            threadOverflowMenuOpen = eph.threadOverflowMenuOpen,
+            messageActionTarget = eph.messageActionTarget,
+            isImportingHistory = eph.isImportingHistory,
+            importDone = eph.importDone,
+            importTotal = eph.importTotal,
         )
     }
 
@@ -307,6 +318,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         category = Category.fromStoredName(category),
         isBusiness = isBusiness,
         avatarColor = androidx.compose.ui.graphics.Color(avatarColor),
+        photoUri = photoUri,
         initials = initialsFor(displayName),
         preview = lastMessagePreview,
         timeLabel = formatThreadListTime(lastMessageTime),
@@ -343,7 +355,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun openAbout() = ephemeral.update { it.copy(pushedScreen = PushedScreen.Settings, settingsSub = SettingsSub.About, overflowMenuOpen = false, showDrawer = false) }
     fun openSettingsSub(sub: SettingsSub) = ephemeral.update { it.copy(settingsSub = sub) }
     fun openCompose() = ephemeral.update {
-        it.copy(pushedScreen = PushedScreen.Compose, composeTo = "", composeBody = "", composeScheduleKey = null, composeDraftId = null, composeToSuggestions = emptyList())
+        it.copy(
+            pushedScreen = PushedScreen.Compose, composeTo = "", composeBody = "", composeRecipients = emptyList(),
+            composeCustomScheduleMillis = null, composeDraftId = null, composeToSuggestions = emptyList(),
+        )
     }
 
     /** Closing Compose (X icon or system back, see [goBack]) saves an unsent, non-empty draft. */
@@ -371,8 +386,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 pushedScreen = PushedScreen.Compose,
                 composeTo = draft.to,
                 composeBody = draft.body,
+                composeRecipients = emptyList(),
                 composeDraftId = draft.id,
-                composeScheduleKey = null,
+                composeCustomScheduleMillis = null,
                 composeToSuggestions = emptyList(),
             )
         }
@@ -503,53 +519,77 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
         contactSearchJob = viewModelScope.launch {
             delay(150)
-            val matches = container.contactLookup.searchContacts(value).map { ContactSuggestionUi(it.name, it.number) }
+            val matches = withContext(Dispatchers.IO) {
+                container.contactLookup.searchContacts(value).map { ContactSuggestionUi(it.name, it.number, it.photoUri) }
+            }
             ephemeral.update { it.copy(composeToSuggestions = matches) }
         }
     }
 
+    /** Adds a contact-search hit as a recipient chip; a number typed with no match can also be added this way. */
     fun selectComposeContact(contact: ContactSuggestionUi) = ephemeral.update {
-        it.copy(composeTo = contact.number, composeToSuggestions = emptyList())
+        if (it.composeRecipients.any { r -> r.number == contact.number }) {
+            it.copy(composeTo = "", composeToSuggestions = emptyList())
+        } else {
+            it.copy(composeRecipients = it.composeRecipients + contact, composeTo = "", composeToSuggestions = emptyList())
+        }
+    }
+
+    /** Adds whatever's currently typed in "To" as a raw recipient (no contact match required). */
+    fun addTypedComposeRecipient() {
+        val number = ephemeral.value.composeTo.trim()
+        if (number.isEmpty()) return
+        selectComposeContact(ContactSuggestionUi(name = number, number = number))
+    }
+
+    fun removeComposeRecipient(number: String) = ephemeral.update {
+        it.copy(composeRecipients = it.composeRecipients.filterNot { r -> r.number == number })
     }
 
     fun onComposeBodyChange(value: String) = ephemeral.update { it.copy(composeBody = value) }
-    fun setComposeSchedule(key: String?) = ephemeral.update { it.copy(composeScheduleKey = key) }
+    fun setComposeCustomSchedule(epochMillis: Long?) = ephemeral.update { it.copy(composeCustomScheduleMillis = epochMillis) }
 
+    /** Every recipient gets its own individual SMS/thread — this is not group MMS. */
     fun sendCompose() = viewModelScope.launch {
         val eph = ephemeral.value
         var body = eph.composeBody.trim()
         if (body.isEmpty()) return@launch
-        val to = eph.composeTo.trim().ifEmpty { "New Contact" }
+        val typed = eph.composeTo.trim()
+        val recipients = (eph.composeRecipients + if (typed.isNotEmpty()) listOf(ContactSuggestionUi(typed, typed)) else emptyList())
+            .distinctBy { it.number }
+        if (recipients.isEmpty()) return@launch
+
         val signature = uiState.value.settings.signature.trim()
         if (signature.isNotEmpty()) body = "$body\n$signature"
 
-        val scheduleLabel = SCHEDULE_OPTIONS.firstOrNull { it.first == eph.composeScheduleKey }?.second
-        val scheduledFor = when (eph.composeScheduleKey) {
-            "1h" -> System.currentTimeMillis() + TimeUnit.HOURS.toMillis(1)
-            "tom9" -> nextNineAm()
-            else -> null
-        }
+        val scheduledFor = eph.composeCustomScheduleMillis
+        val scheduleLabel = scheduledFor?.let { formatScheduleTime(it) }
+        val now = System.currentTimeMillis()
 
-        val (thread, _) = container.threadRepository.composeOutgoingThread(to, body, scheduledFor, scheduleLabel, System.currentTimeMillis())
-        if (scheduledFor == null) {
-            runCatching { container.smsSender.send(to, body) }
+        var lastThreadId: String? = null
+        for (recipient in recipients) {
+            val (thread, _) = container.threadRepository.composeOutgoingThread(
+                to = recipient.number, body = body, scheduledFor = scheduledFor, scheduleLabel = scheduleLabel, nowMillis = now,
+                displayName = recipient.name, photoUri = recipient.photoUri,
+            )
+            if (scheduledFor == null) {
+                runCatching { container.smsSender.send(recipient.number, body) }
+            }
+            lastThreadId = thread.id
         }
         eph.composeDraftId?.let { container.draftRepository.delete(it) }
+
+        val singleRecipient = recipients.size == 1
         ephemeral.update {
             it.copy(
-                pushedScreen = PushedScreen.Thread, activeThreadId = thread.id, composeTo = "", composeBody = "",
-                composeScheduleKey = null, composeDraftId = null, composeToSuggestions = emptyList(),
+                pushedScreen = if (singleRecipient) PushedScreen.Thread else null,
+                activeThreadId = if (singleRecipient) lastThreadId else null,
+                activeTab = DashboardTab.Messages,
+                composeTo = "", composeBody = "", composeRecipients = emptyList(),
+                composeCustomScheduleMillis = null, composeDraftId = null, composeToSuggestions = emptyList(),
                 olderMessages = emptyList(), hasMoreOlderMessages = true, isLoadingOlderMessages = false,
             )
         }
-    }
-
-    private fun nextNineAm(): Long {
-        val zone = java.time.ZoneId.systemDefault()
-        val now = java.time.ZonedDateTime.now(zone)
-        var next = now.withHour(9).withMinute(0).withSecond(0).withNano(0)
-        if (!next.isAfter(now)) next = next.plusDays(1)
-        return next.toInstant().toEpochMilli()
     }
 
     fun onThreadInputChange(value: String) = ephemeral.update { it.copy(threadInput = value) }
@@ -586,6 +626,59 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun unblockNumber(number: String) = viewModelScope.launch { container.threadRepository.unblock(number) }
+
+    fun toggleThreadOverflowMenu() = ephemeral.update { it.copy(threadOverflowMenuOpen = !it.threadOverflowMenuOpen) }
+    fun closeThreadOverflowMenu() = ephemeral.update { it.copy(threadOverflowMenuOpen = false) }
+
+    fun archiveCurrentThread() = viewModelScope.launch {
+        val id = ephemeral.value.activeThreadId ?: return@launch
+        container.threadRepository.archive(id)
+        closeThreadOverflowMenu()
+        goBack()
+    }
+
+    fun deleteCurrentThread() = viewModelScope.launch {
+        val id = ephemeral.value.activeThreadId ?: return@launch
+        container.threadRepository.softDelete(id, System.currentTimeMillis())
+        closeThreadOverflowMenu()
+        goBack()
+    }
+
+    // endregion
+
+    // region ---- per-message long-press actions ----
+
+    fun openMessageActions(target: MessageActionTargetUi) = ephemeral.update { it.copy(messageActionTarget = target) }
+    fun closeMessageActions() = ephemeral.update { it.copy(messageActionTarget = null) }
+
+    fun deleteSelectedMessage() = viewModelScope.launch {
+        val target = ephemeral.value.messageActionTarget ?: return@launch
+        container.threadRepository.deleteMessage(target.id)
+        closeMessageActions()
+    }
+
+    /** No threaded-quote UI exists in this design, so "reply" prefills the input with a quoted snippet. */
+    fun replyQuotingSelectedMessage() {
+        val target = ephemeral.value.messageActionTarget ?: return
+        val quote = if (target.text.length > 80) "${target.text.take(80)}…" else target.text
+        ephemeral.update { it.copy(threadInput = "> $quote\n", messageActionTarget = null) }
+    }
+
+    fun forwardSelectedMessage() {
+        val target = ephemeral.value.messageActionTarget ?: return
+        ephemeral.update {
+            it.copy(
+                pushedScreen = PushedScreen.Compose,
+                composeRecipients = emptyList(),
+                composeTo = "",
+                composeBody = target.text,
+                composeCustomScheduleMillis = null,
+                composeDraftId = null,
+                composeToSuggestions = emptyList(),
+                messageActionTarget = null,
+            )
+        }
+    }
 
     // endregion
 
@@ -636,8 +729,12 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     /** Backfills pre-existing on-device SMS the first time we gain the default-SMS-app role. */
     private fun importHistoryOnce() = viewModelScope.launch {
         if (container.settingsRepository.settingsFlow.first().historyImported) return@launch
-        container.smsHistoryImporter.importAll()
+        ephemeral.update { it.copy(isImportingHistory = true, importDone = 0, importTotal = 0) }
+        container.smsHistoryImporter.importAll { done, total ->
+            ephemeral.update { it.copy(importDone = done, importTotal = total) }
+        }
         container.settingsRepository.setHistoryImported(true)
+        ephemeral.update { it.copy(isImportingHistory = false) }
     }
 
     // endregion

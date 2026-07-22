@@ -10,6 +10,8 @@ import com.phuzle.labs.messages.data.db.entity.ThreadEntity
 import com.phuzle.labs.messages.domain.categorization.CategoryClassifier
 import com.phuzle.labs.messages.domain.model.AvatarPalette
 import com.phuzle.labs.messages.domain.model.Category
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /**
@@ -18,6 +20,11 @@ import java.util.UUID
  * whichever app used to be default) already lives in `content://sms` and would otherwise never
  * show up here. Gated by [com.phuzle.labs.messages.data.prefs.SettingsRepository]'s
  * `historyImported` flag so it only ever runs once per install.
+ *
+ * Everything here — the cursor scan and the per-new-sender [ContactLookup] query — is genuinely
+ * blocking I/O, so the whole thing runs on [Dispatchers.IO]; running it on the caller's dispatcher
+ * (as an earlier version of this did) would freeze the UI for as long as the import takes on a
+ * phone with a lot of history.
  */
 class SmsHistoryImporter(
     private val context: Context,
@@ -26,24 +33,31 @@ class SmsHistoryImporter(
     private val contactLookup: ContactLookup,
     private val classifier: CategoryClassifier,
 ) {
-    suspend fun importAll() {
+    suspend fun importAll(onProgress: (done: Int, total: Int) -> Unit) = withContext(Dispatchers.IO) {
         val cursor = context.contentResolver.query(
             Telephony.Sms.CONTENT_URI,
             arrayOf(Telephony.Sms.ADDRESS, Telephony.Sms.BODY, Telephony.Sms.DATE, Telephony.Sms.TYPE),
             null,
             null,
             "${Telephony.Sms.DATE} ASC",
-        ) ?: return
+        ) ?: return@withContext
 
         cursor.use {
+            val total = it.count
+            onProgress(0, total)
             val addressIdx = it.getColumnIndex(Telephony.Sms.ADDRESS)
             val bodyIdx = it.getColumnIndex(Telephony.Sms.BODY)
             val dateIdx = it.getColumnIndex(Telephony.Sms.DATE)
             val typeIdx = it.getColumnIndex(Telephony.Sms.TYPE)
-            if (addressIdx < 0 || bodyIdx < 0 || dateIdx < 0) return
+            if (addressIdx < 0 || bodyIdx < 0 || dateIdx < 0) return@withContext
 
+            var done = 0
             while (it.moveToNext()) {
-                val address = it.getString(addressIdx)?.takeIf { addr -> addr.isNotBlank() } ?: continue
+                val address = it.getString(addressIdx)?.takeIf { addr -> addr.isNotBlank() }
+                if (address == null) {
+                    done++
+                    continue
+                }
                 val body = it.getString(bodyIdx) ?: ""
                 val date = it.getLong(dateIdx)
                 val type = if (typeIdx >= 0) it.getInt(typeIdx) else Telephony.Sms.MESSAGE_TYPE_INBOX
@@ -51,6 +65,11 @@ class SmsHistoryImporter(
 
                 val thread = findOrTouchThread(address, body, date, outgoing)
                 messageDao.insert(MessageEntity(threadId = thread.id, body = body, timestamp = date, outgoing = outgoing))
+
+                done++
+                // Reporting on every row would itself flood the UI with state updates on a large
+                // import; a coarse throttle keeps the progress screen smooth without losing accuracy.
+                if (done % 20 == 0 || done == total) onProgress(done, total)
             }
         }
     }
@@ -66,6 +85,7 @@ class SmsHistoryImporter(
             return existing
         }
         val contactName = contactLookup.displayNameFor(address)
+        val photoUri = if (contactName != null) contactLookup.photoUriFor(address) else null
         val category = if (outgoing) Category.Personal else classifier.classify(address, body)
         val created = ThreadEntity(
             id = "thread-" + UUID.randomUUID(),
@@ -74,6 +94,7 @@ class SmsHistoryImporter(
             category = category.name,
             isBusiness = contactName == null,
             avatarColor = AvatarPalette.forSeed(address),
+            photoUri = photoUri,
             lastMessagePreview = body,
             lastMessageTime = date,
             unread = false,

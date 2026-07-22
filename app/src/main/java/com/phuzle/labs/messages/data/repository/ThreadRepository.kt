@@ -37,11 +37,13 @@ class ThreadRepository(
         category: Category,
         body: String,
         timestampMillis: Long,
+        photoUri: String? = null,
     ): Pair<ThreadEntity, MessageEntity> {
         val existing = threadDao.findBySender(sender)
         val thread = if (existing != null) {
             val updated = existing.copy(
                 displayName = displayName,
+                photoUri = photoUri,
                 lastMessagePreview = body,
                 lastMessageTime = timestampMillis,
                 unread = true,
@@ -59,6 +61,7 @@ class ThreadRepository(
                 category = category.name,
                 isBusiness = isBusiness,
                 avatarColor = AvatarPalette.forSeed(sender),
+                photoUri = photoUri,
                 lastMessagePreview = body,
                 lastMessageTime = timestampMillis,
                 unread = true,
@@ -78,15 +81,18 @@ class ThreadRepository(
         scheduledFor: Long?,
         scheduleLabel: String?,
         nowMillis: Long,
+        displayName: String = to,
+        photoUri: String? = null,
     ): Pair<ThreadEntity, MessageEntity> {
         val existing = threadDao.findBySender(to)
         val thread = existing ?: ThreadEntity(
             id = "thread-" + java.util.UUID.randomUUID(),
             sender = to,
-            displayName = to,
+            displayName = displayName,
             category = Category.Personal.name,
             isBusiness = false,
             avatarColor = AvatarPalette.forSeed(to),
+            photoUri = photoUri,
             lastMessagePreview = body,
             lastMessageTime = nowMillis,
             unread = false,
@@ -116,6 +122,7 @@ class ThreadRepository(
         return message.copy(id = id)
     }
 
+    suspend fun deleteMessage(id: Long) = messageDao.deleteById(id)
     suspend fun latestIncomingOtpMessage(): MessageEntity? = messageDao.latestIncomingOtpMessage()
     suspend fun dueScheduledMessages(now: Long) = messageDao.dueScheduled(now)
     suspend fun markMessageSent(messageId: Long, sentAt: Long) = messageDao.markSent(messageId, sentAt)

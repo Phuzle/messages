@@ -16,17 +16,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.AppViewModel
 import com.phuzle.labs.messages.ui.components.BackBarScaffold
+import com.phuzle.labs.messages.ui.components.EmptyState
 import com.phuzle.labs.messages.ui.components.SimpleThreadRow
 import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
@@ -48,16 +49,18 @@ fun PrivateChatsScreen(state: AppUiState, viewModel: AppViewModel) {
                 contentPadding = PaddingValues(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(state.privateThreads, key = { it.id }) { item ->
-                    SimpleThreadRow(item = item, onClick = { viewModel.openThreadById(item.id) })
-                }
                 if (state.privateThreads.isEmpty()) {
                     item {
-                        Text(
-                            "No private chats yet. Use a chat's long-press menu to move it here.",
-                            color = tokens.textTertiary, fontSize = 13.5.sp, textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxSize().padding(top = 40.dp),
+                        EmptyState(
+                            icon = Icons.Filled.LockOpen,
+                            title = "No private chats yet",
+                            detail = "Use a chat's long-press menu to move it here.",
+                            modifier = Modifier.fillMaxSize().padding(top = 20.dp),
                         )
+                    }
+                } else {
+                    items(state.privateThreads, key = { it.id }) { item ->
+                        SimpleThreadRow(item = item, onClick = { viewModel.openThreadById(item.id) })
                     }
                 }
             }

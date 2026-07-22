@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.AppViewModel
 import com.phuzle.labs.messages.ui.components.BackBarScaffold
+import com.phuzle.labs.messages.ui.components.EmptyState
 import com.phuzle.labs.messages.ui.components.roundClickable
 import com.phuzle.labs.messages.ui.components.topBarContentPadding
 import com.phuzle.labs.messages.ui.model.AppUiState
@@ -40,12 +41,12 @@ fun DraftsScreen(state: AppUiState, viewModel: AppViewModel) {
     val tokens = MessagesTheme.tokens
     BackBarScaffold(title = "Drafts", onBack = viewModel::goBack) {
         if (state.drafts.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(top = topBarContentPadding(68.dp)), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Filled.Drafts, contentDescription = null, tint = tokens.textTertiary, modifier = Modifier.size(28.dp))
-                    Text("No drafts", color = tokens.textTertiary, fontSize = 13.5.sp, modifier = Modifier.padding(top = 10.dp))
-                }
-            }
+            EmptyState(
+                icon = Icons.Filled.Drafts,
+                title = "No drafts",
+                detail = "Unsent messages you back out of will be saved here.",
+                modifier = Modifier.padding(top = topBarContentPadding(68.dp)),
+            )
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

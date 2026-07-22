@@ -33,6 +33,7 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                 val contactName = container.contactLookup.displayNameFor(sender)
                 val displayName = contactName ?: sender
                 val isBusiness = contactName == null
+                val photoUri = if (contactName != null) container.contactLookup.photoUriFor(sender) else null
                 val category = container.classifier.classify(sender, body)
 
                 val (thread, message) = container.threadRepository.recordIncomingMessage(
@@ -42,6 +43,7 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                     category = category,
                     body = body,
                     timestampMillis = timestamp,
+                    photoUri = photoUri,
                 )
 
                 if (category == Category.Transactions) {

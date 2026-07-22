@@ -44,7 +44,7 @@ fun ThreadInfoScreen(state: AppUiState, viewModel: AppViewModel) {
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = topBarContentPadding(80.dp), start = 20.dp, end = 20.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            AvatarBubble(thread.initials, thread.avatarColor, thread.isBusiness, size = 76.dp)
+            AvatarBubble(thread.initials, thread.avatarColor, thread.isBusiness, size = 76.dp, photoUri = thread.photoUri)
             Text(thread.displayName, color = tokens.textPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
             Text("${thread.kindLabel} · ${thread.category.label}", color = tokens.textTertiary, fontSize = 13.sp)
 

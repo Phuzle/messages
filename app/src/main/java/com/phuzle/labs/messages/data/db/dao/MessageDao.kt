@@ -36,6 +36,9 @@ interface MessageDao {
     @Query("UPDATE messages SET sent = 1, timestamp = :sentAt WHERE id = :id")
     suspend fun markSent(id: Long, sentAt: Long)
 
+    @Query("DELETE FROM messages WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
     @Query("DELETE FROM messages WHERE timestamp < :cutoff AND threadId IN (SELECT id FROM threads WHERE category = 'Otp')")
     suspend fun purgeOtpMessagesBefore(cutoff: Long)
 

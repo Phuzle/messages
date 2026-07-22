@@ -19,6 +19,7 @@ import com.phuzle.labs.messages.ui.components.MenuItem
 import com.phuzle.labs.messages.ui.components.NavDrawer
 import com.phuzle.labs.messages.ui.components.OtpModal
 import com.phuzle.labs.messages.ui.components.OverflowMenu
+import com.phuzle.labs.messages.ui.components.SyncingScreen
 import com.phuzle.labs.messages.ui.components.UpdateAvailableDialog
 import android.net.Uri
 import com.phuzle.labs.messages.ui.dashboard.DashboardScreen
@@ -48,6 +49,11 @@ fun AppRoot(viewModel: AppViewModel) {
                 state.showDrawer -> viewModel.closeDrawer()
                 else -> viewModel.goBack()
             }
+        }
+
+        if (state.isImportingHistory) {
+            SyncingScreen(done = state.importDone, total = state.importTotal)
+            return@MessagesTheme
         }
 
         Box(Modifier.fillMaxSize().background(tokens.bg)) {
