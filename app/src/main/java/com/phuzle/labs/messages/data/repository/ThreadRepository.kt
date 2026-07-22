@@ -51,7 +51,10 @@ class ThreadRepository(
                 deletedAt = null,
                 archived = false,
             )
-            threadDao.upsert(updated)
+            // @Update, not upsert()/INSERT-OR-REPLACE: REPLACE deletes-then-reinserts the
+            // conflicting row, which cascades onDelete=CASCADE and wipes every message this
+            // thread already had. Plain UPDATE touches only this row.
+            threadDao.update(updated)
             updated
         } else {
             val created = ThreadEntity(
@@ -155,6 +158,7 @@ class ThreadRepository(
     suspend fun restore(id: String) = threadDao.setDeletedAt(id, null)
     suspend fun purgeDeletedBefore(cutoffMillis: Long) = threadDao.purgeDeletedBefore(cutoffMillis)
     suspend fun hardDelete(id: String) = threadDao.deleteById(id)
+    fun searchInboxIds(query: String): Flow<List<String>> = threadDao.searchInboxIds(query)
     suspend fun purgeOtpMessagesBefore(cutoffMillis: Long) = messageDao.purgeOtpMessagesBefore(cutoffMillis)
 
     suspend fun block(number: String) = blockedNumberDao.block(BlockedNumberEntity(number))

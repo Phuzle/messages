@@ -16,7 +16,7 @@ data class ExtractedTransaction(
 object TransactionExtractor {
     private val merchantPattern = Regex("\\b(?:at|for) ([A-Z][\\w&'.\\- ]{1,40}?)(?=[,.]|\\s+(?:using|on|via|card|account|ending)\\b|$)")
     private val last4Pattern = Regex("ending(?: in)? (\\d{4})", RegexOption.IGNORE_CASE)
-    private val creditKeywords = listOf("credited", "deposited")
+    private val creditKeywords = listOf("credited", "deposited", "refund", "refunded", "reversed")
 
     fun extract(body: String, amountPattern: Regex, fallbackMerchant: String): ExtractedTransaction? {
         val amountMatch = amountPattern.find(body) ?: return null

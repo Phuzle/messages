@@ -25,4 +25,8 @@ data class AppSettings(
     val lastLocalBackupAt: Long? = null,
     val lastLocalRestoreAt: Long? = null,
     val historyImported: Boolean = false,
+    /** Layer 3 of the PRD's pipeline — off by default, since it means sending (PII-scrubbed)
+     * message text to a server. See server/README.md. */
+    val cloudFallbackEnabled: Boolean = false,
+    val serverBaseUrl: String = "http://10.0.2.2:8080/",
 )

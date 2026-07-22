@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessaging
+import com.phuzle.labs.messages.core.cloud.CloudClassifierClient
 import com.phuzle.labs.messages.core.contacts.ContactLookup
 import com.phuzle.labs.messages.core.notifications.MessageNotifier
 import com.phuzle.labs.messages.core.push.UpdateChecker
@@ -45,6 +46,7 @@ class AppContainer(context: Context) {
     val smsHistoryImporter: SmsHistoryImporter by lazy {
         SmsHistoryImporter(appContext, database.threadDao(), database.messageDao(), contactLookup, classifier)
     }
+    val cloudClassifierClient: CloudClassifierClient by lazy { CloudClassifierClient() }
 
     fun copyToClipboard(label: String, text: String) {
         val clipboard = appContext.getSystemService(android.content.ClipboardManager::class.java)

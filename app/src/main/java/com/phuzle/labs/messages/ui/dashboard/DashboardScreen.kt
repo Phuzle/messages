@@ -38,6 +38,7 @@ import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.outlined.Chat as ChatOutlined
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
@@ -145,7 +146,9 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                     contentPadding = PaddingValues(top = topContentPadding, bottom = bottomContentPadding, start = 16.dp, end = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    items(state.reminders, key = { it.id }) { reminder -> ReminderCard(reminder) }
+                    items(state.reminders, key = { it.id }) { reminder ->
+                        ReminderCard(reminder, onDismiss = { viewModel.dismissReminder(reminder.id) })
+                    }
                 }
             }
         }
@@ -337,17 +340,26 @@ private fun AccountCard(account: AccountUi, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ReminderCard(reminder: ReminderUi) {
+private fun ReminderCard(reminder: ReminderUi, onDismiss: () -> Unit) {
     val tokens = MessagesTheme.tokens
-    Column(
+    Row(
         Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium)
             .border(1.dp, tokens.border, ShapeMedium).padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.Top,
     ) {
-        Text(reminder.title, color = tokens.textPrimary, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold)
-        Text(reminder.detail, color = tokens.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
-        Text(
-            reminder.timeLabel.uppercase(), color = tokens.accent, fontSize = 11.5.sp, fontWeight = FontWeight.Bold,
-            letterSpacing = 0.3.sp, modifier = Modifier.padding(top = 6.dp),
-        )
+        Column(Modifier.weight(1f)) {
+            Text(reminder.title, color = tokens.textPrimary, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold)
+            Text(reminder.detail, color = tokens.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+            Text(
+                reminder.timeLabel.uppercase(), color = tokens.accent, fontSize = 11.5.sp, fontWeight = FontWeight.Bold,
+                letterSpacing = 0.3.sp, modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+        Box(
+            Modifier.size(28.dp).roundClickable(onClick = onDismiss),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.Check, contentDescription = "Dismiss reminder", tint = tokens.textTertiary, modifier = Modifier.size(18.dp))
+        }
     }
 }

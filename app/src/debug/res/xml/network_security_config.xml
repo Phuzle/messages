@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug-build-only (app/src/debug/...) so it never ships in a release build: allows cleartext
+     HTTP to the local Layer 3 dev server (10.0.2.2 for the emulator, or a LAN IP for a real device
+     over wifi debugging), which Android otherwise refuses on API 28+. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

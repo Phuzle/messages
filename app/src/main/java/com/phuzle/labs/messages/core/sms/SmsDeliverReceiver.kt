@@ -9,6 +9,7 @@ import com.phuzle.labs.messages.domain.categorization.TransactionExtractor
 import com.phuzle.labs.messages.domain.model.Category
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -34,7 +35,15 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                 val displayName = contactName ?: sender
                 val isBusiness = contactName == null
                 val photoUri = if (contactName != null) container.contactLookup.photoUriFor(sender) else null
-                val category = container.classifier.classify(sender, body)
+                var category = container.classifier.classify(sender, body)
+
+                val settings = container.settingsRepository.settingsFlow.first()
+
+                // Layer 3: only for what Layer 1 couldn't confidently place, only when the user
+                // opted in, and only after PiiScrubber redacts the body (see CloudClassifierClient).
+                if (category == Category.Unknown && settings.cloudFallbackEnabled) {
+                    container.cloudClassifierClient.classify(settings.serverBaseUrl, body)?.let { category = it }
+                }
 
                 val (thread, message) = container.threadRepository.recordIncomingMessage(
                     sender = sender,
@@ -55,6 +64,12 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                             isCredit = tx.isCredit,
                             timestampMillis = timestamp,
                         )
+                    }
+                }
+
+                if (settings.cloudFallbackEnabled) {
+                    container.cloudClassifierClient.extractReminder(settings.serverBaseUrl, body, timestamp)?.let { reminder ->
+                        container.passbookRepository.insertReminder(reminder.title, reminder.detail, reminder.dueAtEpochMillis)
                     }
                 }
 

@@ -164,6 +164,15 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         ThreadsSnapshot(lists[0], lists[1], lists[2], lists[3], lists[4], blocked)
     }
 
+    /** Real search — matches against a thread's sender name *or any message in its full history*,
+     * not just the cached last-message preview. Null means "no active search, don't filter". */
+    private val searchMatchingIds: Flow<Set<String>?> = ephemeral
+        .map { it.searchQuery.trim() }
+        .distinctUntilChanged()
+        .flatMapLatest { query ->
+            if (query.isEmpty()) flowOf(null) else container.threadRepository.searchInboxIds(query).map { it.toSet() }
+        }
+
     private val passbookSnapshot: Flow<PassbookSnapshot> = combine(
         container.passbookRepository.observeTransactions(),
         container.passbookRepository.observeReminders(),
@@ -201,6 +210,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             })
         }
         .combine(undoState) { state, undo -> state.copy(undoMessage = undo?.message) }
+        .combine(searchMatchingIds) { state, matches ->
+            if (matches == null) state else state.copy(threads = state.threads.filter { matches.contains(it.id) })
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppUiState())
 
     init {
@@ -225,11 +237,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     ): AppUiState {
         val categories = Category.entries.map { CategoryChipUi(it, it.label, it == eph.activeCategory) }
 
-        val query = eph.searchQuery.trim().lowercase()
+        // Real text search (against full message history, not just the cached preview) is applied
+        // as a separate layer over this state — see searchMatchingIds — so only category filtering
+        // happens here.
         val filteredThreads = threads.inbox.filter { t ->
-            val categoryOk = eph.activeCategory == Category.All || t.category == eph.activeCategory.name
-            val searchOk = query.isEmpty() || t.displayName.lowercase().contains(query) || t.lastMessagePreview.lowercase().contains(query)
-            categoryOk && searchOk
+            eph.activeCategory == Category.All || t.category == eph.activeCategory.name
         }.map { it.toThreadUi() }
 
         val hasUnread = threads.inbox.any { it.unread }
@@ -383,6 +395,12 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun openMessagesTab() = ephemeral.update { it.copy(activeTab = DashboardTab.Messages, pushedScreen = null, showDrawer = false) }
     fun openPassbookTab() = ephemeral.update { it.copy(activeTab = DashboardTab.Passbook, pushedScreen = null, showDrawer = false) }
     fun openRemindersTab() = ephemeral.update { it.copy(activeTab = DashboardTab.Reminders, pushedScreen = null, showDrawer = false) }
+
+    fun dismissReminder(id: String) = viewModelScope.launch {
+        val reminder = container.passbookRepository.findReminder(id) ?: return@launch
+        container.passbookRepository.deleteReminder(id)
+        offerUndo("Reminder dismissed") { container.passbookRepository.restoreReminder(reminder) }
+    }
 
     /** Opens the account's own detail page (recent activity lives there now, not inline on the Passbook tab). */
     fun openAccountDetail(last4: String) = ephemeral.update {
@@ -879,6 +897,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun onSignatureChange(value: String) = viewModelScope.launch { container.settingsRepository.setSignature(value) }
     fun toggleCharCount() = viewModelScope.launch { container.settingsRepository.setShowCharCount(!uiState.value.settings.showCharCount) }
     fun toggleInAppBrowser() = viewModelScope.launch { container.settingsRepository.setInAppBrowser(!uiState.value.settings.inAppBrowser) }
+    fun toggleCloudFallback() = viewModelScope.launch { container.settingsRepository.setCloudFallbackEnabled(!uiState.value.settings.cloudFallbackEnabled) }
+    fun onServerUrlChange(value: String) = viewModelScope.launch { container.settingsRepository.setServerBaseUrl(value) }
     fun setBackupFrequency(frequency: String) = viewModelScope.launch { container.settingsRepository.setBackupFrequency(frequency) }
     fun toggleCloud() = viewModelScope.launch { container.settingsRepository.setCloudBackupConnected(!uiState.value.settings.cloudBackupConnected) }
     fun toggleOtpEviction() = viewModelScope.launch { container.settingsRepository.setOtpEvictionEnabled(!uiState.value.settings.otpEvictionEnabled) }

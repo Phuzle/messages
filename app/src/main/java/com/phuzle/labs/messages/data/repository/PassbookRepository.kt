@@ -11,9 +11,9 @@ import kotlinx.coroutines.flow.Flow
  * Transactions, using [com.phuzle.labs.messages.domain.categorization.TransactionExtractor]'s
  * regex-based amount/merchant/last-4 extraction — nothing here is seeded or fabricated.
  * "Accounts" aren't a separate stored concept; the UI derives them by grouping transactions by
- * [TransactionEntity.accountLast4]. Reminders have no real source yet (that needs the Layer 2/3
- * AI this pass doesn't implement) so the table stays genuinely empty rather than pre-filled with
- * sample data — the UI shows an honest empty state until a real source exists.
+ * [TransactionEntity.accountLast4]. Reminders are now real too, via [insertReminder] — the
+ * server/'s Layer 3 reminder-extraction endpoint, called from SmsDeliverReceiver when cloud
+ * fallback is enabled — nothing here is seeded or fabricated.
  */
 class PassbookRepository(private val dao: PassbookDao) {
 
@@ -34,4 +34,12 @@ class PassbookRepository(private val dao: PassbookDao) {
             ),
         )
     }
+
+    suspend fun insertReminder(title: String, detail: String, dueAtEpochMillis: Long) {
+        dao.insertReminders(listOf(ReminderEntity(id = "reminder-" + java.util.UUID.randomUUID(), title = title, detail = detail, dueAt = dueAtEpochMillis)))
+    }
+
+    suspend fun findReminder(id: String): ReminderEntity? = dao.findReminder(id)
+    suspend fun deleteReminder(id: String) = dao.deleteReminder(id)
+    suspend fun restoreReminder(reminder: ReminderEntity) = dao.insertReminders(listOf(reminder))
 }

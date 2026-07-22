@@ -62,4 +62,16 @@ interface ThreadDao {
     /** Permanent delete (e.g. "Empty recycle bin") — messages cascade via the foreign key. */
     @Query("DELETE FROM threads WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    /** IDs of inbox threads matching [query] against the sender's name *or any message in the
+     * thread's full history* — search used to only see each thread's cached last-message preview. */
+    @Query(
+        """
+        SELECT DISTINCT t.id FROM threads t
+        LEFT JOIN messages m ON m.threadId = t.id
+        WHERE t.deletedAt IS NULL AND t.archived = 0 AND t.isPrivate = 0
+          AND (t.displayName LIKE '%' || :query || '%' OR m.body LIKE '%' || :query || '%')
+        """
+    )
+    fun searchInboxIds(query: String): Flow<List<String>>
 }

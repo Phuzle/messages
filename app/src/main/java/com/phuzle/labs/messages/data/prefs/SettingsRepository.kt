@@ -40,6 +40,8 @@ class SettingsRepository(private val context: Context) {
         val LAST_LOCAL_BACKUP_AT = longPreferencesKey("last_local_backup_at")
         val LAST_LOCAL_RESTORE_AT = longPreferencesKey("last_local_restore_at")
         val HISTORY_IMPORTED = booleanPreferencesKey("history_imported")
+        val CLOUD_FALLBACK_ENABLED = booleanPreferencesKey("cloud_fallback_enabled")
+        val SERVER_BASE_URL = stringPreferencesKey("server_base_url")
     }
 
     val settingsFlow: Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
@@ -67,6 +69,8 @@ class SettingsRepository(private val context: Context) {
             lastLocalBackupAt = prefs[Keys.LAST_LOCAL_BACKUP_AT],
             lastLocalRestoreAt = prefs[Keys.LAST_LOCAL_RESTORE_AT],
             historyImported = prefs[Keys.HISTORY_IMPORTED] ?: false,
+            cloudFallbackEnabled = prefs[Keys.CLOUD_FALLBACK_ENABLED] ?: false,
+            serverBaseUrl = prefs[Keys.SERVER_BASE_URL] ?: "http://10.0.2.2:8080/",
         )
     }
 
@@ -98,6 +102,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setLastLocalBackupAt(timestamp: Long) = edit { it[Keys.LAST_LOCAL_BACKUP_AT] = timestamp }
     suspend fun setLastLocalRestoreAt(timestamp: Long) = edit { it[Keys.LAST_LOCAL_RESTORE_AT] = timestamp }
     suspend fun setHistoryImported(imported: Boolean) = edit { it[Keys.HISTORY_IMPORTED] = imported }
+    suspend fun setCloudFallbackEnabled(enabled: Boolean) = edit { it[Keys.CLOUD_FALLBACK_ENABLED] = enabled }
+    suspend fun setServerBaseUrl(url: String) = edit { it[Keys.SERVER_BASE_URL] = url }
 
     private suspend fun edit(transform: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         context.settingsDataStore.edit(transform)

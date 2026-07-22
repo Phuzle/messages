@@ -79,7 +79,10 @@ class SmsHistoryImporter(
         if (existing != null) {
             if (date >= existing.lastMessageTime) {
                 val updated = existing.copy(lastMessagePreview = body, lastMessageTime = date)
-                threadDao.upsert(updated)
+                // @Update, not upsert()/INSERT-OR-REPLACE: REPLACE deletes-then-reinserts the
+                // conflicting row, which cascades onDelete=CASCADE and wipes every message
+                // already imported for this thread. Plain UPDATE touches only this row.
+                threadDao.update(updated)
                 return updated
             }
             return existing

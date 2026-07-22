@@ -21,4 +21,10 @@ interface PassbookDao {
 
     @Query("SELECT * FROM reminders ORDER BY dueAt ASC")
     fun observeReminders(): Flow<List<ReminderEntity>>
+
+    @Query("SELECT * FROM reminders WHERE id = :id LIMIT 1")
+    suspend fun findReminder(id: String): ReminderEntity?
+
+    @Query("DELETE FROM reminders WHERE id = :id")
+    suspend fun deleteReminder(id: String)
 }

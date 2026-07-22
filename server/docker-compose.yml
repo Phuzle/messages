@@ -1,0 +1,13 @@
+services:
+  phuzle-messages-server:
+    build: .
+    container_name: phuzle-messages-server
+    restart: unless-stopped
+    ports:
+      # Bound to 0.0.0.0 on the host so it's reachable both from the Android emulator
+      # (http://10.0.2.2:8080) and from a real device on the same wifi network
+      # (http://<this-machine's-LAN-IP>:8080).
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - NODE_ENV=production
