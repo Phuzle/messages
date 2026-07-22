@@ -22,8 +22,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.AppViewModel
 import com.phuzle.labs.messages.ui.components.AvatarBubble
+import com.phuzle.labs.messages.ui.components.BarInset
 import com.phuzle.labs.messages.ui.components.GlassBar
 import com.phuzle.labs.messages.ui.components.SettingsRowDivider
+import com.phuzle.labs.messages.ui.components.topBarContentPadding
 import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapeMedium
@@ -35,7 +37,7 @@ fun ThreadInfoScreen(state: AppUiState, viewModel: AppViewModel) {
 
     Box(Modifier.fillMaxSize()) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 80.dp, start = 20.dp, end = 20.dp, bottom = 24.dp),
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = topBarContentPadding(80.dp), start = 20.dp, end = 20.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             AvatarBubble(thread.initials, thread.avatarColor, thread.isBusiness, size = 76.dp)
@@ -68,7 +70,7 @@ fun ThreadInfoScreen(state: AppUiState, viewModel: AppViewModel) {
             )
         }
 
-        GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 56.dp) {
+        GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 56.dp, inset = BarInset.Top) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(36.dp).clickable(onClick = viewModel::goBack), contentAlignment = Alignment.Center) {
                     Text("←", color = tokens.textPrimary, fontSize = 20.sp)

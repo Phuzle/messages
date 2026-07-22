@@ -276,6 +276,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun openRemindersTab() = ephemeral.update { it.copy(activeTab = DashboardTab.Reminders, pushedScreen = null, showDrawer = false) }
 
     fun openSettings() = ephemeral.update { it.copy(pushedScreen = PushedScreen.Settings, settingsSub = null, overflowMenuOpen = false, showDrawer = false) }
+    fun openAbout() = ephemeral.update { it.copy(pushedScreen = PushedScreen.Settings, settingsSub = SettingsSub.About, overflowMenuOpen = false, showDrawer = false) }
     fun openSettingsSub(sub: SettingsSub) = ephemeral.update { it.copy(settingsSub = sub) }
     fun openCompose() = ephemeral.update { it.copy(pushedScreen = PushedScreen.Compose, composeTo = "", composeBody = "", composeScheduleKey = null) }
     fun closeCompose() = ephemeral.update { it.copy(pushedScreen = null) }

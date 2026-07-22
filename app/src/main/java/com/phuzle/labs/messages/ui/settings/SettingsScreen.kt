@@ -18,6 +18,7 @@ fun SettingsScreen(state: AppUiState, viewModel: AppViewModel) {
             SettingsSub.Chats -> ChatsSettingsScreen(state, viewModel)
             SettingsSub.Backup -> BackupSettingsScreen(state, viewModel)
             SettingsSub.Storage -> StorageSettingsScreen(state, viewModel)
+            SettingsSub.About -> AboutSettingsScreen(state, viewModel)
         }
     }
 }

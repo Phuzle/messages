@@ -13,6 +13,7 @@ data class RegexRules(
     val transactionKeywords: List<String>,
     val amountPattern: Regex,
     val promotionKeywords: List<String>,
+    val otherKeywords: List<String>,
 ) {
     /** Used to pre-fill the OTP notification's "Copy Code" action and the 30s hot-swap modal. */
     fun extractCode(body: String): String? = otpCodePattern.find(body)?.value
@@ -24,12 +25,14 @@ data class RegexRules(
             val otp = root.getJSONObject("otp")
             val transaction = root.getJSONObject("transaction")
             val promotion = root.getJSONObject("promotion")
+            val other = root.getJSONObject("other")
             return RegexRules(
                 otpKeywords = otp.getJSONArray("keywords").toStringList(),
                 otpCodePattern = Regex(otp.getString("codePattern")),
                 transactionKeywords = transaction.getJSONArray("keywords").toStringList(),
                 amountPattern = Regex(transaction.getString("amountPattern")),
                 promotionKeywords = promotion.getJSONArray("keywords").toStringList(),
+                otherKeywords = other.getJSONArray("keywords").toStringList(),
             )
         }
 

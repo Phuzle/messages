@@ -11,9 +11,13 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.AppViewModel
+import com.phuzle.labs.messages.ui.components.BarInset
 import com.phuzle.labs.messages.ui.components.CategoryChip
 import com.phuzle.labs.messages.ui.components.FlatTextField
 import com.phuzle.labs.messages.ui.components.GlassBar
@@ -44,13 +49,16 @@ import com.phuzle.labs.messages.ui.theme.MessagesTheme
 fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
     val tokens = MessagesTheme.tokens
     val isMessages = state.activeTab == DashboardTab.Messages
-    val topContentPadding = if (isMessages) 104.dp else 68.dp
+    val statusBarInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val topContentPadding = (if (isMessages) 104.dp else 68.dp) + statusBarInset
+    val bottomContentPadding = 90.dp + navBarInset
 
     Box(Modifier.fillMaxSize()) {
         when (state.activeTab) {
             DashboardTab.Messages -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = topContentPadding, bottom = 90.dp),
+                contentPadding = PaddingValues(top = topContentPadding, bottom = bottomContentPadding),
             ) {
                 items(state.threads, key = { it.id }) { thread ->
                     ThreadRow(
@@ -66,7 +74,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
             }
             DashboardTab.Passbook -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = topContentPadding, bottom = 90.dp, start = 16.dp, end = 16.dp),
+                contentPadding = PaddingValues(top = topContentPadding, bottom = bottomContentPadding, start = 16.dp, end = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(state.accounts, key = { it.id }) { account ->
@@ -107,7 +115,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
             }
             DashboardTab.Reminders -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = topContentPadding, bottom = 90.dp, start = 16.dp, end = 16.dp),
+                contentPadding = PaddingValues(top = topContentPadding, bottom = bottomContentPadding, start = 16.dp, end = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 items(state.reminders, key = { it.id }) { reminder ->
@@ -127,7 +135,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
         }
 
         Column(Modifier.align(Alignment.TopCenter)) {
-            GlassBar(height = 52.dp) {
+            GlassBar(height = 52.dp, inset = BarInset.Top) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         Modifier.size(40.dp).clickable(onClick = viewModel::toggleDrawer),
@@ -179,7 +187,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
             }
         }
 
-        GlassBar(modifier = Modifier.align(Alignment.BottomCenter), height = 64.dp, hairlineAtBottom = false) {
+        GlassBar(modifier = Modifier.align(Alignment.BottomCenter), height = 64.dp, hairlineAtBottom = false, inset = BarInset.Bottom) {
             Row(Modifier.fillMaxSize()) {
                 BottomTabButton(
                     label = "Messages",
@@ -216,7 +224,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 80.dp)
+                    .padding(end = 16.dp, bottom = 80.dp + navBarInset)
                     .size(52.dp)
                     .background(tokens.accent, RoundedCornerShape(16.dp))
                     .clickable(onClick = viewModel::openCompose),

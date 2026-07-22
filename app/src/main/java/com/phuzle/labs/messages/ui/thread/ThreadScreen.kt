@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -24,8 +25,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.AppViewModel
 import com.phuzle.labs.messages.ui.components.AvatarBubble
+import com.phuzle.labs.messages.ui.components.BarInset
 import com.phuzle.labs.messages.ui.components.FlatTextField
 import com.phuzle.labs.messages.ui.components.GlassBar
+import com.phuzle.labs.messages.ui.components.topBarContentPadding
 import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.model.MessageUi
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
@@ -39,7 +42,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = 70.dp, bottom = 84.dp, start = 14.dp, end = 14.dp),
+            contentPadding = PaddingValues(top = topBarContentPadding(70.dp), bottom = 84.dp, start = 14.dp, end = 14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(state.currentThreadMessages, key = { it.id }) { message -> MessageBubble(message) }
@@ -59,7 +62,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
             }
         }
 
-        GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 56.dp) {
+        GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 56.dp, inset = BarInset.Top) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(36.dp).clickable(onClick = viewModel::goBack), contentAlignment = Alignment.Center) {
                     Text("←", color = tokens.textPrimary, fontSize = 20.sp)
@@ -76,7 +79,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
         }
 
         if (thread.isReplyable) {
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(tokens.barBg)) {
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(tokens.barBg).navigationBarsPadding()) {
                 if (state.settings.showCharCount) {
                     Text(
                         "${state.threadInput.length} characters", color = tokens.textTertiary, fontSize = 11.sp,
@@ -105,7 +108,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
             }
         } else {
             Box(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(tokens.barBg).padding(14.dp),
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(tokens.barBg).navigationBarsPadding().padding(14.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text("This sender doesn't accept replies", color = tokens.textTertiary, fontSize = 12.5.sp)

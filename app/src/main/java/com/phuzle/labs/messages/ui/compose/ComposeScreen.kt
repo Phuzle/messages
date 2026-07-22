@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,9 +20,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.AppViewModel
+import com.phuzle.labs.messages.ui.components.BarInset
 import com.phuzle.labs.messages.ui.components.FlatTextField
 import com.phuzle.labs.messages.ui.components.GlassBar
 import com.phuzle.labs.messages.ui.components.PillButton
+import com.phuzle.labs.messages.ui.components.topBarContentPadding
 import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapeMedium
@@ -31,7 +34,10 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
     val tokens = MessagesTheme.tokens
 
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().padding(top = 70.dp, start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+        Column(
+            Modifier.fillMaxSize().navigationBarsPadding()
+                .padding(top = topBarContentPadding(70.dp), start = 16.dp, end = 16.dp, bottom = 16.dp),
+        ) {
             FlatTextField(
                 value = state.composeTo,
                 onValueChange = viewModel::onComposeToChange,
@@ -74,7 +80,7 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
             )
         }
 
-        GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 56.dp) {
+        GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 56.dp, inset = BarInset.Top) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,

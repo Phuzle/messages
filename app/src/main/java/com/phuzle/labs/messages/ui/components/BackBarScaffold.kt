@@ -23,7 +23,7 @@ fun BackBarScaffold(title: String, onBack: () -> Unit, content: @Composable BoxS
     val tokens = MessagesTheme.tokens
     Box(Modifier.fillMaxSize()) {
         content()
-        GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 56.dp) {
+        GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 56.dp, inset = BarInset.Top) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(36.dp).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
                     Text("←", color = tokens.textPrimary, fontSize = 20.sp)

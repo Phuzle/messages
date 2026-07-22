@@ -81,6 +81,16 @@ fun SettingsCategoryIcon(section: SettingsSub, modifier: Modifier = Modifier) {
                         )
                     }
                 }
+                SettingsSub.About -> {
+                    drawCircle(color = tokens.textSecondary, radius = size.width * 0.42f, center = center, style = stroke)
+                    drawCircle(tokens.textSecondary, radius = 1.4.dp.toPx(), center = Offset(size.width / 2, size.height * 0.32f))
+                    drawLine(
+                        tokens.textSecondary,
+                        Offset(size.width / 2, size.height * 0.46f),
+                        Offset(size.width / 2, size.height * 0.72f),
+                        stroke.width,
+                    )
+                }
             }
         }
     }

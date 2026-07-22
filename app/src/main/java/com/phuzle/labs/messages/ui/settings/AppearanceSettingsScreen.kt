@@ -1,4 +1,5 @@
 package com.phuzle.labs.messages.ui.settings
+import com.phuzle.labs.messages.ui.components.topBarContentPadding
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,7 +32,7 @@ import com.phuzle.labs.messages.ui.theme.ThemeMode
 fun AppearanceSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
     val tokens = MessagesTheme.tokens
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 68.dp, start = 16.dp, end = 16.dp, bottom = 24.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
         Column {

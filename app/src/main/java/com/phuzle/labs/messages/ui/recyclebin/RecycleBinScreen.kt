@@ -1,4 +1,5 @@
 package com.phuzle.labs.messages.ui.recyclebin
+import com.phuzle.labs.messages.ui.components.topBarContentPadding
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -26,7 +27,7 @@ fun RecycleBinScreen(state: AppUiState, viewModel: AppViewModel) {
     BackBarScaffold(title = "Recycle Bin", onBack = viewModel::goBack) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = 68.dp, start = 16.dp, end = 16.dp, bottom = 24.dp),
+            contentPadding = PaddingValues(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (state.deletedThreads.isNotEmpty()) {

@@ -29,6 +29,14 @@ class CategoryClassifier(
             return Category.Promotions
         }
 
-        return if (isKnownContact(sender)) Category.Personal else Category.Unknown
+        if (isKnownContact(sender)) {
+            return Category.Personal
+        }
+
+        if (rules.otherKeywords.any { text.contains(it) }) {
+            return Category.Others
+        }
+
+        return Category.Unknown
     }
 }

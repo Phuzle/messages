@@ -15,6 +15,7 @@ enum class SettingsSub(val title: String) {
     Chats("Chats"),
     Backup("Backup & Restore"),
     Storage("Storage & Data"),
+    About("About"),
 }
 
 enum class SwipeAction(val key: String, val label: String) {

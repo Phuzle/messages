@@ -1,4 +1,5 @@
 package com.phuzle.labs.messages.ui.settings
+import com.phuzle.labs.messages.ui.components.topBarContentPadding
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +26,7 @@ private val CATEGORIES = listOf(
     SettingsCategoryInfo(SettingsSub.Chats, "Swipe actions, signature"),
     SettingsCategoryInfo(SettingsSub.Backup, "Local & cloud backup"),
     SettingsCategoryInfo(SettingsSub.Storage, "Archive, recycle bin, OTP eviction"),
+    SettingsCategoryInfo(SettingsSub.About, "About, contact, credits"),
 )
 
 @Composable
@@ -33,7 +35,7 @@ fun SettingsHomeScreen(state: AppUiState, viewModel: AppViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(top = 68.dp, start = 16.dp, end = 16.dp),
+            .padding(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp),
     ) {
         SettingsCard {
             CATEGORIES.forEachIndexed { index, category ->

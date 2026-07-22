@@ -22,5 +22,13 @@
       "unsubscribe", "reply stop", "limited time", "free shipping", "deal",
       "exclusive", "clearance", "promo code"
     ]
+  },
+  "other": {
+    "keywords": [
+      "advisory", "alert", "notice", "reminder:", "has shipped", "out for delivery",
+      "delivered", "appointment", "scheduled maintenance", "service outage",
+      "weather warning", "evacuation", "school closing", "flight status",
+      "gate change", "tracking number"
+    ]
   }
 }

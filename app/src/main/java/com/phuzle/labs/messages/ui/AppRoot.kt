@@ -1,16 +1,19 @@
 package com.phuzle.labs.messages.ui
 
+import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import com.phuzle.labs.messages.ui.archived.ArchivedScreen
 import com.phuzle.labs.messages.ui.compose.ComposeScreen
 import com.phuzle.labs.messages.ui.components.ActionSheet
+import com.phuzle.labs.messages.ui.components.DrawerIconType
 import com.phuzle.labs.messages.ui.components.DrawerItem
 import com.phuzle.labs.messages.ui.components.MenuItem
 import com.phuzle.labs.messages.ui.components.NavDrawer
@@ -18,6 +21,7 @@ import com.phuzle.labs.messages.ui.components.OtpModal
 import com.phuzle.labs.messages.ui.components.OverflowMenu
 import com.phuzle.labs.messages.ui.dashboard.DashboardScreen
 import com.phuzle.labs.messages.ui.model.PushedScreen
+import com.phuzle.labs.messages.ui.model.SettingsSub
 import com.phuzle.labs.messages.ui.privatechats.PrivateChatsScreen
 import com.phuzle.labs.messages.ui.recyclebin.RecycleBinScreen
 import com.phuzle.labs.messages.ui.settings.SettingsScreen
@@ -28,6 +32,7 @@ import com.phuzle.labs.messages.ui.thread.ThreadScreen
 @Composable
 fun AppRoot(viewModel: AppViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     MessagesTheme(themeMode = state.themeMode, accentHex = state.settings.accentHex) {
         val tokens = MessagesTheme.tokens
@@ -57,12 +62,29 @@ fun AppRoot(viewModel: AppViewModel) {
                 visible = state.showDrawer,
                 onDismiss = viewModel::closeDrawer,
                 items = listOf(
-                    DrawerItem("Inbox", viewModel::openMessagesTab),
-                    DrawerItem("Archived", viewModel::openArchivedScreen),
-                    DrawerItem("Passbook", viewModel::openPassbookTab),
-                    DrawerItem("Reminders", viewModel::openRemindersTab),
-                    DrawerItem("Settings", viewModel::openSettings),
-                    DrawerItem("Recycle Bin", viewModel::openRecycleBin),
+                    DrawerItem("Inbox", DrawerIconType.Inbox, viewModel::openMessagesTab),
+                    DrawerItem("Archived", DrawerIconType.Archived, viewModel::openArchivedScreen),
+                    DrawerItem("Passbook", DrawerIconType.Passbook, viewModel::openPassbookTab),
+                    DrawerItem("Reminders", DrawerIconType.Reminders, viewModel::openRemindersTab),
+                    DrawerItem("Settings", DrawerIconType.Settings, viewModel::openSettings),
+                    DrawerItem("Recycle Bin", DrawerIconType.RecycleBin, viewModel::openRecycleBin),
+                ),
+                secondaryItems = listOf(
+                    DrawerItem("About Us", DrawerIconType.AboutUs, viewModel::openAbout),
+                    DrawerItem(
+                        "Share",
+                        DrawerIconType.Share,
+                        {
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(
+                                    Intent.EXTRA_TEXT,
+                                    "Messages — a smart SMS app with automatic categorization, OTP quick-copy, and a built-in passbook.",
+                                )
+                            }
+                            context.startActivity(Intent.createChooser(sendIntent, "Share Messages"))
+                        },
+                    ),
                 ),
             )
 

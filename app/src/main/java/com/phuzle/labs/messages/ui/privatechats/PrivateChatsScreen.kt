@@ -1,4 +1,5 @@
 package com.phuzle.labs.messages.ui.privatechats
+import com.phuzle.labs.messages.ui.components.topBarContentPadding
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -43,7 +44,7 @@ fun PrivateChatsScreen(state: AppUiState, viewModel: AppViewModel) {
         if (state.privateChatsUnlockedThisSession) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = 68.dp, start = 16.dp, end = 16.dp, bottom = 24.dp),
+                contentPadding = PaddingValues(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(state.privateThreads, key = { it.id }) { item ->
