@@ -26,9 +26,12 @@ data class AppUiState(
     val accounts: List<AccountUi> = emptyList(),
     val transactions: List<TransactionUi> = emptyList(),
     val reminders: List<ReminderUi> = emptyList(),
+    val selectedAccountLast4: String? = null,
 
     val currentThread: CurrentThreadUi? = null,
     val currentThreadMessages: List<MessageUi> = emptyList(),
+    val isLoadingOlderMessages: Boolean = false,
+    val hasMoreOlderMessages: Boolean = true,
     val threadInput: String = "",
     val threadOtpCopied: Boolean = false,
 
@@ -36,6 +39,8 @@ data class AppUiState(
     val composeBody: String = "",
     val composeScheduleKey: String? = null,
     val scheduleOptions: List<ScheduleOptionUi> = emptyList(),
+    val composeToSuggestions: List<ContactSuggestionUi> = emptyList(),
+    val drafts: List<DraftUi> = emptyList(),
 
     val deletedThreads: List<DeletedThreadUi> = emptyList(),
     val archivedThreads: List<DeletedThreadUi> = emptyList(),

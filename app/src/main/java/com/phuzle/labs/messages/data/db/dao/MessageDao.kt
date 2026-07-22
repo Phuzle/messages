@@ -18,6 +18,18 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE threadId = :threadId ORDER BY timestamp ASC")
     fun observeForThread(threadId: String): Flow<List<MessageEntity>>
 
+    /**
+     * The reactive "live window": only the most recent [limit] messages, so opening a thread with
+     * years of history doesn't pull every row into memory at once. Ordered DESC here purely so
+     * `LIMIT` keeps the *newest* rows — callers reverse it back to chronological order.
+     */
+    @Query("SELECT * FROM messages WHERE threadId = :threadId ORDER BY timestamp DESC LIMIT :limit")
+    fun observeRecentForThread(threadId: String, limit: Int): Flow<List<MessageEntity>>
+
+    /** One-shot "load older" page, keyed off the oldest timestamp currently held in memory. */
+    @Query("SELECT * FROM messages WHERE threadId = :threadId AND timestamp < :beforeTimestamp ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun olderThan(threadId: String, beforeTimestamp: Long, limit: Int): List<MessageEntity>
+
     @Query("SELECT * FROM messages WHERE sent = 0 AND scheduledFor <= :now")
     suspend fun dueScheduled(now: Long): List<MessageEntity>
 

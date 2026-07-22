@@ -10,8 +10,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.clip
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
-import com.phuzle.labs.messages.ui.theme.ShapeSmall
+import com.phuzle.labs.messages.ui.theme.ShapePill
 import com.phuzle.labs.messages.ui.theme.pillOptionColors
 
 /** The soft-accent-tinted pill used across Settings for theme/accent/swipe/schedule/app-lock choices. */
@@ -24,9 +25,10 @@ fun PillButton(label: String, active: Boolean, onClick: () -> Unit, modifier: Mo
         fontSize = 12.5.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = modifier
-            .background(colors.background, ShapeSmall)
-            .border(1.dp, colors.border, ShapeSmall)
+            .clip(ShapePill)
+            .background(colors.background, ShapePill)
+            .border(1.dp, colors.border, ShapePill)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
+            .padding(horizontal = 13.dp, vertical = 7.dp),
     )
 }

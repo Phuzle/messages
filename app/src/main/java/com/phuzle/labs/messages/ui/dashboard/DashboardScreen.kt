@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.outlined.Chat as ChatOutlined
@@ -32,6 +31,7 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.AccountBalanceWallet as AccountBalanceWalletOutlined
 import androidx.compose.material.icons.outlined.Notifications as NotificationsOutlined
@@ -40,8 +40,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.AppViewModel
@@ -50,9 +52,14 @@ import com.phuzle.labs.messages.ui.components.CategoryChip
 import com.phuzle.labs.messages.ui.components.FlatTextField
 import com.phuzle.labs.messages.ui.components.GlassBar
 import com.phuzle.labs.messages.ui.components.ThreadRow
+import com.phuzle.labs.messages.ui.components.roundClickable
+import com.phuzle.labs.messages.ui.model.AccountUi
 import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.model.DashboardTab
+import com.phuzle.labs.messages.ui.model.ReminderUi
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
+import com.phuzle.labs.messages.ui.theme.ShapeMedium
+import com.phuzle.labs.messages.ui.theme.ShapeSmall
 
 private const val BOTTOM_BAR_HEIGHT = 60
 
@@ -83,64 +90,64 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                     )
                 }
             }
-            DashboardTab.Passbook -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = topContentPadding, bottom = bottomContentPadding, start = 16.dp, end = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(state.accounts, key = { it.id }) { account ->
-                    Column(
-                        Modifier.fillMaxWidth().background(tokens.surface, RoundedCornerShape(12.dp))
-                            .border(1.dp, tokens.border, RoundedCornerShape(12.dp)).padding(16.dp),
-                    ) {
-                        Text("${account.name} · •• ${account.last4}", color = tokens.textSecondary, fontSize = 13.sp)
-                        Text(account.balanceLabel, color = tokens.textPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
-                        Text(account.type.uppercase(), color = tokens.textTertiary, fontSize = 11.5.sp, letterSpacing = 0.4.sp, modifier = Modifier.padding(top = 4.dp))
+            DashboardTab.Passbook -> if (state.accounts.isEmpty()) {
+                EmptyTabState(
+                    icon = Icons.Filled.AccountBalanceWallet,
+                    title = "No transactions yet",
+                    detail = "Bank and card messages are captured automatically as they arrive — nothing to show until then.",
+                    modifier = Modifier.padding(top = topContentPadding, bottom = bottomContentPadding),
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(top = topContentPadding, bottom = bottomContentPadding, start = 16.dp, end = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(state.accounts, key = { it.last4 }) { account ->
+                        AccountCard(account = account, onClick = { viewModel.toggleAccountFilter(account.last4) })
                     }
-                }
-                item {
-                    Text(
-                        "RECENT ACTIVITY", color = tokens.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.4.sp, modifier = Modifier.padding(top = 10.dp),
-                    )
-                }
-                item {
-                    Column(Modifier.fillMaxWidth().background(tokens.surface, RoundedCornerShape(12.dp)).border(1.dp, tokens.border, RoundedCornerShape(12.dp))) {
-                        state.transactions.forEachIndexed { index, tx ->
-                            Row(
-                                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Column {
-                                    Text(tx.merchant, color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                    Text("${tx.accountLabel} · ${tx.timeLabel}", color = tokens.textTertiary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+                    item {
+                        Text(
+                            if (state.selectedAccountLast4 != null) "ACTIVITY · •• ${state.selectedAccountLast4}" else "RECENT ACTIVITY",
+                            color = tokens.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.4.sp, modifier = Modifier.padding(top = 10.dp),
+                        )
+                    }
+                    item {
+                        Column(Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium)) {
+                            state.transactions.forEach { tx ->
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Column {
+                                        Text(tx.merchant, color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                        Text("${tx.accountLabel} · ${tx.timeLabel}", color = tokens.textTertiary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+                                    }
+                                    Text(
+                                        tx.amountLabel, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                                        color = if (tx.isCredit) tokens.accent else tokens.textPrimary,
+                                    )
                                 }
-                                Text(
-                                    tx.amountLabel, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                                    color = if (tx.isCredit) tokens.accent else tokens.textPrimary,
-                                )
                             }
                         }
                     }
                 }
             }
-            DashboardTab.Reminders -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = topContentPadding, bottom = bottomContentPadding, start = 16.dp, end = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(state.reminders, key = { it.id }) { reminder ->
-                    Column(
-                        Modifier.fillMaxWidth().background(tokens.surface, RoundedCornerShape(12.dp))
-                            .border(1.dp, tokens.border, RoundedCornerShape(12.dp)).padding(horizontal = 16.dp, vertical = 14.dp),
-                    ) {
-                        Text(reminder.title, color = tokens.textPrimary, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold)
-                        Text(reminder.detail, color = tokens.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
-                        Text(
-                            reminder.timeLabel.uppercase(), color = tokens.accent, fontSize = 11.5.sp, fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.3.sp, modifier = Modifier.padding(top = 6.dp),
-                        )
-                    }
+            DashboardTab.Reminders -> if (state.reminders.isEmpty()) {
+                EmptyTabState(
+                    icon = Icons.Filled.NotificationsNone,
+                    title = "No reminders yet",
+                    detail = "Reminders will appear here once we can reliably detect due dates and follow-ups from your messages.",
+                    modifier = Modifier.padding(top = topContentPadding, bottom = bottomContentPadding),
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(top = topContentPadding, bottom = bottomContentPadding, start = 16.dp, end = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(state.reminders, key = { it.id }) { reminder -> ReminderCard(reminder) }
                 }
             }
         }
@@ -149,7 +156,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
             GlassBar(height = 52.dp, inset = BarInset.Top) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        Modifier.size(40.dp).clickable(onClick = viewModel::toggleDrawer),
+                        Modifier.size(40.dp).roundClickable(onClick = viewModel::toggleDrawer),
                         contentAlignment = Alignment.Center,
                     ) { Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = tokens.textPrimary, modifier = Modifier.size(22.dp)) }
 
@@ -158,7 +165,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                             modifier = Modifier
                                 .weight(1f)
                                 .height(36.dp)
-                                .background(tokens.inputBg, RoundedCornerShape(10.dp))
+                                .background(tokens.inputBg, ShapeSmall)
                                 .padding(horizontal = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -176,7 +183,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                     }
 
                     Box(
-                        Modifier.size(40.dp).clickable(onClick = viewModel::toggleOverflowMenu),
+                        Modifier.size(40.dp).roundClickable(onClick = viewModel::toggleOverflowMenu),
                         contentAlignment = Alignment.Center,
                     ) { Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = tokens.textPrimary, modifier = Modifier.size(22.dp)) }
                 }
@@ -201,7 +208,6 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
         GlassBar(
             modifier = Modifier.align(Alignment.BottomCenter),
             height = BOTTOM_BAR_HEIGHT.dp,
-            hairlineAtBottom = false,
             inset = BarInset.Bottom,
         ) {
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
@@ -240,9 +246,9 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(end = 16.dp, bottom = (BOTTOM_BAR_HEIGHT + 16).dp + navBarInset)
-                    .size(52.dp)
-                    .background(tokens.accent, RoundedCornerShape(16.dp))
-                    .clickable(onClick = viewModel::openCompose),
+                    .size(56.dp)
+                    .background(tokens.accent, CircleShape)
+                    .roundClickable(onClick = viewModel::openCompose),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(Icons.Filled.Add, contentDescription = "Compose", tint = tokens.accentText, modifier = Modifier.size(26.dp))
@@ -265,7 +271,11 @@ private fun BottomTabButton(
     val color = if (active) tokens.accent else tokens.textTertiary
     Box(modifier.fillMaxSize().clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Box {
+            Box(
+                modifier = Modifier
+                    .background(if (active) tokens.accentSoft else androidx.compose.ui.graphics.Color.Transparent, CircleShape)
+                    .padding(horizontal = 18.dp, vertical = 4.dp),
+            ) {
                 Icon(if (active) icon else iconOutlined, contentDescription = label, tint = color, modifier = Modifier.size(23.dp))
                 if (hasUnreadDot) {
                     Box(
@@ -279,5 +289,64 @@ private fun BottomTabButton(
             }
             Text(label, color = color, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold)
         }
+    }
+}
+
+@Composable
+private fun EmptyTabState(icon: ImageVector, title: String, detail: String, modifier: Modifier = Modifier) {
+    val tokens = MessagesTheme.tokens
+    Column(
+        modifier = modifier.fillMaxSize().padding(horizontal = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Box(
+            Modifier.size(64.dp).background(tokens.surfaceAlt, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) { Icon(icon, contentDescription = null, tint = tokens.textTertiary, modifier = Modifier.size(28.dp)) }
+        Text(title, color = tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 14.dp))
+        Text(detail, color = tokens.textTertiary, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+    }
+}
+
+@Composable
+private fun AccountCard(account: AccountUi, onClick: () -> Unit) {
+    val tokens = MessagesTheme.tokens
+    val amountColor = if (account.netIsCredit) tokens.accent else tokens.textPrimary
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(tokens.surface, ShapeMedium)
+            .border(1.dp, if (account.selected) tokens.accent else tokens.border, ShapeMedium)
+            .clip(ShapeMedium)
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column {
+            Text("•• ${account.last4}", color = tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "${account.transactionCount} transaction${if (account.transactionCount == 1) "" else "s"}",
+                color = tokens.textTertiary, fontSize = 12.5.sp, modifier = Modifier.padding(top = 3.dp),
+            )
+        }
+        Text(account.netLabel, color = amountColor, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun ReminderCard(reminder: ReminderUi) {
+    val tokens = MessagesTheme.tokens
+    Column(
+        Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium)
+            .border(1.dp, tokens.border, ShapeMedium).padding(horizontal = 16.dp, vertical = 14.dp),
+    ) {
+        Text(reminder.title, color = tokens.textPrimary, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold)
+        Text(reminder.detail, color = tokens.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+        Text(
+            reminder.timeLabel.uppercase(), color = tokens.accent, fontSize = 11.5.sp, fontWeight = FontWeight.Bold,
+            letterSpacing = 0.3.sp, modifier = Modifier.padding(top = 6.dp),
+        )
     }
 }

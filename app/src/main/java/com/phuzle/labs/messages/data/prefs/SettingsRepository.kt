@@ -39,6 +39,7 @@ class SettingsRepository(private val context: Context) {
         val OTP_EVICTION_ENABLED = booleanPreferencesKey("otp_eviction_enabled")
         val LAST_LOCAL_BACKUP_AT = longPreferencesKey("last_local_backup_at")
         val LAST_LOCAL_RESTORE_AT = longPreferencesKey("last_local_restore_at")
+        val HISTORY_IMPORTED = booleanPreferencesKey("history_imported")
     }
 
     val settingsFlow: Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
@@ -65,6 +66,7 @@ class SettingsRepository(private val context: Context) {
             otpEvictionEnabled = prefs[Keys.OTP_EVICTION_ENABLED] ?: false,
             lastLocalBackupAt = prefs[Keys.LAST_LOCAL_BACKUP_AT],
             lastLocalRestoreAt = prefs[Keys.LAST_LOCAL_RESTORE_AT],
+            historyImported = prefs[Keys.HISTORY_IMPORTED] ?: false,
         )
     }
 
@@ -95,6 +97,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setOtpEvictionEnabled(enabled: Boolean) = edit { it[Keys.OTP_EVICTION_ENABLED] = enabled }
     suspend fun setLastLocalBackupAt(timestamp: Long) = edit { it[Keys.LAST_LOCAL_BACKUP_AT] = timestamp }
     suspend fun setLastLocalRestoreAt(timestamp: Long) = edit { it[Keys.LAST_LOCAL_RESTORE_AT] = timestamp }
+    suspend fun setHistoryImported(imported: Boolean) = edit { it[Keys.HISTORY_IMPORTED] = imported }
 
     private suspend fun edit(transform: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         context.settingsDataStore.edit(transform)

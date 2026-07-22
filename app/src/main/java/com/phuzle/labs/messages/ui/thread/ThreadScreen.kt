@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -22,6 +24,10 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -32,23 +38,43 @@ import com.phuzle.labs.messages.ui.components.AvatarBubble
 import com.phuzle.labs.messages.ui.components.BarInset
 import com.phuzle.labs.messages.ui.components.FlatTextField
 import com.phuzle.labs.messages.ui.components.GlassBar
+import com.phuzle.labs.messages.ui.components.MessageSkeletonRow
+import com.phuzle.labs.messages.ui.components.roundClickable
 import com.phuzle.labs.messages.ui.components.topBarContentPadding
 import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.model.MessageUi
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
-import com.phuzle.labs.messages.ui.theme.ShapeMedium
 
 @Composable
 fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
     val tokens = MessagesTheme.tokens
     val thread = state.currentThread ?: return
+    val listState = rememberLazyListState()
+    val latestState = rememberUpdatedState(state)
+
+    // Bounded message buffer: scrolling near the top fetches one more page of history; scrolling
+    // back down well clear of it releases those pages again so long threads don't sit fully in memory.
+    LaunchedEffect(thread.id, listState) {
+        snapshotFlow { listState.firstVisibleItemIndex }.collect { index ->
+            val s = latestState.value
+            when {
+                index <= 3 && s.hasMoreOlderMessages && !s.isLoadingOlderMessages -> viewModel.loadOlderMessages()
+                index > 20 -> viewModel.trimOlderMessages()
+            }
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(top = topBarContentPadding(70.dp), bottom = 84.dp, start = 14.dp, end = 14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            if (state.isLoadingOlderMessages) {
+                item { MessageSkeletonRow(alignEnd = false) }
+                item { MessageSkeletonRow(alignEnd = true) }
+            }
             items(state.currentThreadMessages, key = { it.id }) { message -> MessageBubble(message) }
             if (thread.isOtp && thread.latestOtpCode != null) {
                 item {
@@ -68,7 +94,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
 
         GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 56.dp, inset = BarInset.Top) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(36.dp).clickable(onClick = viewModel::goBack), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(36.dp).roundClickable(onClick = viewModel::goBack), contentAlignment = Alignment.Center) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
                 }
                 Row(
@@ -103,7 +129,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                         modifier = Modifier.weight(1f),
                     )
                     Box(
-                        Modifier.size(38.dp).background(tokens.accent, ShapeMedium).clickable(onClick = viewModel::sendThreadMessage),
+                        Modifier.size(40.dp).background(tokens.accent, CircleShape).roundClickable(onClick = viewModel::sendThreadMessage),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = tokens.accentText, modifier = Modifier.size(18.dp))

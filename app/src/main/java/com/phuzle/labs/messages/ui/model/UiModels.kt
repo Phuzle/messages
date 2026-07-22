@@ -6,7 +6,7 @@ import com.phuzle.labs.messages.domain.model.Category
 
 enum class DashboardTab { Messages, Passbook, Reminders }
 
-enum class PushedScreen { Thread, ThreadInfo, Compose, Settings, RecycleBin, Archived, PrivateChats }
+enum class PushedScreen { Thread, ThreadInfo, Compose, Settings, RecycleBin, Archived, PrivateChats, Drafts }
 
 enum class SettingsSub(val title: String) {
     Notifications("Notifications"),
@@ -80,7 +80,13 @@ data class CurrentThreadUi(
     val latestOtpCode: String?,
 )
 
-data class AccountUi(val id: String, val name: String, val last4: String, val type: String, val balanceLabel: String)
+data class AccountUi(
+    val last4: String,
+    val transactionCount: Int,
+    val netLabel: String,
+    val netIsCredit: Boolean,
+    val selected: Boolean,
+)
 
 data class TransactionUi(
     val id: String,
@@ -106,3 +112,6 @@ data class BlockedNumberUi(val number: String)
 
 data class ScheduleOptionUi(val key: String?, val label: String, val active: Boolean)
 data class PillOptionUi(val key: String, val label: String, val active: Boolean)
+
+data class ContactSuggestionUi(val name: String, val number: String)
+data class DraftUi(val id: String, val to: String, val bodyPreview: String, val timeLabel: String)

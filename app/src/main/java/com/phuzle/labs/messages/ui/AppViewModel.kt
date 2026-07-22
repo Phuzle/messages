@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.phuzle.labs.messages.AppContainer
-import com.phuzle.labs.messages.data.db.entity.BankAccountEntity
 import com.phuzle.labs.messages.data.db.entity.BlockedNumberEntity
 import com.phuzle.labs.messages.data.db.entity.MessageEntity
 import com.phuzle.labs.messages.data.db.entity.ReminderEntity
@@ -14,7 +13,6 @@ import com.phuzle.labs.messages.data.prefs.AppSettings
 import com.phuzle.labs.messages.domain.model.Category
 import com.phuzle.labs.messages.domain.model.NotificationChannelIds
 import com.phuzle.labs.messages.domain.model.initialsFor
-import com.phuzle.labs.messages.ui.format.formatCentsPlain
 import com.phuzle.labs.messages.ui.format.formatCentsSigned
 import com.phuzle.labs.messages.ui.format.formatDueRelative
 import com.phuzle.labs.messages.ui.format.formatMessageTime
@@ -25,9 +23,11 @@ import com.phuzle.labs.messages.ui.model.ActionSheetUi
 import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.model.BlockedNumberUi
 import com.phuzle.labs.messages.ui.model.CategoryChipUi
+import com.phuzle.labs.messages.ui.model.ContactSuggestionUi
 import com.phuzle.labs.messages.ui.model.CurrentThreadUi
 import com.phuzle.labs.messages.ui.model.DashboardTab
 import com.phuzle.labs.messages.ui.model.DeletedThreadUi
+import com.phuzle.labs.messages.ui.model.DraftUi
 import com.phuzle.labs.messages.ui.model.MessageUi
 import com.phuzle.labs.messages.ui.model.OtpModalUi
 import com.phuzle.labs.messages.ui.model.PushedScreen
@@ -46,6 +46,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -59,6 +61,9 @@ private data class Ephemeral(
     val settingsSub: SettingsSub? = null,
     val activeTab: DashboardTab = DashboardTab.Messages,
     val activeThreadId: String? = null,
+    val olderMessages: List<MessageEntity> = emptyList(),
+    val hasMoreOlderMessages: Boolean = true,
+    val isLoadingOlderMessages: Boolean = false,
     val searchQuery: String = "",
     val activeCategory: Category = Category.All,
     val showDrawer: Boolean = false,
@@ -69,10 +74,13 @@ private data class Ephemeral(
     val composeTo: String = "",
     val composeBody: String = "",
     val composeScheduleKey: String? = null,
+    val composeDraftId: String? = null,
+    val composeToSuggestions: List<ContactSuggestionUi> = emptyList(),
     val privateChatsUnlockedThisSession: Boolean = false,
     val otpModal: OtpModalUi? = null,
     val isDefaultSmsApp: Boolean = true,
     val updateInfo: UpdateInfoUi? = null,
+    val selectedAccountLast4: String? = null,
 )
 
 private data class ThreadsSnapshot(
@@ -85,12 +93,15 @@ private data class ThreadsSnapshot(
 )
 
 private data class PassbookSnapshot(
-    val accounts: List<BankAccountEntity>,
     val transactions: List<TransactionEntity>,
     val reminders: List<ReminderEntity>,
 )
 
 private val SCHEDULE_OPTIONS = listOf(null to "Send now", "1h" to "In 1 hour", "tom9" to "Tomorrow, 9 AM")
+private const val MESSAGE_PAGE_SIZE = 40
+private const val OLDER_MESSAGE_PAGE_SIZE = 30
+/** Once loaded-older messages fall this far behind the visible/live area, drop them to bound memory. */
+private const val TRIM_OLDER_MESSAGES_SLACK = 15
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppViewModel(private val container: AppContainer) : ViewModel() {
@@ -110,29 +121,44 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     private val passbookSnapshot: Flow<PassbookSnapshot> = combine(
-        container.passbookRepository.observeAccounts(),
         container.passbookRepository.observeTransactions(),
         container.passbookRepository.observeReminders(),
-    ) { accounts, transactions, reminders -> PassbookSnapshot(accounts, transactions, reminders) }
+    ) { transactions, reminders -> PassbookSnapshot(transactions, reminders) }
 
-    private val activeThreadMessages: Flow<List<MessageEntity>> = ephemeral
+    /** The reactive "live window" — only the most recent [MESSAGE_PAGE_SIZE] rows, so an old
+     * thread with thousands of messages doesn't get pulled into memory on open. */
+    private val recentThreadMessages: Flow<List<MessageEntity>> = ephemeral
         .map { it.activeThreadId }
         .distinctUntilChanged()
-        .flatMapLatest { id -> id?.let { container.threadRepository.observeMessages(it) } ?: flowOf(emptyList()) }
+        .flatMapLatest { id -> id?.let { container.threadRepository.observeRecentMessages(it, MESSAGE_PAGE_SIZE) } ?: flowOf(emptyList()) }
 
-    val uiState: StateFlow<AppUiState> = combine(
+    /** Older pages loaded on-demand (see [loadOlderMessages]) are prepended in front of the live window. */
+    private val activeThreadMessages: Flow<List<MessageEntity>> = combine(recentThreadMessages, ephemeral) { recent, eph ->
+        (eph.olderMessages + recent.sortedBy { it.timestamp }).distinctBy { it.id }
+    }
+
+    private val baseUiState: Flow<AppUiState> = combine(
         threadsSnapshot,
         passbookSnapshot,
         activeThreadMessages,
         container.settingsRepository.settingsFlow,
         ephemeral,
     ) { threads, passbook, messages, settings, eph -> buildUiState(threads, passbook, messages, settings, eph) }
+
+    val uiState: StateFlow<AppUiState> = baseUiState
+        .combine(container.draftRepository.observeAll()) { state, drafts ->
+            state.copy(drafts = drafts.map {
+                DraftUi(
+                    id = it.id,
+                    to = it.to.ifBlank { "No recipient" },
+                    bodyPreview = it.body.take(60),
+                    timeLabel = formatThreadListTime(it.updatedAt),
+                )
+            })
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppUiState())
 
     init {
-        viewModelScope.launch {
-            container.passbookRepository.seedIfEmpty()
-        }
         viewModelScope.launch {
             val update = container.updateChecker.checkForUpdate(BuildConfig.VERSION_CODE.toLong())
             if (update != null) {
@@ -163,10 +189,27 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
         val hasUnread = threads.inbox.any { it.unread }
 
-        val accounts = passbook.accounts.map { AccountUi(it.id, it.name, it.last4, it.type, formatCentsPlain(it.balanceCents)) }
-        val transactions = passbook.transactions.map {
-            TransactionUi(it.id, it.merchant, "•• ${it.accountLast4}", formatTransactionTime(it.time), formatCentsSigned(it.amountCents), it.isCredit)
-        }
+        // "Accounts" aren't separately stored — grouping the real transaction feed by last-4 is
+        // the whole Layer-1-only story here (see PassbookRepository's doc comment).
+        val accounts = passbook.transactions
+            .filter { it.accountLast4.isNotBlank() }
+            .groupBy { it.accountLast4 }
+            .map { (last4, txs) ->
+                val net = txs.sumOf { it.amountCents }
+                AccountUi(
+                    last4 = last4,
+                    transactionCount = txs.size,
+                    netLabel = formatCentsSigned(net),
+                    netIsCredit = net >= 0,
+                    selected = last4 == eph.selectedAccountLast4,
+                )
+            }
+            .sortedByDescending { it.transactionCount }
+        val transactions = passbook.transactions
+            .filter { eph.selectedAccountLast4 == null || it.accountLast4 == eph.selectedAccountLast4 }
+            .map {
+                TransactionUi(it.id, it.merchant, "•• ${it.accountLast4}", formatTransactionTime(it.time), formatCentsSigned(it.amountCents), it.isCredit)
+            }
         val reminders = passbook.reminders.map { ReminderUi(it.id, it.title, it.detail, formatDueRelative(it.dueAt)) }
 
         val activeThread = threads.allActive.firstOrNull { it.id == eph.activeThreadId }
@@ -231,14 +274,18 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             accounts = accounts,
             transactions = transactions,
             reminders = reminders,
+            selectedAccountLast4 = eph.selectedAccountLast4,
             currentThread = currentThread,
             currentThreadMessages = currentThreadMessages,
+            isLoadingOlderMessages = eph.isLoadingOlderMessages,
+            hasMoreOlderMessages = eph.hasMoreOlderMessages,
             threadInput = eph.threadInput,
             threadOtpCopied = eph.threadOtpCopied,
             composeTo = eph.composeTo,
             composeBody = eph.composeBody,
             composeScheduleKey = eph.composeScheduleKey,
             scheduleOptions = scheduleOptions,
+            composeToSuggestions = eph.composeToSuggestions,
             deletedThreads = threads.deleted.map(::toDeleted),
             archivedThreads = threads.archived.map(::toDeleted),
             privateThreads = threads.privateList.map(::toDeleted),
@@ -287,22 +334,65 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun openPassbookTab() = ephemeral.update { it.copy(activeTab = DashboardTab.Passbook, pushedScreen = null, showDrawer = false) }
     fun openRemindersTab() = ephemeral.update { it.copy(activeTab = DashboardTab.Reminders, pushedScreen = null, showDrawer = false) }
 
+    /** Tapping an account card filters "recent activity" to that group; tapping it again clears the filter. */
+    fun toggleAccountFilter(last4: String) = ephemeral.update {
+        it.copy(selectedAccountLast4 = if (it.selectedAccountLast4 == last4) null else last4)
+    }
+
     fun openSettings() = ephemeral.update { it.copy(pushedScreen = PushedScreen.Settings, settingsSub = null, overflowMenuOpen = false, showDrawer = false) }
     fun openAbout() = ephemeral.update { it.copy(pushedScreen = PushedScreen.Settings, settingsSub = SettingsSub.About, overflowMenuOpen = false, showDrawer = false) }
     fun openSettingsSub(sub: SettingsSub) = ephemeral.update { it.copy(settingsSub = sub) }
-    fun openCompose() = ephemeral.update { it.copy(pushedScreen = PushedScreen.Compose, composeTo = "", composeBody = "", composeScheduleKey = null) }
-    fun closeCompose() = ephemeral.update { it.copy(pushedScreen = null) }
+    fun openCompose() = ephemeral.update {
+        it.copy(pushedScreen = PushedScreen.Compose, composeTo = "", composeBody = "", composeScheduleKey = null, composeDraftId = null, composeToSuggestions = emptyList())
+    }
+
+    /** Closing Compose (X icon or system back, see [goBack]) saves an unsent, non-empty draft. */
+    fun closeCompose() = viewModelScope.launch {
+        saveDraftIfNeeded()
+        ephemeral.update { it.copy(pushedScreen = null, composeToSuggestions = emptyList()) }
+    }
+
+    private suspend fun saveDraftIfNeeded() {
+        val eph = ephemeral.value
+        val body = eph.composeBody.trim()
+        if (body.isEmpty()) {
+            eph.composeDraftId?.let { container.draftRepository.delete(it) }
+            return
+        }
+        container.draftRepository.save(eph.composeDraftId, eph.composeTo.trim(), body)
+    }
+
+    fun openDraftsScreen() = ephemeral.update { it.copy(pushedScreen = PushedScreen.Drafts, showDrawer = false, overflowMenuOpen = false) }
+
+    fun openDraft(id: String) = viewModelScope.launch {
+        val draft = container.draftRepository.findById(id) ?: return@launch
+        ephemeral.update {
+            it.copy(
+                pushedScreen = PushedScreen.Compose,
+                composeTo = draft.to,
+                composeBody = draft.body,
+                composeDraftId = draft.id,
+                composeScheduleKey = null,
+                composeToSuggestions = emptyList(),
+            )
+        }
+    }
+
+    fun deleteDraft(id: String) = viewModelScope.launch { container.draftRepository.delete(id) }
+
     fun openRecycleBin() = ephemeral.update { it.copy(pushedScreen = PushedScreen.RecycleBin, showDrawer = false, overflowMenuOpen = false) }
     fun openArchivedScreen() = ephemeral.update { it.copy(pushedScreen = PushedScreen.Archived, showDrawer = false, overflowMenuOpen = false) }
     fun openThreadInfo() = ephemeral.update { it.copy(pushedScreen = PushedScreen.ThreadInfo) }
     fun openPrivateChatsScreen() = ephemeral.update { it.copy(pushedScreen = PushedScreen.PrivateChats, privateChatsUnlockedThisSession = false) }
     fun unlockPrivateChats() = ephemeral.update { it.copy(privateChatsUnlockedThisSession = true) }
 
-    fun goBack() = ephemeral.update {
+    fun goBack() {
+        val eph = ephemeral.value
         when {
-            it.pushedScreen == PushedScreen.ThreadInfo -> it.copy(pushedScreen = PushedScreen.Thread)
-            it.pushedScreen == PushedScreen.Settings && it.settingsSub != null -> it.copy(settingsSub = null)
-            else -> it.copy(pushedScreen = null, activeThreadId = null, settingsSub = null)
+            eph.pushedScreen == PushedScreen.Compose -> closeCompose()
+            eph.pushedScreen == PushedScreen.ThreadInfo -> ephemeral.update { it.copy(pushedScreen = PushedScreen.Thread) }
+            eph.pushedScreen == PushedScreen.Settings && eph.settingsSub != null -> ephemeral.update { it.copy(settingsSub = null) }
+            else -> ephemeral.update { it.copy(pushedScreen = null, activeThreadId = null, settingsSub = null) }
         }
     }
 
@@ -313,7 +403,39 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     // region ---- threads ----
 
-    fun openThreadById(id: String) = ephemeral.update { it.copy(pushedScreen = PushedScreen.Thread, activeThreadId = id, threadInput = "") }
+    fun openThreadById(id: String) = ephemeral.update {
+        it.copy(
+            pushedScreen = PushedScreen.Thread, activeThreadId = id, threadInput = "",
+            olderMessages = emptyList(), hasMoreOlderMessages = true, isLoadingOlderMessages = false,
+        )
+    }
+
+    /** Loads one more page of history above the live window; called when the list scrolls near the top. */
+    fun loadOlderMessages() = viewModelScope.launch {
+        val eph = ephemeral.value
+        val threadId = eph.activeThreadId ?: return@launch
+        if (eph.isLoadingOlderMessages || !eph.hasMoreOlderMessages) return@launch
+
+        ephemeral.update { it.copy(isLoadingOlderMessages = true) }
+        val oldestLoadedTimestamp = activeThreadMessages.first().firstOrNull()?.timestamp
+        if (oldestLoadedTimestamp == null) {
+            ephemeral.update { it.copy(isLoadingOlderMessages = false) }
+            return@launch
+        }
+        val page = container.threadRepository.olderMessagesThan(threadId, oldestLoadedTimestamp, OLDER_MESSAGE_PAGE_SIZE)
+        ephemeral.update {
+            it.copy(
+                olderMessages = (page.sortedBy { m -> m.timestamp } + it.olderMessages).distinctBy { m -> m.id },
+                hasMoreOlderMessages = page.size == OLDER_MESSAGE_PAGE_SIZE,
+                isLoadingOlderMessages = false,
+            )
+        }
+    }
+
+    /** Releases loaded-older pages once the user has scrolled well back into the live window. */
+    fun trimOlderMessages() = ephemeral.update {
+        if (it.olderMessages.isEmpty()) it else it.copy(olderMessages = emptyList(), hasMoreOlderMessages = true)
+    }
 
     fun markAllAsRead() = viewModelScope.launch {
         container.threadRepository.markAllRead()
@@ -370,7 +492,26 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     // region ---- compose & replying ----
 
-    fun onComposeToChange(value: String) = ephemeral.update { it.copy(composeTo = value) }
+    private var contactSearchJob: Job? = null
+
+    fun onComposeToChange(value: String) {
+        ephemeral.update { it.copy(composeTo = value) }
+        contactSearchJob?.cancel()
+        if (value.isBlank()) {
+            ephemeral.update { it.copy(composeToSuggestions = emptyList()) }
+            return
+        }
+        contactSearchJob = viewModelScope.launch {
+            delay(150)
+            val matches = container.contactLookup.searchContacts(value).map { ContactSuggestionUi(it.name, it.number) }
+            ephemeral.update { it.copy(composeToSuggestions = matches) }
+        }
+    }
+
+    fun selectComposeContact(contact: ContactSuggestionUi) = ephemeral.update {
+        it.copy(composeTo = contact.number, composeToSuggestions = emptyList())
+    }
+
     fun onComposeBodyChange(value: String) = ephemeral.update { it.copy(composeBody = value) }
     fun setComposeSchedule(key: String?) = ephemeral.update { it.copy(composeScheduleKey = key) }
 
@@ -393,7 +534,14 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         if (scheduledFor == null) {
             runCatching { container.smsSender.send(to, body) }
         }
-        ephemeral.update { it.copy(pushedScreen = PushedScreen.Thread, activeThreadId = thread.id, composeTo = "", composeBody = "", composeScheduleKey = null) }
+        eph.composeDraftId?.let { container.draftRepository.delete(it) }
+        ephemeral.update {
+            it.copy(
+                pushedScreen = PushedScreen.Thread, activeThreadId = thread.id, composeTo = "", composeBody = "",
+                composeScheduleKey = null, composeDraftId = null, composeToSuggestions = emptyList(),
+                olderMessages = emptyList(), hasMoreOlderMessages = true, isLoadingOlderMessages = false,
+            )
+        }
     }
 
     private fun nextNineAm(): Long {
@@ -480,7 +628,17 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         ephemeral.update { it.copy(otpModal = null) }
     }
 
-    fun setDefaultSmsAppStatus(isDefault: Boolean) = ephemeral.update { it.copy(isDefaultSmsApp = isDefault) }
+    fun setDefaultSmsAppStatus(isDefault: Boolean) {
+        ephemeral.update { it.copy(isDefaultSmsApp = isDefault) }
+        if (isDefault) importHistoryOnce()
+    }
+
+    /** Backfills pre-existing on-device SMS the first time we gain the default-SMS-app role. */
+    private fun importHistoryOnce() = viewModelScope.launch {
+        if (container.settingsRepository.settingsFlow.first().historyImported) return@launch
+        container.smsHistoryImporter.importAll()
+        container.settingsRepository.setHistoryImported(true)
+    }
 
     // endregion
 

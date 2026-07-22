@@ -21,6 +21,9 @@ class ThreadRepository(
     fun observeDeleted(): Flow<List<ThreadEntity>> = threadDao.observeDeleted()
     fun observePrivate(): Flow<List<ThreadEntity>> = threadDao.observePrivate()
     fun observeMessages(threadId: String): Flow<List<MessageEntity>> = messageDao.observeForThread(threadId)
+    fun observeRecentMessages(threadId: String, limit: Int): Flow<List<MessageEntity>> = messageDao.observeRecentForThread(threadId, limit)
+    suspend fun olderMessagesThan(threadId: String, beforeTimestamp: Long, limit: Int): List<MessageEntity> =
+        messageDao.olderThan(threadId, beforeTimestamp, limit)
     fun observeBlockedNumbers(): Flow<List<BlockedNumberEntity>> = blockedNumberDao.observeAll()
 
     suspend fun getThread(id: String): ThreadEntity? = threadDao.findById(id)

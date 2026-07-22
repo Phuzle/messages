@@ -10,12 +10,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.clip
 import com.phuzle.labs.messages.ui.model.CategoryChipUi
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
-import com.phuzle.labs.messages.ui.theme.ShapeSmall
+import com.phuzle.labs.messages.ui.theme.ShapePill
 import com.phuzle.labs.messages.ui.theme.categoryChipColors
 
-/** The prototype's shadcn-style flat toggle chips — no Material `TabRow` indicators. */
+/** One UI-style full-pill toggle chips. */
 @Composable
 fun CategoryChip(chip: CategoryChipUi, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val colors = categoryChipColors(chip.active, MessagesTheme.tokens)
@@ -25,9 +26,10 @@ fun CategoryChip(chip: CategoryChipUi, onClick: () -> Unit, modifier: Modifier =
         fontSize = 12.5.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = modifier
-            .background(colors.background, ShapeSmall)
-            .border(1.dp, colors.border, ShapeSmall)
+            .clip(ShapePill)
+            .background(colors.background, ShapePill)
+            .border(1.dp, colors.border, ShapePill)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 7.dp),
+            .padding(horizontal = 15.dp, vertical = 7.dp),
     )
 }

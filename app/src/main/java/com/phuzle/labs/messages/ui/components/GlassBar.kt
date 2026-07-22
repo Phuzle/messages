@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
@@ -19,20 +19,18 @@ import com.phuzle.labs.messages.ui.theme.MessagesTheme
 enum class BarInset { None, Top, Bottom }
 
 /**
- * The prototype's frosted top/bottom bar. True backdrop blur-through of scrolling content isn't
- * achievable with plain Jetpack Compose (no first-party equivalent to CSS `backdrop-filter`
- * without a third-party compositing library) — this renders the same translucent tint + hairline
- * border the design specifies, without the blur-through of what's underneath.
+ * The app's solid, gently-elevated top/bottom bar — a One UI-style opaque surface with a soft
+ * drop shadow, not a translucent glass tint (the earlier frosted-glass look read as messy/see-
+ * through against scrolling content, especially on the bottom nav).
  *
- * The tint+background always extends into the system bar area (edge-to-edge is mandatory as of
- * API 35); [inset] pads the *content* clear of the status/navigation bar without shrinking the
- * painted background, so the glass tint still shows behind the status/nav bar.
+ * The background always extends into the system bar area (edge-to-edge is mandatory as of API 35);
+ * [inset] pads the *content* clear of the status/navigation bar without shrinking the painted
+ * background, so the surface still shows behind the status/nav bar.
  */
 @Composable
 fun GlassBar(
     modifier: Modifier = Modifier,
     height: Dp = 52.dp,
-    hairlineAtBottom: Boolean = true,
     inset: BarInset = BarInset.None,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -45,17 +43,8 @@ fun GlassBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(tokens.barBg)
-            .drawBehind {
-                val strokeWidth = 1.dp.toPx()
-                val y = if (hairlineAtBottom) size.height - strokeWidth / 2 else strokeWidth / 2
-                drawLine(
-                    color = tokens.barBorder,
-                    start = androidx.compose.ui.geometry.Offset(0f, y),
-                    end = androidx.compose.ui.geometry.Offset(size.width, y),
-                    strokeWidth = strokeWidth,
-                )
-            }
+            .shadow(elevation = 6.dp)
+            .background(tokens.surface)
             .then(insetModifier)
             .height(height),
         contentAlignment = Alignment.CenterStart,

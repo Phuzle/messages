@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Drafts
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
@@ -17,11 +18,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 
-enum class DrawerIconType { Inbox, Archived, Passbook, Reminders, Settings, RecycleBin, AboutUs, Share }
+enum class DrawerIconType { Inbox, Archived, Drafts, Passbook, Reminders, Settings, RecycleBin, AboutUs, Share }
 
 private fun DrawerIconType.imageVector(): ImageVector = when (this) {
     DrawerIconType.Inbox -> Icons.Filled.Inbox
     DrawerIconType.Archived -> Icons.Filled.Archive
+    DrawerIconType.Drafts -> Icons.Filled.Drafts
     DrawerIconType.Passbook -> Icons.Filled.AccountBalanceWallet
     DrawerIconType.Reminders -> Icons.Filled.Notifications
     DrawerIconType.Settings -> Icons.Filled.Settings

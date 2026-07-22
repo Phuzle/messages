@@ -22,6 +22,7 @@ import com.phuzle.labs.messages.ui.components.OverflowMenu
 import com.phuzle.labs.messages.ui.components.UpdateAvailableDialog
 import android.net.Uri
 import com.phuzle.labs.messages.ui.dashboard.DashboardScreen
+import com.phuzle.labs.messages.ui.drafts.DraftsScreen
 import com.phuzle.labs.messages.ui.model.PushedScreen
 import com.phuzle.labs.messages.ui.model.SettingsSub
 import com.phuzle.labs.messages.ui.privatechats.PrivateChatsScreen
@@ -59,6 +60,7 @@ fun AppRoot(viewModel: AppViewModel) {
                 PushedScreen.RecycleBin -> RecycleBinScreen(state, viewModel)
                 PushedScreen.Archived -> ArchivedScreen(state, viewModel)
                 PushedScreen.PrivateChats -> PrivateChatsScreen(state, viewModel)
+                PushedScreen.Drafts -> DraftsScreen(state, viewModel)
             }
 
             NavDrawer(
@@ -67,6 +69,7 @@ fun AppRoot(viewModel: AppViewModel) {
                 items = listOf(
                     DrawerItem("Inbox", DrawerIconType.Inbox, viewModel::openMessagesTab),
                     DrawerItem("Archived", DrawerIconType.Archived, viewModel::openArchivedScreen),
+                    DrawerItem("Drafts", DrawerIconType.Drafts, viewModel::openDraftsScreen),
                     DrawerItem("Passbook", DrawerIconType.Passbook, viewModel::openPassbookTab),
                     DrawerItem("Reminders", DrawerIconType.Reminders, viewModel::openRemindersTab),
                     DrawerItem("Settings", DrawerIconType.Settings, viewModel::openSettings),

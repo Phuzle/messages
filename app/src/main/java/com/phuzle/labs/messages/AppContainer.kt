@@ -7,10 +7,12 @@ import com.google.firebase.messaging.FirebaseMessaging
 import com.phuzle.labs.messages.core.contacts.ContactLookup
 import com.phuzle.labs.messages.core.notifications.MessageNotifier
 import com.phuzle.labs.messages.core.push.UpdateChecker
+import com.phuzle.labs.messages.core.sms.SmsHistoryImporter
 import com.phuzle.labs.messages.core.sms.SmsSender
 import com.phuzle.labs.messages.data.backup.LocalBackupManager
 import com.phuzle.labs.messages.data.db.AppDatabase
 import com.phuzle.labs.messages.data.prefs.SettingsRepository
+import com.phuzle.labs.messages.data.repository.DraftRepository
 import com.phuzle.labs.messages.data.repository.PassbookRepository
 import com.phuzle.labs.messages.data.repository.ThreadRepository
 import com.phuzle.labs.messages.domain.categorization.CategoryClassifier
@@ -29,6 +31,7 @@ class AppContainer(context: Context) {
         ThreadRepository(database.threadDao(), database.messageDao(), database.blockedNumberDao())
     }
     val passbookRepository: PassbookRepository by lazy { PassbookRepository(database.passbookDao()) }
+    val draftRepository: DraftRepository by lazy { DraftRepository(database.draftDao()) }
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(appContext) }
     val backupManager: LocalBackupManager by lazy { LocalBackupManager(appContext) }
     val contactLookup: ContactLookup by lazy { ContactLookup(appContext) }
@@ -39,6 +42,9 @@ class AppContainer(context: Context) {
     val smsSender: SmsSender by lazy { SmsSender(appContext) }
     val messageNotifier: MessageNotifier by lazy { MessageNotifier(appContext, settingsRepository) }
     val updateChecker: UpdateChecker by lazy { UpdateChecker() }
+    val smsHistoryImporter: SmsHistoryImporter by lazy {
+        SmsHistoryImporter(appContext, database.threadDao(), database.messageDao(), contactLookup, classifier)
+    }
 
     fun copyToClipboard(label: String, text: String) {
         val clipboard = appContext.getSystemService(android.content.ClipboardManager::class.java)

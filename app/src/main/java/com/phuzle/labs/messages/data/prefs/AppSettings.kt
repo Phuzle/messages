@@ -24,4 +24,5 @@ data class AppSettings(
     val otpEvictionEnabled: Boolean = false,
     val lastLocalBackupAt: Long? = null,
     val lastLocalRestoreAt: Long? = null,
+    val historyImported: Boolean = false,
 )
