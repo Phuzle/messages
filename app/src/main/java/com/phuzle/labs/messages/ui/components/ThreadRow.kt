@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.model.ThreadUi
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
+import com.phuzle.labs.messages.ui.theme.SwipeActionMeta
 import com.phuzle.labs.messages.ui.theme.swipeActionMeta
 
 /**
@@ -62,13 +64,13 @@ fun ThreadRow(
     SwipeToDismissBox(
         state = dismissState,
         modifier = modifier,
-        enableDismissFromStartToEnd = rightPanel.first != "—",
-        enableDismissFromEndToStart = leftPanel.first != "—",
+        enableDismissFromStartToEnd = rightPanel.label != "—",
+        enableDismissFromEndToStart = leftPanel.label != "—",
         backgroundContent = {
-            val (label, color) = when (dismissState.dismissDirection) {
+            val panel = when (dismissState.dismissDirection) {
                 SwipeToDismissBoxValue.StartToEnd -> rightPanel
                 SwipeToDismissBoxValue.EndToStart -> leftPanel
-                SwipeToDismissBoxValue.Settled -> "" to tokens.bg
+                SwipeToDismissBoxValue.Settled -> SwipeActionMeta("", tokens.bg, null)
             }
             val alignment = if (dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd) {
                 Alignment.CenterStart
@@ -76,10 +78,25 @@ fun ThreadRow(
                 Alignment.CenterEnd
             }
             Box(
-                modifier = Modifier.fillMaxSize().background(color).padding(horizontal = 22.dp),
+                modifier = Modifier.fillMaxSize().background(panel.color).padding(horizontal = 22.dp),
                 contentAlignment = alignment,
             ) {
-                Text(label, color = androidx.compose.ui.graphics.Color.White, fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (alignment == Alignment.CenterEnd) {
+                        Text(panel.label, color = androidx.compose.ui.graphics.Color.White, fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                    }
+                    panel.icon?.let {
+                        Icon(
+                            it,
+                            contentDescription = panel.label,
+                            tint = androidx.compose.ui.graphics.Color.White,
+                            modifier = Modifier.padding(horizontal = 8.dp).size(18.dp),
+                        )
+                    }
+                    if (alignment == Alignment.CenterStart) {
+                        Text(panel.label, color = androidx.compose.ui.graphics.Color.White, fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                    }
+                }
             }
         },
     ) {

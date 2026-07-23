@@ -95,11 +95,14 @@
             android:name=".core.notifications.ReplyReceiver"
             android:exported="false" />
 
-        <!-- adb-only testing hook (simulate_messages.sh) for injecting a genuine outgoing message
-             through the real repository; not exported, and no-ops outside debug builds. -->
+        <!-- adb-only testing hook (simulate_messages.sh, provision_contacts.sh) for injecting a
+             genuine outgoing message / contact photo through the real repository/ContentResolver.
+             Exported so `adb shell am broadcast` can reach it by explicit component name even on
+             API levels that no longer let shell bypass exported=false for this; harmless even in a
+             release build since onReceive no-ops entirely outside BuildConfig.DEBUG. -->
         <receiver
             android:name=".core.debug.DebugSimulationReceiver"
-            android:exported="false" />
+            android:exported="true" />
 
         <!-- Receives server-pushed alerts (app update available, maintenance notices) via FCM -->
         <service

@@ -64,6 +64,10 @@ import kotlinx.coroutines.launch
 private data class Ephemeral(
     val pushedScreen: PushedScreen? = null,
     val settingsSub: SettingsSub? = null,
+    /** Set when RecycleBin/Archived/PrivateChats is opened from inside a settings sub-page (e.g.
+     * Storage's "Recycle Bin" row) instead of the drawer, so [AppViewModel.goBack] can return to
+     * that sub-page instead of falling all the way back to the dashboard. */
+    val returnToSettingsSub: SettingsSub? = null,
     val activeTab: DashboardTab = DashboardTab.Messages,
     val activeThreadId: String? = null,
     val olderMessages: List<MessageEntity> = emptyList(),
@@ -462,10 +466,26 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         offerUndo("Draft deleted") { container.draftRepository.save(draft.id, draft.to, draft.body) }
     }
 
-    fun openRecycleBin() = ephemeral.update { it.copy(pushedScreen = PushedScreen.RecycleBin, showDrawer = false, overflowMenuOpen = false) }
-    fun openArchivedScreen() = ephemeral.update { it.copy(pushedScreen = PushedScreen.Archived, showDrawer = false, overflowMenuOpen = false) }
+    /** Recycle Bin/Archived/Private Chats can be reached either from the drawer (top level) or
+     * from a row inside a settings sub-page (Storage's "Recycle Bin"/"Archived", Privacy's
+     * "Private Chats"); in the latter case, remember the sub-page so [goBack] returns there
+     * instead of falling all the way back to the dashboard. */
+    private fun settingsAwareNav(target: PushedScreen) = ephemeral.update {
+        it.copy(
+            pushedScreen = target,
+            returnToSettingsSub = if (it.pushedScreen == PushedScreen.Settings) it.settingsSub else null,
+            showDrawer = false,
+            overflowMenuOpen = false,
+        )
+    }
+
+    fun openRecycleBin() = settingsAwareNav(PushedScreen.RecycleBin)
+    fun openArchivedScreen() = settingsAwareNav(PushedScreen.Archived)
     fun openThreadInfo() = ephemeral.update { it.copy(pushedScreen = PushedScreen.ThreadInfo) }
-    fun openPrivateChatsScreen() = ephemeral.update { it.copy(pushedScreen = PushedScreen.PrivateChats, privateChatsUnlockedThisSession = false) }
+    fun openPrivateChatsScreen() {
+        settingsAwareNav(PushedScreen.PrivateChats)
+        ephemeral.update { it.copy(privateChatsUnlockedThisSession = false) }
+    }
     fun unlockPrivateChats() = ephemeral.update { it.copy(privateChatsUnlockedThisSession = true) }
 
     fun goBack() {
@@ -474,6 +494,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             eph.pushedScreen == PushedScreen.Compose -> closeCompose()
             eph.pushedScreen == PushedScreen.ThreadInfo -> ephemeral.update { it.copy(pushedScreen = PushedScreen.Thread) }
             eph.pushedScreen == PushedScreen.Settings && eph.settingsSub != null -> ephemeral.update { it.copy(settingsSub = null) }
+            eph.returnToSettingsSub != null -> ephemeral.update {
+                it.copy(pushedScreen = PushedScreen.Settings, settingsSub = it.returnToSettingsSub, returnToSettingsSub = null)
+            }
             else -> ephemeral.update { it.copy(pushedScreen = null, activeThreadId = null, settingsSub = null) }
         }
     }
@@ -485,11 +508,20 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     // region ---- threads ----
 
-    fun openThreadById(id: String) = ephemeral.update {
-        it.copy(
-            pushedScreen = PushedScreen.Thread, activeThreadId = id, threadInput = "",
-            olderMessages = emptyList(), hasMoreOlderMessages = true, isLoadingOlderMessages = false,
-        )
+    fun openThreadById(id: String) {
+        ephemeral.update {
+            it.copy(
+                pushedScreen = PushedScreen.Thread, activeThreadId = id, threadInput = "",
+                olderMessages = emptyList(), hasMoreOlderMessages = true, isLoadingOlderMessages = false,
+            )
+        }
+        // Opening the conversation is itself "reading" it — previously only the explicit
+        // action-sheet "Mark as read" toggled this, so the unread dot stuck around after simply
+        // viewing the thread.
+        viewModelScope.launch {
+            val thread = container.threadRepository.getThread(id) ?: return@launch
+            if (thread.unread) container.threadRepository.toggleRead(id, true)
+        }
     }
 
     /** Loads one more page of history above the live window; called when the list scrolls near the top. */
@@ -575,8 +607,15 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         offerUndo("Chat deleted") { container.threadRepository.restore(id) }
     }
 
-    fun restoreThread(id: String) = viewModelScope.launch { container.threadRepository.restore(id); toast("Restored") }
-    fun unarchiveThread(id: String) = viewModelScope.launch { container.threadRepository.unarchive(id); toast("Unarchived") }
+    fun restoreThread(id: String) = viewModelScope.launch {
+        container.threadRepository.restore(id)
+        offerUndo("Restored") { container.threadRepository.softDelete(id, System.currentTimeMillis()) }
+    }
+
+    fun unarchiveThread(id: String) = viewModelScope.launch {
+        container.threadRepository.unarchive(id)
+        offerUndo("Unarchived") { container.threadRepository.archive(id) }
+    }
 
     fun unarchiveAll() = viewModelScope.launch {
         val ids = uiState.value.archivedThreads.map { it.id }
@@ -588,8 +627,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun restoreAllDeleted() = viewModelScope.launch {
         val ids = uiState.value.deletedThreads.map { it.id }
         if (ids.isEmpty()) return@launch
+        val now = System.currentTimeMillis()
         ids.forEach { container.threadRepository.restore(it) }
-        toast("${ids.size} ${if (ids.size == 1) "chat" else "chats"} restored")
+        offerUndo("${ids.size} ${if (ids.size == 1) "chat" else "chats"} restored") { ids.forEach { container.threadRepository.softDelete(it, now) } }
     }
 
     /** Permanent — not reversible via undo, so callers should confirm with the user first. */
