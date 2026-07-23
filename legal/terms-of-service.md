@@ -1,6 +1,6 @@
 # Terms of Service
 
-**Effective date:** [FILL IN ON PUBLISH]
+**Effective date:** July 24, 2026
 
 These terms cover the Messages Android app ("Messages", "the app"), published by Phuzle Labs.
 Intended to be hosted at `https://docs.phuzle.com/messages/terms`. By installing or using

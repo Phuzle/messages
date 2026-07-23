@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Effective date:** [FILL IN ON PUBLISH]
+**Effective date:** July 24, 2026
 
 This policy covers the Messages Android app ("Messages", "the app"), published by Phuzle Labs.
 It is intended to be hosted at `https://docs.phuzle.com/messages/privacy`.
