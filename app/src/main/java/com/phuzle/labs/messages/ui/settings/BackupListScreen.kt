@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -86,7 +87,8 @@ fun BackupListScreen(viewModel: AppViewModel) {
                 items(listState.local, key = { "local-" + it.fileName }) { backup ->
                     BackupRow(
                         title = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(backup.timestampMillis)),
-                        subtitle = "Local snapshot",
+                        busy = listState.restoringKey == "local:${backup.fileName}",
+                        disabled = listState.restoringKey != null,
                         onRestore = { pendingLocalRestore = backup },
                     )
                 }
@@ -101,11 +103,19 @@ fun BackupListScreen(viewModel: AppViewModel) {
                     item { Text("Not connected to Google Drive", color = tokens.textTertiary, fontSize = 12.5.sp) }
                 } else if (listState.drive.isEmpty() && !listState.loading) {
                     item { Text("No Drive backups yet", color = tokens.textTertiary, fontSize = 12.5.sp) }
+                } else {
+                    item {
+                        Text(
+                            "Restoring merges these in — nothing already on this device is removed.",
+                            color = tokens.textTertiary, fontSize = 11.5.sp, modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                    }
                 }
                 items(listState.drive, key = { "drive-" + it.id }) { backup ->
                     BackupRow(
                         title = formatDriveTime(backup.createdTime),
-                        subtitle = "Google Drive · merges in, nothing local is removed",
+                        busy = listState.restoringKey == "drive:${backup.id}",
+                        disabled = listState.restoringKey != null,
                         onRestore = { viewModel.restoreDriveBackup(backup.id) },
                     )
                 }
@@ -136,22 +146,28 @@ fun BackupListScreen(viewModel: AppViewModel) {
 }
 
 @Composable
-private fun BackupRow(title: String, subtitle: String, onRestore: () -> Unit) {
+private fun BackupRow(title: String, onRestore: () -> Unit, busy: Boolean = false, disabled: Boolean = false) {
     val tokens = MessagesTheme.tokens
     Row(
         Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium).padding(14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, color = tokens.textPrimary, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
-            Text(subtitle, color = tokens.textTertiary, fontSize = 11.5.sp, modifier = Modifier.padding(top = 2.dp))
-        }
         Text(
-            "Restore", color = tokens.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.border(1.dp, tokens.border, RoundedCornerShape(9.dp))
-                .clickable(onClick = onRestore).padding(horizontal = 16.dp, vertical = 9.dp),
+            title, color = if (disabled) tokens.textTertiary else tokens.textPrimary, fontSize = 13.5.sp,
+            fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f),
         )
+        Row(
+            modifier = Modifier.border(1.dp, tokens.border, RoundedCornerShape(9.dp))
+                .clickable(enabled = !disabled, onClick = onRestore).padding(horizontal = 16.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (busy) {
+                CircularProgressIndicator(color = tokens.textPrimary, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+            } else {
+                Text("Restore", color = if (disabled) tokens.textTertiary else tokens.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
     }
 }
 

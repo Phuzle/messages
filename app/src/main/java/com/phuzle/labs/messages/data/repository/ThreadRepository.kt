@@ -30,6 +30,11 @@ class ThreadRepository(
     suspend fun getThread(id: String): ThreadEntity? = threadDao.findById(id)
     suspend fun isBlocked(number: String): Boolean = blockedNumberDao.isBlocked(number)
 
+    data class StorageOverview(val chatCount: Int, val senderCount: Int, val messageCount: Int)
+
+    suspend fun storageOverview(): StorageOverview =
+        StorageOverview(threadDao.countActiveThreads(), threadDao.countActiveSenders(), messageDao.countAll())
+
     /** Real SMS_DELIVER path: find-or-create the thread for [sender], then append the message. */
     suspend fun recordIncomingMessage(
         sender: String,

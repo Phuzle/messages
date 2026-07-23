@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -23,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,6 +43,7 @@ fun BackupSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
     val tokens = MessagesTheme.tokens
     val settings = state.settings
     var showDisconnectConfirm by remember { mutableStateOf(false) }
+    val busy by viewModel.backupBusy.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
@@ -81,8 +85,8 @@ fun BackupSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                         Text(settings.googleAccountEmail, color = tokens.textTertiary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
                     }
                     Text(
-                        "Disconnect", color = tokens.danger, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable(onClick = { showDisconnectConfirm = true }).padding(4.dp),
+                        "Disconnect", color = if (busy) tokens.textTertiary else tokens.danger, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable(enabled = !busy, onClick = { showDisconnectConfirm = true }).padding(4.dp),
                     )
                 }
                 Row(
@@ -107,7 +111,7 @@ fun BackupSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                     ) {
                         Column {
                             Text("Wi-Fi only", color = tokens.textPrimary, fontSize = 13.sp)
-                            Text("appDataFolder · hidden from your Drive UI", color = tokens.textTertiary, fontSize = 11.5.sp, modifier = Modifier.padding(top = 2.dp))
+                            Text("Disabling this will use mobile data", color = tokens.textTertiary, fontSize = 11.5.sp, modifier = Modifier.padding(top = 2.dp))
                         }
                         LabeledSwitch(checked = settings.driveWifiOnly, onCheckedChange = { viewModel.toggleDriveWifiOnly() })
                     }
@@ -120,11 +124,7 @@ fun BackupSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                             Text("Backup now", color = tokens.textPrimary, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
                             Text(lastBackupLabel(settings.lastDriveBackupAt), color = tokens.textTertiary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
                         }
-                        Text(
-                            "Backup now", color = tokens.accentText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.background(tokens.accent, RoundedCornerShape(9.dp))
-                                .clickable(onClick = viewModel::driveBackupNow).padding(horizontal = 16.dp, vertical = 9.dp),
-                        )
+                        BackupActionButton("Backup now", busy = busy, filled = true, onClick = viewModel::driveBackupNow)
                     }
                 }
             }
@@ -136,16 +136,32 @@ fun BackupSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                     Text("Backup now (local)", color = tokens.textPrimary, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
                     Text(lastBackupLabel(settings.lastLocalBackupAt), color = tokens.textTertiary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
                 }
+                BackupActionButton("Backup now", busy = busy, filled = true, onClick = viewModel::backupNow)
+            }
+            Text(
+                "Kept privately in this app's storage, not visible in your Files app. Use Export to save a copy you can move to another device.",
+                color = tokens.textTertiary, fontSize = 11.5.sp, modifier = Modifier.padding(top = 10.dp),
+            )
+            Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "Backup now", color = tokens.accentText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.background(tokens.accent, RoundedCornerShape(9.dp))
-                        .clickable(onClick = viewModel::backupNow).padding(horizontal = 16.dp, vertical = 9.dp),
+                    "Export a copy", color = tokens.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.weight(1f)
+                        .border(1.dp, tokens.border, RoundedCornerShape(9.dp))
+                        .clickable(onClick = viewModel::requestExportBackup).padding(vertical = 11.dp),
+                )
+                Text(
+                    "Restore from file", color = tokens.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.weight(1f)
+                        .border(1.dp, tokens.border, RoundedCornerShape(9.dp))
+                        .clickable(onClick = viewModel::requestRestoreFromFile).padding(vertical = 11.dp),
                 )
             }
             Text(
                 "View & restore backups", color = tokens.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(top = 14.dp)
+                modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
                     .border(1.dp, tokens.border, RoundedCornerShape(9.dp))
                     .clickable(onClick = viewModel::openBackupList).padding(vertical = 11.dp),
             )
@@ -169,3 +185,25 @@ fun BackupSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
 
 private fun lastBackupLabel(timestamp: Long?): String =
     if (timestamp == null) "No backup yet" else "Last backup: ${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(timestamp))}"
+
+/** Backup/restore is async I/O with no other visible feedback — this disables the button and
+ * swaps its label for a spinner while in flight, so a slow connection can't be mistaken for "my
+ * tap didn't register" and tapped again into a queue of redundant runs (see AppViewModel.runBackupAction). */
+@Composable
+private fun BackupActionButton(label: String, busy: Boolean, filled: Boolean, onClick: () -> Unit) {
+    val tokens = MessagesTheme.tokens
+    val spinnerColor = if (filled) tokens.accentText else tokens.textPrimary
+    Row(
+        modifier = Modifier
+            .let { if (filled) it.background(tokens.accent, RoundedCornerShape(9.dp)) else it.border(1.dp, tokens.border, RoundedCornerShape(9.dp)) }
+            .clickable(enabled = !busy, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (busy) {
+            CircularProgressIndicator(color = spinnerColor, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+        } else {
+            Text(label, color = if (filled) tokens.accentText else tokens.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}

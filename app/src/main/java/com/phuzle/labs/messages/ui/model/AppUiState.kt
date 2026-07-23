@@ -48,6 +48,7 @@ data class AppUiState(
     val archivedThreads: List<DeletedThreadUi> = emptyList(),
     val privateThreads: List<DeletedThreadUi> = emptyList(),
     val privateChatsUnlockedThisSession: Boolean = false,
+    val appUnlockedThisSession: Boolean = true,
 
     val blockedList: List<BlockedNumberUi> = emptyList(),
 
@@ -61,6 +62,7 @@ data class AppUiState(
     val threadSearchQuery: String = "",
     val driveRestoreAvailable: Boolean = false,
     val messageActionTarget: MessageActionTargetUi? = null,
+    val multiSelectThreadIds: Set<String> = emptySet(),
 
     val isDefaultSmsApp: Boolean = true,
     val isImportingHistory: Boolean = false,

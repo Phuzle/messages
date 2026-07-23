@@ -121,6 +121,8 @@ data class BlockedNumberUi(val number: String)
 
 data class PillOptionUi(val key: String, val label: String, val active: Boolean)
 
+data class StorageOverviewUi(val chatCount: Int, val senderCount: Int, val messageCount: Int, val storageBytes: Long)
+
 data class LocalBackupUi(val fileName: String, val timestampMillis: Long)
 data class DriveBackupUi(val id: String, val name: String, val createdTime: String)
 data class BackupListUiState(
@@ -128,6 +130,10 @@ data class BackupListUiState(
     val local: List<LocalBackupUi> = emptyList(),
     val drive: List<DriveBackupUi> = emptyList(),
     val driveConnected: Boolean = false,
+    /** Key of whichever backup is currently being restored ("local:<fileName>" or "drive:<id>"),
+     * so that one row can show a spinner and every row can be disabled meanwhile — restoring two
+     * backups at once would race on the same live database. */
+    val restoringKey: String? = null,
 )
 
 data class ContactSuggestionUi(val name: String, val number: String, val photoUri: String? = null)

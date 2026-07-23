@@ -4,8 +4,12 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -13,6 +17,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.archived.ArchivedScreen
 import com.phuzle.labs.messages.ui.compose.ComposeScreen
 import com.phuzle.labs.messages.ui.components.ActionSheet
@@ -51,7 +57,7 @@ fun AppRoot(viewModel: AppViewModel) {
     MessagesTheme(themeMode = state.themeMode, accentHex = state.settings.accentHex) {
         val tokens = MessagesTheme.tokens
 
-        BackHandler(enabled = state.undoMessage != null || state.updateInfo != null || state.driveRestoreAvailable || state.actionSheet != null || state.overflowMenuOpen || state.showDrawer || state.pushedScreen != null) {
+        BackHandler(enabled = state.undoMessage != null || state.updateInfo != null || state.driveRestoreAvailable || state.actionSheet != null || state.overflowMenuOpen || state.showDrawer || state.multiSelectThreadIds.isNotEmpty() || state.pushedScreen != null) {
             when {
                 state.undoMessage != null -> viewModel.dismissUndo()
                 state.updateInfo != null -> viewModel.dismissUpdate()
@@ -59,12 +65,37 @@ fun AppRoot(viewModel: AppViewModel) {
                 state.actionSheet != null -> viewModel.closeActionSheet()
                 state.overflowMenuOpen -> viewModel.closeOverflowMenu()
                 state.showDrawer -> viewModel.closeDrawer()
+                state.multiSelectThreadIds.isNotEmpty() -> viewModel.exitMultiSelect()
                 else -> viewModel.goBack()
             }
         }
 
         if (state.isImportingHistory) {
             SyncingScreen(done = state.importDone, total = state.importTotal)
+            return@MessagesTheme
+        }
+
+        if (!state.appUnlockedThisSession) {
+            com.phuzle.labs.messages.ui.components.BiometricGate(
+                key = "app_lock",
+                title = "Unlock Messages",
+                subtitle = "Confirm it's you to open the app",
+                onUnlocked = viewModel::unlockApp,
+            ) { retry ->
+                Box(Modifier.fillMaxSize().background(tokens.bg).padding(24.dp), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(14.dp)) {
+                        com.phuzle.labs.messages.ui.components.AppLogo(size = 56.dp)
+                        Text("Messages is locked", color = tokens.textSecondary, fontSize = 14.sp)
+                        Text(
+                            "Unlock", color = tokens.accentText, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                            modifier = Modifier
+                                .background(tokens.accent, com.phuzle.labs.messages.ui.theme.ShapeMedium)
+                                .clickable(onClick = retry)
+                                .padding(horizontal = 20.dp, vertical = 11.dp),
+                        )
+                    }
+                }
+            }
             return@MessagesTheme
         }
 

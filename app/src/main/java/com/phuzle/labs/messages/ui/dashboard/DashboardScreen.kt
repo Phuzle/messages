@@ -21,11 +21,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -38,7 +41,11 @@ import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.outlined.Chat as ChatOutlined
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MarkEmailRead
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
@@ -98,7 +105,17 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                     modifier = Modifier.padding(top = topContentPadding, bottom = bottomContentPadding),
                 )
             } else {
+                val listState = rememberLazyListState()
+                // Undoing an archive/delete brings a thread back near the top of a recency-sorted
+                // list, but LazyColumn's key-based scroll anchoring keeps whatever was already on
+                // screen pinned in place — so the restored thread can reappear scrolled out of
+                // view above the top edge instead of visibly popping back in. Scroll back to the
+                // top whenever that happens (see AppViewModel.confirmUndo).
+                LaunchedEffect(Unit) {
+                    viewModel.scrollToTopEvents.collect { listState.animateScrollToItem(0) }
+                }
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(top = topContentPadding, bottom = bottomContentPadding),
                 ) {
@@ -112,6 +129,11 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                             onSwipeRight = { viewModel.onSwipeRight(thread.id) },
                             onSwipeLeft = { viewModel.onSwipeLeft(thread.id) },
                             modifier = Modifier.animateItem(),
+                            selectionMode = state.multiSelectThreadIds.isNotEmpty(),
+                            selected = thread.id in state.multiSelectThreadIds,
+                            onToggleSelect = { viewModel.toggleThreadSelection(thread.id) },
+                            onAvatarClick = { viewModel.openThreadInfoById(thread.id) },
+                            onAvatarLongPress = { viewModel.startMultiSelect(thread.id) },
                         )
                     }
                 }
@@ -156,6 +178,59 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
 
         Column(Modifier.align(Alignment.TopCenter)) {
             GlassBar(height = 52.dp, inset = BarInset.Top) {
+                if (state.multiSelectThreadIds.isNotEmpty()) {
+                    var showBulkArchiveConfirm by remember { mutableStateOf(false) }
+                    var showBulkDeleteConfirm by remember { mutableStateOf(false) }
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier.size(40.dp).roundClickable(onClick = viewModel::exitMultiSelect),
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(Icons.Filled.Close, contentDescription = "Cancel selection", tint = tokens.textPrimary, modifier = Modifier.size(22.dp)) }
+                        Text(
+                            "${state.multiSelectThreadIds.size} selected", color = tokens.textPrimary, fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 4.dp),
+                        )
+                        Box(
+                            Modifier.size(40.dp).roundClickable(onClick = viewModel::bulkMarkReadSelected),
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(Icons.Filled.MarkEmailRead, contentDescription = "Mark as read", tint = tokens.textPrimary, modifier = Modifier.size(20.dp)) }
+                        Box(
+                            Modifier.size(40.dp).roundClickable(onClick = { showBulkArchiveConfirm = true }),
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(Icons.Filled.Archive, contentDescription = "Archive", tint = tokens.textPrimary, modifier = Modifier.size(20.dp)) }
+                        Box(
+                            Modifier.size(40.dp).roundClickable(onClick = { showBulkDeleteConfirm = true }),
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = tokens.danger, modifier = Modifier.size(20.dp)) }
+                    }
+
+                    if (showBulkArchiveConfirm) {
+                        androidx.compose.material3.AlertDialog(
+                            onDismissRequest = { showBulkArchiveConfirm = false },
+                            title = { Text("Archive ${state.multiSelectThreadIds.size} chats?") },
+                            confirmButton = {
+                                androidx.compose.material3.TextButton(onClick = { viewModel.bulkArchiveSelected(); showBulkArchiveConfirm = false }) {
+                                    Text("Archive")
+                                }
+                            },
+                            dismissButton = { androidx.compose.material3.TextButton(onClick = { showBulkArchiveConfirm = false }) { Text("Cancel") } },
+                        )
+                    }
+                    if (showBulkDeleteConfirm) {
+                        androidx.compose.material3.AlertDialog(
+                            onDismissRequest = { showBulkDeleteConfirm = false },
+                            title = { Text("Delete ${state.multiSelectThreadIds.size} chats?") },
+                            text = { Text("Deleted chats move to the Recycle Bin for 30 days before they're purged for good.") },
+                            confirmButton = {
+                                androidx.compose.material3.TextButton(onClick = { viewModel.bulkDeleteSelected(); showBulkDeleteConfirm = false }) {
+                                    Text("Delete", color = tokens.danger)
+                                }
+                            },
+                            dismissButton = { androidx.compose.material3.TextButton(onClick = { showBulkDeleteConfirm = false }) { Text("Cancel") } },
+                        )
+                    }
+                    return@GlassBar
+                }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         Modifier.size(40.dp).roundClickable(onClick = viewModel::toggleDrawer),

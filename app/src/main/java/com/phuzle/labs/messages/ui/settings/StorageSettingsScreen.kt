@@ -14,11 +14,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.phuzle.labs.messages.ui.AppViewModel
 import com.phuzle.labs.messages.ui.components.LabeledSwitch
 import com.phuzle.labs.messages.ui.components.SettingsCard
@@ -30,11 +34,27 @@ import com.phuzle.labs.messages.ui.theme.ShapeMedium
 @Composable
 fun StorageSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
     val tokens = MessagesTheme.tokens
+    val context = LocalContext.current
+    val overview by viewModel.storageOverview.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { viewModel.loadStorageOverview() }
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
+        SettingsCard {
+            OverviewRow("Chats", overview?.chatCount?.toString() ?: "—")
+            SettingsRowDivider()
+            OverviewRow("Senders", overview?.senderCount?.toString() ?: "—")
+            SettingsRowDivider()
+            OverviewRow("Messages", overview?.messageCount?.toString() ?: "—")
+            SettingsRowDivider()
+            OverviewRow(
+                "Storage used",
+                overview?.let { android.text.format.Formatter.formatShortFileSize(context, it.storageBytes) } ?: "—",
+            )
+        }
+
         Column(Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium).padding(14.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -55,6 +75,19 @@ fun StorageSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
             "Archived threads stay until you unarchive them. Deleted threads are purged automatically after 30 days.",
             color = tokens.textTertiary, fontSize = 12.sp,
         )
+    }
+}
+
+@Composable
+private fun OverviewRow(title: String, value: String) {
+    val tokens = MessagesTheme.tokens
+    Row(
+        Modifier.fillMaxWidth().padding(14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(title, color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text(value, color = tokens.textTertiary, fontSize = 13.sp)
     }
 }
 

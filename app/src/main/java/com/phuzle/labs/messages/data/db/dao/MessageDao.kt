@@ -42,6 +42,10 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE id = :id LIMIT 1")
     suspend fun findById(id: Long): MessageEntity?
 
+    /** Storage & Data's overview total. */
+    @Query("SELECT COUNT(*) FROM messages")
+    suspend fun countAll(): Int
+
     /** Used to recompute a thread's cached preview/time after its last message is deleted. */
     @Query("SELECT * FROM messages WHERE threadId = :threadId ORDER BY timestamp DESC LIMIT 1")
     suspend fun latestForThread(threadId: String): MessageEntity?

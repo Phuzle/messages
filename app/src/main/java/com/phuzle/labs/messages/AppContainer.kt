@@ -57,6 +57,16 @@ class AppContainer(context: Context) {
         clipboard?.setPrimaryClip(android.content.ClipData.newPlainText(label, text))
     }
 
+    /** Backing "Export backup"/"Restore from file" (see BackupListScreen) — the SAF picker itself
+     * needs an Activity, but reading/writing the chosen Uri's bytes doesn't. */
+    fun writeBytesToUri(uri: android.net.Uri, bytes: ByteArray): Boolean = runCatching {
+        appContext.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } != null
+    }.getOrDefault(false)
+
+    fun readBytesFromUri(uri: android.net.Uri): ByteArray? = runCatching {
+        appContext.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+    }.getOrNull()
+
     fun isDefaultSmsApp(): Boolean = com.phuzle.labs.messages.core.sms.DefaultSmsAppHelper.isDefaultSmsApp(appContext)
 
     /** Gate for the Drive "Wi-Fi only" setting — checked fresh before every Drive network call,

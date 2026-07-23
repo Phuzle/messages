@@ -93,6 +93,10 @@ private data class Ephemeral(
     val composeOpenedFromDrafts: Boolean = false,
     val composeToSuggestions: List<ContactSuggestionUi> = emptyList(),
     val privateChatsUnlockedThisSession: Boolean = false,
+    /** Raw "has the biometric gate succeeded this session" flag — false until [AppViewModel.unlockApp]
+     * fires. Whether the app is actually *shown* locked also depends on settings.appLockEnabled
+     * (see the uiState combine below), which Ephemeral doesn't know about. */
+    val appUnlockedThisSession: Boolean = false,
     val otpModal: OtpModalUi? = null,
     val isDefaultSmsApp: Boolean = true,
     val updateInfo: UpdateInfoUi? = null,
@@ -110,6 +114,10 @@ private data class Ephemeral(
      * flow just for a "first contact" date that never changes after the fact. */
     val threadInfoFirstContactAt: Long? = null,
     val messageActionTarget: MessageActionTargetUi? = null,
+    /** Non-empty means multi-select is active (started by long-pressing a chat's avatar — see
+     * ThreadRow.onAvatarLongPress). Reaching empty via individual toggles exits select mode the
+     * same way an explicit "close" would, matching most inbox apps' behavior. */
+    val multiSelectThreadIds: Set<String> = emptySet(),
 )
 
 private data class ThreadsSnapshot(
@@ -146,6 +154,16 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private val _toastEvents = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val toastEvents: SharedFlow<String> = _toastEvents.asSharedFlow()
 
+    /** Undoing an archive/delete brings a thread back near the top of the list (by recency), but
+     * LazyColumn's key-based scroll anchoring keeps whatever was already on screen pinned in
+     * place — so a restore that lands above the current scroll position (most commonly: it was
+     * the most-recent thread, i.e. the very first row) reappears scrolled out of view above the
+     * top edge instead of visibly popping back in. DashboardScreen collects this to scroll back
+     * to the top on every undo, which is always safe here since undo is single-thread-at-a-time
+     * and restored threads are never far from the top of a recency-sorted list. */
+    private val _scrollToTopEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val scrollToTopEvents: SharedFlow<Unit> = _scrollToTopEvents.asSharedFlow()
+
     private fun toast(message: String) {
         _toastEvents.tryEmit(message)
     }
@@ -164,6 +182,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         val pending = undoState.value ?: return@launch
         undoState.value = null
         pending.undo()
+        _scrollToTopEvents.tryEmit(Unit)
     }
 
     fun dismissUndo() {
@@ -229,14 +248,18 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     val uiState: StateFlow<AppUiState> = baseUiState
         .combine(container.draftRepository.observeAll()) { state, drafts ->
-            state.copy(drafts = drafts.map {
-                DraftUi(
-                    id = it.id,
-                    to = it.to.ifBlank { "No recipient" },
-                    bodyPreview = it.body.take(60),
-                    timeLabel = formatThreadListTime(it.updatedAt),
-                )
-            })
+            state.copy(
+                drafts = drafts.map {
+                    DraftUi(
+                        id = it.id,
+                        // Drafts only ever store raw numbers (see saveDraftIfNeeded) — show the
+                        // saved contact's name here too, not just on reopening the draft itself.
+                        to = withContext(Dispatchers.IO) { resolveDraftRecipientsLabel(it.to) },
+                        bodyPreview = it.body.take(60),
+                        timeLabel = formatThreadListTime(it.updatedAt),
+                    )
+                },
+            )
         }
         .combine(undoState) { state, undo -> state.copy(undoMessage = undo?.message) }
         .combine(searchMatchingIds) { state, matches ->
@@ -394,6 +417,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             archivedThreads = threads.archived.map(::toDeleted),
             privateThreads = threads.privateList.map(::toDeleted),
             privateChatsUnlockedThisSession = eph.privateChatsUnlockedThisSession,
+            appUnlockedThisSession = !settings.appLockEnabled || eph.appUnlockedThisSession,
+            multiSelectThreadIds = eph.multiSelectThreadIds,
             blockedList = threads.blocked.map { BlockedNumberUi(it.number) },
             showDrawer = eph.showDrawer,
             overflowMenuOpen = eph.overflowMenuOpen,
@@ -410,6 +435,15 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             importDone = eph.importDone,
             importTotal = eph.importTotal,
         )
+    }
+
+    /** Draft "to" is stored as raw comma-joined numbers (see saveDraftIfNeeded) — show whatever
+     * name is on file for each number, falling back to the number itself, same as everywhere else
+     * a bare number gets a contact-name upgrade. */
+    private fun resolveDraftRecipientsLabel(to: String): String {
+        val numbers = to.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        if (numbers.isEmpty()) return "No recipient"
+        return numbers.joinToString(", ") { container.contactLookup.displayNameFor(it) ?: it }
     }
 
     private fun ThreadEntity.toThreadUi(): com.phuzle.labs.messages.ui.model.ThreadUi = com.phuzle.labs.messages.ui.model.ThreadUi(
@@ -502,7 +536,15 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     fun openDraft(id: String) = viewModelScope.launch {
         val draft = container.draftRepository.findById(id) ?: return@launch
-        val recipients = draft.to.split(",").map { it.trim() }.filter { it.isNotEmpty() }.map { ContactSuggestionUi(it, it) }
+        val numbers = draft.to.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        // Drafts only ever stored the raw number (see saveDraftIfNeeded) — resolve the contact
+        // name fresh each time instead of showing the number as its own "name", which used to
+        // make a draft to a saved contact silently lose that contact's name on reopen.
+        val recipients = withContext(Dispatchers.IO) {
+            numbers.map { number ->
+                ContactSuggestionUi(container.contactLookup.displayNameFor(number) ?: number, number, container.contactLookup.photoUriFor(number))
+            }
+        }
         ephemeral.update {
             it.copy(
                 pushedScreen = PushedScreen.Compose,
@@ -550,11 +592,61 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             ephemeral.update { it.copy(threadInfoFirstContactAt = first) }
         }
     }
+
+    /** Tapping a chat's avatar in the Messages list — jumps straight to its profile/info page
+     * without opening the conversation first (unlike [openThreadById], this does not mark the
+     * thread read — viewing someone's profile card isn't "reading" their messages). */
+    fun openThreadInfoById(id: String) {
+        ephemeral.update { it.copy(activeThreadId = id, pushedScreen = PushedScreen.ThreadInfo, threadInfoFirstContactAt = null) }
+        viewModelScope.launch {
+            val first = container.threadRepository.firstMessageTime(id)
+            ephemeral.update { it.copy(threadInfoFirstContactAt = first) }
+        }
+    }
+
+    // region ---- Multi-select (started by long-pressing a chat's avatar) ----
+
+    fun startMultiSelect(threadId: String) = ephemeral.update { it.copy(multiSelectThreadIds = setOf(threadId)) }
+
+    fun toggleThreadSelection(threadId: String) = ephemeral.update {
+        val current = it.multiSelectThreadIds
+        it.copy(multiSelectThreadIds = if (threadId in current) current - threadId else current + threadId)
+    }
+
+    fun exitMultiSelect() = ephemeral.update { it.copy(multiSelectThreadIds = emptySet()) }
+
+    /** Multiple destructive actions ask for confirmation instead of offering undo (the dialog
+     * lives in DashboardScreen) — unlike a single archive/delete, which offers undo. */
+    fun bulkArchiveSelected() = viewModelScope.launch {
+        val ids = ephemeral.value.multiSelectThreadIds
+        ids.forEach { container.threadRepository.archive(it) }
+        exitMultiSelect()
+        toast("${ids.size} ${if (ids.size == 1) "chat" else "chats"} archived")
+    }
+
+    fun bulkDeleteSelected() = viewModelScope.launch {
+        val ids = ephemeral.value.multiSelectThreadIds
+        val now = System.currentTimeMillis()
+        ids.forEach { container.threadRepository.softDelete(it, now) }
+        exitMultiSelect()
+        toast("${ids.size} ${if (ids.size == 1) "chat" else "chats"} deleted")
+    }
+
+    fun bulkMarkReadSelected() = viewModelScope.launch {
+        val ids = ephemeral.value.multiSelectThreadIds
+        ids.forEach { container.threadRepository.toggleRead(it, true) }
+        exitMultiSelect()
+    }
+
+    // endregion
     fun openPrivateChatsScreen() {
         settingsAwareNav(PushedScreen.PrivateChats)
         ephemeral.update { it.copy(privateChatsUnlockedThisSession = false) }
     }
     fun unlockPrivateChats() = ephemeral.update { it.copy(privateChatsUnlockedThisSession = true) }
+
+    /** Whole-app equivalent of [unlockPrivateChats] — see BiometricGate in AppRoot. */
+    fun unlockApp() = ephemeral.update { it.copy(appUnlockedThisSession = true) }
 
     fun goBack() {
         val eph = ephemeral.value
@@ -1024,13 +1116,33 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun setBackupFrequency(frequency: String) = viewModelScope.launch { container.settingsRepository.setBackupFrequency(frequency) }
     fun toggleOtpEviction() = viewModelScope.launch { container.settingsRepository.setOtpEvictionEnabled(!uiState.value.settings.otpEvictionEnabled) }
 
-    fun backupNow() = viewModelScope.launch {
+    /** Backup/restore/disconnect are all async network-or-disk I/O with no immediate visible
+     * effect — without this, tapping "Backup now" (or any of these) several times in a row queued
+     * up that many redundant runs, since nothing disabled the button while one was in flight.
+     * Shared across every action on BackupSettingsScreen: a real intent isn't to run two of these
+     * at once anyway (e.g. backing up locally while also restoring from Drive). */
+    private val _backupBusy = MutableStateFlow(false)
+    val backupBusy: StateFlow<Boolean> = _backupBusy
+
+    private fun runBackupAction(block: suspend () -> Unit) {
+        if (_backupBusy.value) return
+        viewModelScope.launch {
+            _backupBusy.value = true
+            try {
+                block()
+            } finally {
+                _backupBusy.value = false
+            }
+        }
+    }
+
+    fun backupNow() = runBackupAction {
         container.backupManager.backupNow(container.database)
         container.settingsRepository.setLastLocalBackupAt(System.currentTimeMillis())
         toast("Backed up locally")
     }
 
-    fun restoreNow() = viewModelScope.launch {
+    fun restoreNow() = runBackupAction {
         if (container.backupManager.restoreNow()) {
             container.settingsRepository.setLastLocalRestoreAt(System.currentTimeMillis())
             toast("Restored from local backup")
@@ -1071,8 +1183,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         toast("Connected to Google Drive as $email")
     }
 
-    fun disconnectGoogleDrive() = viewModelScope.launch {
-        container.driveBackupManager.signOut {}
+    fun disconnectGoogleDrive() = runBackupAction {
+        container.driveBackupManager.signOut()
         container.settingsRepository.setGoogleAccountEmail(null)
         container.settingsRepository.setCloudBackupConnected(false)
         toast("Disconnected from Google Drive")
@@ -1086,27 +1198,27 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         container.settingsRepository.setDriveWifiOnly(!uiState.value.settings.driveWifiOnly)
     }
 
-    fun driveBackupNow() = viewModelScope.launch {
+    fun driveBackupNow() = runBackupAction {
         val settings = uiState.value.settings
         if (settings.driveWifiOnly && !container.isOnWifi()) {
             toast("Waiting for Wi-Fi — this device only backs up to Drive on Wi-Fi (see Backup & Restore)")
-            return@launch
+            return@runBackupAction
         }
         val account = container.driveBackupManager.lastSignedInAccount()
         if (account == null) {
             toast("Not connected to Google Drive")
-            return@launch
+            return@runBackupAction
         }
         val token = container.driveBackupManager.accessToken(account)
         if (token == null) {
             toast("Couldn't reach Google Drive — check your connection and try again")
-            return@launch
+            return@runBackupAction
         }
         val gzipped = container.backupManager.gzipDatabaseSnapshot(container.database)
         val fileId = container.driveBackupManager.uploadBackup(token, "messages-${System.currentTimeMillis()}.bak", gzipped)
         if (fileId == null) {
             toast("Drive backup failed — see BackupSettingsScreen's doc comment for the Google Cloud setup this needs")
-            return@launch
+            return@runBackupAction
         }
         container.driveBackupManager.pruneOldBackups(token)
         container.settingsRepository.setLastDriveBackupAt(System.currentTimeMillis())
@@ -1117,29 +1229,44 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
      * clean overwrite of an already-local, already-understood backup. Drive restores can happen at
      * any time (not just first launch), potentially alongside real local data already on this
      * device, so silently discarding it would be a bad surprise. See DriveBackupMerger. */
-    fun driveRestoreNow() = viewModelScope.launch {
+    fun driveRestoreNow() = runBackupAction {
         val account = container.driveBackupManager.lastSignedInAccount()
         if (account == null) {
             toast("Not connected to Google Drive")
-            return@launch
+            return@runBackupAction
         }
         val token = container.driveBackupManager.accessToken(account) ?: run {
             toast("Couldn't reach Google Drive — check your connection and try again")
-            return@launch
+            return@runBackupAction
         }
         val latest = container.driveBackupManager.listBackups(token).firstOrNull() ?: run {
             toast("No Drive backup found")
-            return@launch
+            return@runBackupAction
         }
         val gzipped = container.driveBackupManager.downloadBackup(token, latest.id) ?: run {
             toast("Couldn't download the Drive backup")
-            return@launch
+            return@runBackupAction
         }
         val raw = container.backupManager.gunzipDriveSnapshot(gzipped)
         container.driveBackupMerger.merge(raw)
         container.settingsRepository.setLastDriveRestoreAt(System.currentTimeMillis())
         toast("Merged in messages from your Google Drive backup")
     }
+
+    // region ---- Storage & Data overview ----
+
+    private val _storageOverview = MutableStateFlow<com.phuzle.labs.messages.ui.model.StorageOverviewUi?>(null)
+    val storageOverview: StateFlow<com.phuzle.labs.messages.ui.model.StorageOverviewUi?> = _storageOverview
+
+    /** One-shot load when Storage & Data opens — not worth a continuous reactive flow for a
+     * summary that only needs to be roughly current (matches the threadInfoFirstContactAt pattern). */
+    fun loadStorageOverview() = viewModelScope.launch {
+        val counts = container.threadRepository.storageOverview()
+        val bytes = container.backupManager.totalStorageBytes()
+        _storageOverview.value = com.phuzle.labs.messages.ui.model.StorageOverviewUi(counts.chatCount, counts.senderCount, counts.messageCount, bytes)
+    }
+
+    // endregion
 
     // region ---- Backup list (pick-a-file restore, see BackupListScreen) ----
 
@@ -1167,35 +1294,97 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     /** Destructive — overwrites the live database, unlike a Drive restore (always a merge). The
      * confirmation dialog lives in BackupListScreen, matching the destructive-action rule the rest
      * of the app follows (archive/delete/disconnect all confirm or offer undo). */
-    fun restoreLocalBackup(fileName: String) = viewModelScope.launch {
-        if (container.backupManager.restore(fileName)) {
-            container.settingsRepository.setLastLocalRestoreAt(System.currentTimeMillis())
-            toast("Restored from backup")
-        } else {
-            toast("Couldn't restore that backup")
+    fun restoreLocalBackup(fileName: String) {
+        if (_backupListState.value.restoringKey != null) return
+        viewModelScope.launch {
+            _backupListState.update { it.copy(restoringKey = "local:$fileName") }
+            try {
+                if (container.backupManager.restore(fileName)) {
+                    container.settingsRepository.setLastLocalRestoreAt(System.currentTimeMillis())
+                    toast("Restored from backup")
+                } else {
+                    toast("Couldn't restore that backup")
+                }
+            } finally {
+                _backupListState.update { it.copy(restoringKey = null) }
+            }
         }
     }
 
     /** Always a merge (see driveRestoreNow/DriveBackupMerger) — safe to run without a confirmation
      * dialog since nothing local is ever discarded. */
-    fun restoreDriveBackup(fileId: String) = viewModelScope.launch {
-        val account = container.driveBackupManager.lastSignedInAccount() ?: run {
-            toast("Not connected to Google Drive")
-            return@launch
+    fun restoreDriveBackup(fileId: String) {
+        if (_backupListState.value.restoringKey != null) return
+        viewModelScope.launch {
+            _backupListState.update { it.copy(restoringKey = "drive:$fileId") }
+            try {
+                val account = container.driveBackupManager.lastSignedInAccount() ?: run {
+                    toast("Not connected to Google Drive")
+                    return@launch
+                }
+                val token = container.driveBackupManager.accessToken(account) ?: run {
+                    toast("Couldn't reach Google Drive — check your connection and try again")
+                    return@launch
+                }
+                val gzipped = container.driveBackupManager.downloadBackup(token, fileId) ?: run {
+                    toast("Couldn't download that Drive backup")
+                    return@launch
+                }
+                val raw = container.backupManager.gunzipDriveSnapshot(gzipped)
+                container.driveBackupMerger.merge(raw)
+                container.settingsRepository.setLastDriveRestoreAt(System.currentTimeMillis())
+                toast("Merged in messages from that Drive backup")
+            } finally {
+                _backupListState.update { it.copy(restoringKey = null) }
+            }
         }
-        val token = container.driveBackupManager.accessToken(account) ?: run {
-            toast("Couldn't reach Google Drive — check your connection and try again")
-            return@launch
-        }
-        val gzipped = container.driveBackupManager.downloadBackup(token, fileId) ?: run {
-            toast("Couldn't download that Drive backup")
-            return@launch
-        }
-        val raw = container.backupManager.gunzipDriveSnapshot(gzipped)
-        container.driveBackupMerger.merge(raw)
-        container.settingsRepository.setLastDriveRestoreAt(System.currentTimeMillis())
-        toast("Merged in messages from that Drive backup")
     }
+
+    // region ---- Export / restore-from-file (moving a backup between devices by hand) ----
+
+    private val _exportBackupRequests = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val exportBackupRequests: SharedFlow<String> = _exportBackupRequests.asSharedFlow()
+
+    private val _restoreFromFileRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val restoreFromFileRequests: SharedFlow<Unit> = _restoreFromFileRequests.asSharedFlow()
+
+    /** Local snapshots live app-private (see LocalBackupManager's class doc) and can't be browsed
+     * to or moved by hand — this is the only way to get a backup file onto, say, a USB drive or
+     * cloud folder to carry to another device. MainActivity collects this and launches
+     * ActivityResultContracts.CreateDocument, the same "please launch this for me" pattern as
+     * requestDriveSignIn. Exported as gzip only (no device-bound AES — see gzipDatabaseSnapshot),
+     * the same portable format Drive backups already use, so it can actually be restored elsewhere. */
+    fun requestExportBackup() = _exportBackupRequests.tryEmit("messages-backup-${System.currentTimeMillis()}.bak")
+
+    fun handleExportBackupResult(uri: android.net.Uri?) = viewModelScope.launch {
+        if (uri == null) return@launch
+        val gzipped = withContext(Dispatchers.IO) { container.backupManager.gzipDatabaseSnapshot(container.database) }
+        val ok = withContext(Dispatchers.IO) { container.writeBytesToUri(uri, gzipped) }
+        toast(if (ok) "Backup saved" else "Couldn't save the backup file")
+    }
+
+    fun requestRestoreFromFile() = _restoreFromFileRequests.tryEmit(Unit)
+
+    /** Always a merge, same as a Drive restore — a file handed over from another device is exactly
+     * that "migrating in, alongside data already here" case, so overwriting would be wrong. */
+    fun handleRestoreFromFileResult(uri: android.net.Uri?) = viewModelScope.launch {
+        if (uri == null) return@launch
+        val bytes = withContext(Dispatchers.IO) { container.readBytesFromUri(uri) }
+        if (bytes == null) {
+            toast("Couldn't read that file")
+            return@launch
+        }
+        val raw = runCatching { container.backupManager.gunzipDriveSnapshot(bytes) }.getOrNull()
+        if (raw == null) {
+            toast("That doesn't look like a Messages backup file")
+            return@launch
+        }
+        container.driveBackupMerger.merge(raw)
+        container.settingsRepository.setLastLocalRestoreAt(System.currentTimeMillis())
+        toast("Merged in messages from that file")
+    }
+
+    // endregion
 
     // endregion
 

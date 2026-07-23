@@ -75,8 +75,8 @@ class GoogleDriveBackupManager(private val context: Context) {
         GoogleSignIn.getSignedInAccountFromIntent(data).getResult(ApiException::class.java)
     }.getOrNull()
 
-    fun signOut(onComplete: () -> Unit) {
-        signInClient().signOut().addOnCompleteListener { onComplete() }
+    suspend fun signOut() = suspendCancellableCoroutine<Unit> { cont ->
+        signInClient().signOut().addOnCompleteListener { if (cont.isActive) cont.resume(Unit) }
     }
 
     /** No UI shown — Google Play Services remembers this app's consent at the Google *account*

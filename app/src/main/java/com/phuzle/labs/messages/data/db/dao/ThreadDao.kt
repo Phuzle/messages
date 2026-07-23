@@ -35,6 +35,13 @@ interface ThreadDao {
     @Query("SELECT * FROM threads WHERE id = :id LIMIT 1")
     suspend fun findById(id: String): ThreadEntity?
 
+    /** For Storage & Data's overview — active (non-deleted) chats and distinct senders among them. */
+    @Query("SELECT COUNT(*) FROM threads WHERE deletedAt IS NULL")
+    suspend fun countActiveThreads(): Int
+
+    @Query("SELECT COUNT(DISTINCT sender) FROM threads WHERE deletedAt IS NULL")
+    suspend fun countActiveSenders(): Int
+
     @Query("SELECT * FROM threads WHERE sender = :sender LIMIT 1")
     suspend fun findBySender(sender: String): ThreadEntity?
 

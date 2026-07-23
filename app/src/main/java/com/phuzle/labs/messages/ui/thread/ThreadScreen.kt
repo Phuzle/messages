@@ -176,14 +176,6 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
             ),
         )
 
-        MessageActionSheet(
-            visible = state.messageActionTarget != null,
-            onDismiss = viewModel::closeMessageActions,
-            onReply = viewModel::replyQuotingSelectedMessage,
-            onForward = viewModel::forwardSelectedMessage,
-            onDelete = viewModel::deleteSelectedMessage,
-        )
-
         if (thread.isReplyable && !thread.isBlocked) {
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(tokens.barBg).navigationBarsPadding()) {
                 if (state.settings.showCharCount) {
@@ -230,6 +222,16 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                 )
             }
         }
+
+        // Composed last so it draws above the reply bar / "doesn't accept replies" banner above —
+        // it used to be composed first, which put that banner's Box on top of this bottom sheet.
+        MessageActionSheet(
+            visible = state.messageActionTarget != null,
+            onDismiss = viewModel::closeMessageActions,
+            onReply = viewModel::replyQuotingSelectedMessage,
+            onForward = viewModel::forwardSelectedMessage,
+            onDelete = viewModel::deleteSelectedMessage,
+        )
     }
 }
 

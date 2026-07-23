@@ -2,6 +2,7 @@ package com.phuzle.labs.messages.ui.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.SwipeToDismissBox
@@ -31,6 +35,13 @@ import com.phuzle.labs.messages.ui.theme.swipeActionMeta
  * A single inbox row. Swiping past the threshold in either direction fires that side's configured
  * action (archive/delete/toggle-read/none) via Material3's [SwipeToDismissBox], which also gives
  * us the settle-back-to-center spring the prototype relies on for non-removing actions for free.
+ *
+ * Tapping/long-pressing the avatar is a separate gesture target from the rest of the row: a tap
+ * opens that chat's profile directly ([onAvatarClick]), a long-press starts multi-select
+ * ([onAvatarLongPress]) — mirroring how most inbox apps let you jump into "select mode" from the
+ * avatar without disturbing the row's own open/action-sheet gestures. Once [selectionMode] is on
+ * (someone long-pressed an avatar), every tap anywhere on any row — including its avatar — toggles
+ * that row's selection instead, and swiping is disabled to avoid an ambiguous double-meaning.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -43,6 +54,11 @@ fun ThreadRow(
     onSwipeRight: () -> Unit,
     onSwipeLeft: () -> Unit,
     modifier: Modifier = Modifier,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onToggleSelect: () -> Unit = {},
+    onAvatarClick: () -> Unit = {},
+    onAvatarLongPress: () -> Unit = {},
 ) {
     val tokens = MessagesTheme.tokens
     val dismissState = rememberSwipeToDismissBoxState(
@@ -65,8 +81,8 @@ fun ThreadRow(
     SwipeToDismissBox(
         state = dismissState,
         modifier = modifier,
-        enableDismissFromStartToEnd = rightPanel.label != "—",
-        enableDismissFromEndToStart = leftPanel.label != "—",
+        enableDismissFromStartToEnd = !selectionMode && rightPanel.label != "—",
+        enableDismissFromEndToStart = !selectionMode && leftPanel.label != "—",
         backgroundContent = {
             val panel = when (dismissState.dismissDirection) {
                 SwipeToDismissBoxValue.StartToEnd -> rightPanel
@@ -104,12 +120,36 @@ fun ThreadRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(tokens.bg)
-                .combinedClickable(onClick = onOpen, onLongClick = onLongPress)
+                .background(if (selected) tokens.accentSoft else tokens.bg)
+                .combinedClickable(
+                    onClick = if (selectionMode) onToggleSelect else onOpen,
+                    onLongClick = if (selectionMode) null else onLongPress,
+                )
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AvatarBubble(thread.initials, thread.avatarColor, thread.isBusiness, photoUri = thread.photoUri)
+            Box(
+                modifier = Modifier.combinedClickable(
+                    onClick = if (selectionMode) onToggleSelect else onAvatarClick,
+                    onLongClick = if (selectionMode) null else onAvatarLongPress,
+                ),
+            ) {
+                if (selectionMode) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(if (selected) tokens.accent else tokens.surfaceAlt, CircleShape)
+                            .border(1.dp, if (selected) tokens.accent else tokens.border, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (selected) {
+                            Icon(Icons.Filled.Check, contentDescription = "Selected", tint = tokens.accentText, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                } else {
+                    AvatarBubble(thread.initials, thread.avatarColor, thread.isBusiness, photoUri = thread.photoUri)
+                }
+            }
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
                     Text(

@@ -36,6 +36,14 @@ class MainActivity : FragmentActivity() {
         viewModel.handleDriveSignInResult(result.data)
     }
 
+    private val exportBackupLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        viewModel.handleExportBackupResult(uri)
+    }
+
+    private val restoreFromFileLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        viewModel.handleRestoreFromFileResult(uri)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -54,6 +62,12 @@ class MainActivity : FragmentActivity() {
 
         lifecycleScope.launch {
             viewModel.driveSignInRequests.collect { driveSignInLauncher.launch(appContainer.driveBackupManager.signInIntent()) }
+        }
+        lifecycleScope.launch {
+            viewModel.exportBackupRequests.collect { suggestedName -> exportBackupLauncher.launch(suggestedName) }
+        }
+        lifecycleScope.launch {
+            viewModel.restoreFromFileRequests.collect { restoreFromFileLauncher.launch(arrayOf("*/*")) }
         }
         viewModel.checkFirstLaunchDriveRestore()
     }

@@ -27,17 +27,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.AppViewModel
 import com.phuzle.labs.messages.ui.components.BackBarScaffold
+import com.phuzle.labs.messages.ui.components.BiometricGate
 import com.phuzle.labs.messages.ui.components.EmptyState
 import com.phuzle.labs.messages.ui.components.SimpleThreadRow
 import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapeMedium
-
-private fun appLockMethodLabel(key: String) = when (key) {
-    "face" -> "Face Unlock"
-    "pin" -> "PIN"
-    else -> "Fingerprint"
-}
 
 @Composable
 fun PrivateChatsScreen(state: AppUiState, viewModel: AppViewModel) {
@@ -65,25 +60,32 @@ fun PrivateChatsScreen(state: AppUiState, viewModel: AppViewModel) {
                 }
             }
         } else {
-            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Box(
-                        Modifier.size(48.dp).background(tokens.surfaceAlt, RoundedCornerShape(14.dp)).border(1.dp, tokens.border, RoundedCornerShape(14.dp)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(Icons.Filled.Lock, contentDescription = null, tint = tokens.textSecondary, modifier = Modifier.size(22.dp))
+            BiometricGate(
+                key = "private_chats",
+                title = "Unlock private chats",
+                subtitle = "Confirm it's you to view your private chats",
+                onUnlocked = viewModel::unlockPrivateChats,
+            ) { retry ->
+                Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Box(
+                            Modifier.size(48.dp).background(tokens.surfaceAlt, RoundedCornerShape(14.dp)).border(1.dp, tokens.border, RoundedCornerShape(14.dp)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Filled.Lock, contentDescription = null, tint = tokens.textSecondary, modifier = Modifier.size(22.dp))
+                        }
+                        Text("Private chats are locked", color = tokens.textSecondary, fontSize = 14.sp)
+                        Text(
+                            "Unlock",
+                            color = tokens.accentText,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .background(tokens.accent, ShapeMedium)
+                                .clickable(onClick = retry)
+                                .padding(horizontal = 20.dp, vertical = 11.dp),
+                        )
                     }
-                    Text("Private chats are locked", color = tokens.textSecondary, fontSize = 14.sp)
-                    Text(
-                        "Unlock with ${appLockMethodLabel(state.settings.appLockMethod)}",
-                        color = tokens.accentText,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier
-                            .background(tokens.accent, ShapeMedium)
-                            .clickable(onClick = viewModel::unlockPrivateChats)
-                            .padding(horizontal = 20.dp, vertical = 11.dp),
-                    )
                 }
             }
         }

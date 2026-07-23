@@ -42,6 +42,15 @@ class LocalBackupManager(private val context: Context) {
 
     fun hasBackup(): Boolean = backupFiles().isNotEmpty()
 
+    /** Storage & Data's "space used" — the live db file (+ its not-yet-checkpointed WAL, which is
+     * real on-disk space) plus every local backup snapshot kept on this device. */
+    fun totalStorageBytes(): Long {
+        val dbFile = context.getDatabasePath(DATABASE_FILE_NAME)
+        val liveBytes = dbFile.length() + File(dbFile.path + "-wal").length() + File(dbFile.path + "-shm").length()
+        val backupBytes = backupFiles().sumOf { it.length() }
+        return liveBytes + backupBytes
+    }
+
     /** Newest-first, for the backup-list screen — every snapshot, not just the latest. */
     fun listBackups(): List<LocalBackupFile> = backupFiles().map { f ->
         val timestamp = f.name.removePrefix("messages-").removeSuffix(".bak").toLongOrNull() ?: f.lastModified()

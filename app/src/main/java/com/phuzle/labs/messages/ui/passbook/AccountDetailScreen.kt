@@ -1,7 +1,5 @@
 package com.phuzle.labs.messages.ui.passbook
 
-import androidx.biometric.BiometricManager
-import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -18,20 +16,17 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
-import androidx.fragment.app.FragmentActivity
 import com.phuzle.labs.messages.ui.AppViewModel
 import com.phuzle.labs.messages.ui.components.BackBarScaffold
+import com.phuzle.labs.messages.ui.components.BiometricGate
 import com.phuzle.labs.messages.ui.components.EmptyState
 import com.phuzle.labs.messages.ui.components.topBarContentPadding
 import com.phuzle.labs.messages.ui.model.AppUiState
@@ -52,50 +47,26 @@ fun AccountDetailScreen(state: AppUiState, viewModel: AppViewModel) {
     val account = state.accounts.firstOrNull { it.last4 == last4 }
     val appLockEnabled = state.settings.appLockEnabled
     var unlocked by remember(last4) { mutableStateOf(!appLockEnabled) }
-    var authFailed by remember(last4) { mutableStateOf(false) }
-    val context = LocalContext.current
-
-    LaunchedEffect(last4, appLockEnabled) {
-        if (unlocked) return@LaunchedEffect
-        val activity = context as? FragmentActivity ?: return@LaunchedEffect
-        val prompt = BiometricPrompt(
-            activity,
-            ContextCompat.getMainExecutor(activity),
-            object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    unlocked = true
-                }
-
-                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    authFailed = true
-                }
-            },
-        )
-        val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Unlock account details")
-            .setSubtitle("Confirm it's you to view •• $last4")
-            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_WEAK or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
-            .build()
-        prompt.authenticate(promptInfo)
-    }
 
     BackBarScaffold(title = "•• $last4", onBack = viewModel::goBack) {
-        when {
-            !unlocked && authFailed -> EmptyState(
-                icon = Icons.Filled.Lock,
-                title = "Couldn't verify it's you",
-                detail = "Account details stay locked until you authenticate.",
-                modifier = Modifier.padding(top = topBarContentPadding(68.dp)),
-                actionLabel = "Try again",
-                onAction = { authFailed = false },
-            )
-            !unlocked -> EmptyState(
-                icon = Icons.Filled.Lock,
-                title = "Locked",
-                detail = "Waiting for authentication…",
-                modifier = Modifier.padding(top = topBarContentPadding(68.dp)),
-            )
-            else -> LazyColumn(
+        if (!unlocked) {
+            BiometricGate(
+                key = last4,
+                title = "Unlock account details",
+                subtitle = "Confirm it's you to view •• $last4",
+                onUnlocked = { unlocked = true },
+            ) { retry ->
+                EmptyState(
+                    icon = Icons.Filled.Lock,
+                    title = "Locked",
+                    detail = "Confirm it's you to view this account's details.",
+                    modifier = Modifier.padding(top = topBarContentPadding(68.dp)),
+                    actionLabel = "Try again",
+                    onAction = retry,
+                )
+            }
+        } else {
+            LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(top = topBarContentPadding(80.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
             ) {
