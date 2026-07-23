@@ -5,7 +5,6 @@ import androidx.compose.ui.graphics.Color
 /** 1:1 port of the prototype's per-render `c` color-token object. */
 data class ThemeTokens(
     val bg: Color,
-    val barBg: Color,
     val barBorder: Color,
     val surface: Color,
     val surfaceAlt: Color,
@@ -65,7 +64,6 @@ fun buildTheme(dark: Boolean, accentHex: String): ThemeTokens {
     return if (!dark) {
         ThemeTokens(
             bg = Color(0xFFF8FAFC),
-            barBg = Color(0xADFFFFFF),
             barBorder = Color(0x140F172A),
             surface = Color(0xFFFFFFFF),
             surfaceAlt = Color(0xFFF1F5F9),
@@ -87,7 +85,6 @@ fun buildTheme(dark: Boolean, accentHex: String): ThemeTokens {
     } else {
         ThemeTokens(
             bg = Color(0xFF0B0F17),
-            barBg = Color(0x9E10141E),
             barBorder = Color(0x14FFFFFF),
             surface = Color(0xFF131826),
             surfaceAlt = Color(0xFF1A2030),
@@ -115,14 +112,12 @@ fun applyThemeOverrides(mode: ThemeMode, tokens: ThemeTokens): ThemeTokens = whe
         bg = Color(0xFF000000),
         surface = Color(0xFF0A0A0A),
         surfaceAlt = Color(0xFF121212),
-        barBg = Color(0xB3000000),
     )
     ThemeMode.Sepia -> tokens.copy(
         bg = Color(0xFFF6EFE1),
         surface = Color(0xFFFFFBF3),
         surfaceAlt = Color(0xFFEFE6D3),
         border = Color(0xFFE3D6BA),
-        barBg = Color(0xB8F6EFE1),
         textPrimary = Color(0xFF2B2013),
         textSecondary = Color(0xFF6B5D45),
         textTertiary = Color(0xFF9A8C6E),

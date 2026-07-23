@@ -205,7 +205,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
         )
 
         if (thread.isReplyable && !thread.isBlocked) {
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(tokens.barBg).navigationBarsPadding()) {
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(tokens.surface).navigationBarsPadding()) {
                 if (state.settings.showCharCount) {
                     Text(
                         "${state.threadInput.length} characters", color = tokens.textTertiary, fontSize = 11.sp,
@@ -241,7 +241,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
             }
         } else {
             Box(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(tokens.barBg).navigationBarsPadding().padding(14.dp),
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(tokens.surface).navigationBarsPadding().padding(14.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
