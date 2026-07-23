@@ -63,15 +63,19 @@ interface ThreadDao {
     @Query("DELETE FROM threads WHERE id = :id")
     suspend fun deleteById(id: String)
 
-    /** IDs of inbox threads matching [query] against the sender's name *or any message in the
-     * thread's full history* — search used to only see each thread's cached last-message preview. */
+    /** Every (thread, message) pairing eligible for search — fuzzy-scored in Kotlin (see
+     * FuzzyMatcher) against the sender's name *and* every message in the thread's full history,
+     * not just the cached last-message preview. Loaded only while a search is active (see
+     * AppViewModel's searchMatchingIds), not on every recomposition. */
     @Query(
         """
-        SELECT DISTINCT t.id FROM threads t
+        SELECT t.id AS threadId, t.displayName AS displayName, m.body AS body
+        FROM threads t
         LEFT JOIN messages m ON m.threadId = t.id
         WHERE t.deletedAt IS NULL AND t.archived = 0 AND t.isPrivate = 0
-          AND (t.displayName LIKE '%' || :query || '%' OR m.body LIKE '%' || :query || '%')
         """
     )
-    fun searchInboxIds(query: String): Flow<List<String>>
+    fun observeSearchCandidates(): Flow<List<SearchCandidateRow>>
 }
+
+data class SearchCandidateRow(val threadId: String, val displayName: String, val body: String?)

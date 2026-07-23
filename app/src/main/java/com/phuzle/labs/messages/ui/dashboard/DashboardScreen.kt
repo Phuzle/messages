@@ -89,9 +89,9 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
             DashboardTab.Messages -> if (state.threads.isEmpty()) {
                 EmptyState(
                     icon = Icons.AutoMirrored.Filled.Chat,
-                    title = if (state.searchQuery.isNotBlank() || state.activeCategory != Category.All) "No matching messages" else "No messages yet",
-                    detail = if (state.searchQuery.isNotBlank() || state.activeCategory != Category.All) {
-                        "Try a different search or category."
+                    title = if (state.searchQuery.isNotBlank() || state.activeCategory != Category.All || state.unreadOnly) "No matching messages" else "No messages yet",
+                    detail = if (state.searchQuery.isNotBlank() || state.activeCategory != Category.All || state.unreadOnly) {
+                        "Try a different search, category, or filter."
                     } else {
                         "Incoming texts will show up here automatically."
                     },
@@ -111,6 +111,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                             onLongPress = { viewModel.openActionSheet(thread.id) },
                             onSwipeRight = { viewModel.onSwipeRight(thread.id) },
                             onSwipeLeft = { viewModel.onSwipeLeft(thread.id) },
+                            modifier = Modifier.animateItem(),
                         )
                     }
                 }
@@ -129,7 +130,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(state.accounts, key = { it.last4 }) { account ->
-                        AccountCard(account = account, onClick = { viewModel.openAccountDetail(account.last4) })
+                        AccountCard(account = account, onClick = { viewModel.openAccountDetail(account.last4) }, modifier = Modifier.animateItem())
                     }
                 }
             }
@@ -147,7 +148,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     items(state.reminders, key = { it.id }) { reminder ->
-                        ReminderCard(reminder, onDismiss = { viewModel.dismissReminder(reminder.id) })
+                        ReminderCard(reminder, onDismiss = { viewModel.dismissReminder(reminder.id) }, modifier = Modifier.animateItem())
                     }
                 }
             }
@@ -262,18 +263,16 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
             }
         }
 
-        if (isMessages) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = (BOTTOM_BAR_HEIGHT + 16).dp + navBarInset)
-                    .size(56.dp)
-                    .background(tokens.accent, CircleShape)
-                    .roundClickable(onClick = viewModel::openCompose),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = "Compose", tint = tokens.accentText, modifier = Modifier.size(26.dp))
-            }
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = (BOTTOM_BAR_HEIGHT + 16).dp + navBarInset)
+                .size(56.dp)
+                .background(tokens.accent, CircleShape)
+                .roundClickable(onClick = viewModel::openCompose),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = "Compose", tint = tokens.accentText, modifier = Modifier.size(26.dp))
         }
     }
 }
@@ -314,11 +313,11 @@ private fun BottomTabButton(
 }
 
 @Composable
-private fun AccountCard(account: AccountUi, onClick: () -> Unit) {
+private fun AccountCard(account: AccountUi, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val tokens = MessagesTheme.tokens
     val amountColor = if (account.netIsCredit) tokens.accent else tokens.textPrimary
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .background(tokens.surface, ShapeMedium)
             .border(1.dp, if (account.selected) tokens.accent else tokens.border, ShapeMedium)
@@ -340,10 +339,10 @@ private fun AccountCard(account: AccountUi, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ReminderCard(reminder: ReminderUi, onDismiss: () -> Unit) {
+private fun ReminderCard(reminder: ReminderUi, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     val tokens = MessagesTheme.tokens
     Row(
-        Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium)
+        modifier.fillMaxWidth().background(tokens.surface, ShapeMedium)
             .border(1.dp, tokens.border, ShapeMedium).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.Top,
     ) {

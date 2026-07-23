@@ -36,6 +36,11 @@ class SettingsRepository(private val context: Context) {
         val IN_APP_BROWSER = booleanPreferencesKey("in_app_browser")
         val BACKUP_FREQUENCY = stringPreferencesKey("backup_frequency")
         val CLOUD_BACKUP_CONNECTED = booleanPreferencesKey("cloud_backup_connected")
+        val GOOGLE_ACCOUNT_EMAIL = stringPreferencesKey("google_account_email")
+        val DRIVE_WIFI_ONLY = booleanPreferencesKey("drive_wifi_only")
+        val LAST_DRIVE_BACKUP_AT = longPreferencesKey("last_drive_backup_at")
+        val LAST_DRIVE_RESTORE_AT = longPreferencesKey("last_drive_restore_at")
+        val DRIVE_RESTORE_PROMPT_SHOWN = booleanPreferencesKey("drive_restore_prompt_shown")
         val OTP_EVICTION_ENABLED = booleanPreferencesKey("otp_eviction_enabled")
         val LAST_LOCAL_BACKUP_AT = longPreferencesKey("last_local_backup_at")
         val LAST_LOCAL_RESTORE_AT = longPreferencesKey("last_local_restore_at")
@@ -65,6 +70,11 @@ class SettingsRepository(private val context: Context) {
             inAppBrowser = prefs[Keys.IN_APP_BROWSER] ?: true,
             backupFrequency = prefs[Keys.BACKUP_FREQUENCY] ?: "daily",
             cloudBackupConnected = prefs[Keys.CLOUD_BACKUP_CONNECTED] ?: false,
+            googleAccountEmail = prefs[Keys.GOOGLE_ACCOUNT_EMAIL],
+            driveWifiOnly = prefs[Keys.DRIVE_WIFI_ONLY] ?: true,
+            lastDriveBackupAt = prefs[Keys.LAST_DRIVE_BACKUP_AT],
+            lastDriveRestoreAt = prefs[Keys.LAST_DRIVE_RESTORE_AT],
+            driveRestorePromptShown = prefs[Keys.DRIVE_RESTORE_PROMPT_SHOWN] ?: false,
             otpEvictionEnabled = prefs[Keys.OTP_EVICTION_ENABLED] ?: false,
             lastLocalBackupAt = prefs[Keys.LAST_LOCAL_BACKUP_AT],
             lastLocalRestoreAt = prefs[Keys.LAST_LOCAL_RESTORE_AT],
@@ -98,6 +108,13 @@ class SettingsRepository(private val context: Context) {
     suspend fun setInAppBrowser(enabled: Boolean) = edit { it[Keys.IN_APP_BROWSER] = enabled }
     suspend fun setBackupFrequency(frequency: String) = edit { it[Keys.BACKUP_FREQUENCY] = frequency }
     suspend fun setCloudBackupConnected(connected: Boolean) = edit { it[Keys.CLOUD_BACKUP_CONNECTED] = connected }
+    suspend fun setGoogleAccountEmail(email: String?) = edit {
+        if (email == null) it.remove(Keys.GOOGLE_ACCOUNT_EMAIL) else it[Keys.GOOGLE_ACCOUNT_EMAIL] = email
+    }
+    suspend fun setDriveWifiOnly(wifiOnly: Boolean) = edit { it[Keys.DRIVE_WIFI_ONLY] = wifiOnly }
+    suspend fun setLastDriveBackupAt(timestamp: Long) = edit { it[Keys.LAST_DRIVE_BACKUP_AT] = timestamp }
+    suspend fun setLastDriveRestoreAt(timestamp: Long) = edit { it[Keys.LAST_DRIVE_RESTORE_AT] = timestamp }
+    suspend fun setDriveRestorePromptShown(shown: Boolean) = edit { it[Keys.DRIVE_RESTORE_PROMPT_SHOWN] = shown }
     suspend fun setOtpEvictionEnabled(enabled: Boolean) = edit { it[Keys.OTP_EVICTION_ENABLED] = enabled }
     suspend fun setLastLocalBackupAt(timestamp: Long) = edit { it[Keys.LAST_LOCAL_BACKUP_AT] = timestamp }
     suspend fun setLastLocalRestoreAt(timestamp: Long) = edit { it[Keys.LAST_LOCAL_RESTORE_AT] = timestamp }

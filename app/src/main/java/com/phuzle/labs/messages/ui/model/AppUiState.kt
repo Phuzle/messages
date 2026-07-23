@@ -19,6 +19,7 @@ data class AppUiState(
 
     val searchQuery: String = "",
     val activeCategory: Category = Category.All,
+    val unreadOnly: Boolean = false,
     val categories: List<CategoryChipUi> = emptyList(),
     val threads: List<ThreadUi> = emptyList(),
     val hasUnread: Boolean = false,
@@ -56,6 +57,9 @@ data class AppUiState(
     val otpModal: OtpModalUi? = null,
     val updateInfo: UpdateInfoUi? = null,
     val threadOverflowMenuOpen: Boolean = false,
+    val threadSearchActive: Boolean = false,
+    val threadSearchQuery: String = "",
+    val driveRestoreAvailable: Boolean = false,
     val messageActionTarget: MessageActionTargetUi? = null,
 
     val isDefaultSmsApp: Boolean = true,

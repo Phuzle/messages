@@ -32,6 +32,10 @@ class MainActivity : FragmentActivity() {
         viewModel.setDefaultSmsAppStatus(DefaultSmsAppHelper.isDefaultSmsApp(this))
     }
 
+    private val driveSignInLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        viewModel.handleDriveSignInResult(result.data)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -47,6 +51,11 @@ class MainActivity : FragmentActivity() {
         requestNeededPermissions()
         handleIntent(intent)
         setContent { AppRoot(viewModel) }
+
+        lifecycleScope.launch {
+            viewModel.driveSignInRequests.collect { driveSignInLauncher.launch(appContainer.driveBackupManager.signInIntent()) }
+        }
+        viewModel.checkFirstLaunchDriveRestore()
     }
 
     override fun onNewIntent(intent: Intent) {

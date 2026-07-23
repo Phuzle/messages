@@ -33,6 +33,24 @@ fun formatThreadListTime(epochMillis: Long, now: Long = System.currentTimeMillis
 fun formatMessageTime(epochMillis: Long): String =
     Instant.ofEpochMilli(epochMillis).atZone(zone).format(timeOfDay)
 
+/** In-thread date-separator row, WhatsApp-style: "Today" / "Yesterday" / "21 Jul" / "31 Dec '24". */
+fun formatDateSeparator(epochMillis: Long, now: Long = System.currentTimeMillis()): String {
+    val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    val then = Instant.ofEpochMilli(epochMillis).atZone(zone)
+    val thenDate = then.toLocalDate()
+    return when {
+        thenDate == today -> "Today"
+        thenDate == today.minusDays(1) -> "Yesterday"
+        thenDate.year == today.year -> then.format(dayAndMonth)
+        else -> then.format(dayMonthYear)
+    }
+}
+
+/** True when [a] and [b] fall on different calendar days in the local timezone — used to decide
+ * where a date-separator row belongs in the message list. */
+fun isDifferentDay(a: Long, b: Long): Boolean =
+    Instant.ofEpochMilli(a).atZone(zone).toLocalDate() != Instant.ofEpochMilli(b).atZone(zone).toLocalDate()
+
 /** Passbook activity row: "Today, 6:08 PM" / "Yesterday, 9:00 AM" / "21 Jul, 9:03 AM" / "31 Dec '24, 9:03 AM". */
 fun formatTransactionTime(epochMillis: Long, now: Long = System.currentTimeMillis()): String {
     val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()

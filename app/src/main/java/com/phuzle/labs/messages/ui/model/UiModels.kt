@@ -54,12 +54,18 @@ data class ThreadUi(
     val timeLabel: String,
     val unread: Boolean,
     val nameWeight: FontWeight,
+    /** Character indices within [displayName]/[preview] that matched the active fuzzy search
+     * query — empty when there's no active search or the match came from elsewhere in the
+     * thread's full history (nothing to visibly bold in that case). See FuzzyMatcher. */
+    val displayNameMatch: Set<Int> = emptySet(),
+    val previewMatch: Set<Int> = emptySet(),
 )
 
 data class MessageUi(
     val id: Long,
     val text: String,
     val timeLabel: String,
+    val timestamp: Long,
     val isMine: Boolean,
     val isScheduled: Boolean,
 )
@@ -80,6 +86,7 @@ data class CurrentThreadUi(
     val isOtp: Boolean,
     val isBlocked: Boolean,
     val latestOtpCode: String?,
+    val firstContactLabel: String?,
 )
 
 data class AccountUi(

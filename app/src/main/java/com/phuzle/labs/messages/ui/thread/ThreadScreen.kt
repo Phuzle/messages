@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -46,8 +47,12 @@ import com.phuzle.labs.messages.ui.components.MessageActionSheet
 import com.phuzle.labs.messages.ui.components.MessageSkeletonRow
 import com.phuzle.labs.messages.ui.components.MenuItem
 import com.phuzle.labs.messages.ui.components.OverflowMenu
+import com.phuzle.labs.messages.ui.components.highlightedText
 import com.phuzle.labs.messages.ui.components.roundClickable
 import com.phuzle.labs.messages.ui.components.topBarContentPadding
+import com.phuzle.labs.messages.domain.search.FuzzyMatcher
+import com.phuzle.labs.messages.ui.format.formatDateSeparator
+import com.phuzle.labs.messages.ui.format.isDifferentDay
 import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.model.MessageActionTargetUi
 import com.phuzle.labs.messages.ui.model.MessageUi
@@ -74,6 +79,18 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
     }
 
     val canSend = state.threadInput.isNotBlank()
+    val listEntries = remember(state.currentThreadMessages, state.threadSearchQuery) {
+        val query = state.threadSearchQuery.trim()
+        if (query.isEmpty()) {
+            buildThreadListEntries(state.currentThreadMessages)
+        } else {
+            // Searching within the conversation filters to just the matches — date headers would
+            // just be clutter across a sparse, non-contiguous result set — with matched characters
+            // bolded the same way the dashboard's thread-list search does (see FuzzyMatcher).
+            val matches = state.currentThreadMessages.mapNotNull { m -> FuzzyMatcher.match(query, m.text)?.let { m to it.matchedIndices } }
+            buildThreadListEntries(matches.map { it.first }, matches.associate { it.first.id to it.second }, showDateHeaders = false)
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -86,8 +103,19 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                 item { MessageSkeletonRow(alignEnd = false) }
                 item { MessageSkeletonRow(alignEnd = true) }
             }
-            items(state.currentThreadMessages, key = { it.id }) { message ->
-                MessageBubble(message, onLongPress = { viewModel.openMessageActions(MessageActionTargetUi(message.id, message.text)) })
+            items(
+                listEntries,
+                key = { entry -> when (entry) { is ThreadListEntry.DateHeader -> "date-${entry.label}"; is ThreadListEntry.Msg -> entry.message.id } },
+                contentType = { entry -> entry is ThreadListEntry.DateHeader },
+            ) { entry ->
+                when (entry) {
+                    is ThreadListEntry.DateHeader -> DateSeparator(entry.label)
+                    is ThreadListEntry.Msg -> MessageBubble(
+                        entry.message,
+                        matchedIndices = entry.matchedIndices,
+                        onLongPress = { viewModel.openMessageActions(MessageActionTargetUi(entry.message.id, entry.message.text)) },
+                    )
+                }
             }
             if (thread.isOtp && thread.latestOtpCode != null) {
                 item {
@@ -107,19 +135,31 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
 
         GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 56.dp, inset = BarInset.Top) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(36.dp).roundClickable(onClick = viewModel::goBack), contentAlignment = Alignment.Center) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
-                }
-                Row(
-                    modifier = Modifier.weight(1f).clickable(onClick = viewModel::openThreadInfo).padding(start = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    AvatarBubble(thread.initials, thread.avatarColor, thread.isBusiness, size = 34.dp, photoUri = thread.photoUri)
-                    Text(thread.displayName, color = tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                }
-                Box(Modifier.size(36.dp).roundClickable(onClick = viewModel::toggleThreadOverflowMenu), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
+                if (state.threadSearchActive) {
+                    Box(Modifier.size(36.dp).roundClickable(onClick = viewModel::closeThreadSearch), contentAlignment = Alignment.Center) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
+                    }
+                    FlatTextField(
+                        value = state.threadSearchQuery,
+                        onValueChange = viewModel::onThreadSearchChange,
+                        placeholder = "Search in conversation",
+                        modifier = Modifier.weight(1f).padding(start = 4.dp),
+                    )
+                } else {
+                    Box(Modifier.size(36.dp).roundClickable(onClick = viewModel::goBack), contentAlignment = Alignment.Center) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
+                    }
+                    Row(
+                        modifier = Modifier.weight(1f).clickable(onClick = viewModel::openThreadInfo).padding(start = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        AvatarBubble(thread.initials, thread.avatarColor, thread.isBusiness, size = 34.dp, photoUri = thread.photoUri)
+                        Text(thread.displayName, color = tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Box(Modifier.size(36.dp).roundClickable(onClick = viewModel::toggleThreadOverflowMenu), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
+                    }
                 }
             }
         }
@@ -128,6 +168,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
             visible = state.threadOverflowMenuOpen,
             onDismiss = viewModel::closeThreadOverflowMenu,
             items = listOf(
+                MenuItem("Search in conversation", onClick = viewModel::openThreadSearch),
                 MenuItem("View contact info") { viewModel.closeThreadOverflowMenu(); viewModel.openThreadInfo() },
                 MenuItem(if (thread.isBlocked) "Unblock" else "Block") { viewModel.closeThreadOverflowMenu(); viewModel.toggleBlockCurrent() },
                 MenuItem("Archive", onClick = viewModel::archiveCurrentThread),
@@ -143,7 +184,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
             onDelete = viewModel::deleteSelectedMessage,
         )
 
-        if (thread.isReplyable) {
+        if (thread.isReplyable && !thread.isBlocked) {
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(tokens.barBg).navigationBarsPadding()) {
                 if (state.settings.showCharCount) {
                     Text(
@@ -183,15 +224,58 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(tokens.barBg).navigationBarsPadding().padding(14.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("This sender doesn't accept replies", color = tokens.textTertiary, fontSize = 12.5.sp)
+                Text(
+                    if (thread.isBlocked) "You've blocked this sender" else "This sender doesn't accept replies",
+                    color = tokens.textTertiary, fontSize = 12.5.sp,
+                )
             }
         }
     }
 }
 
+/** WhatsApp-style grouping: a date header before the first message of each calendar day (skipped
+ * during in-conversation search, see buildThreadListEntries's showDateHeaders). */
+private sealed class ThreadListEntry {
+    data class DateHeader(val label: String) : ThreadListEntry()
+    data class Msg(val message: MessageUi, val matchedIndices: Set<Int> = emptySet()) : ThreadListEntry()
+}
+
+private fun buildThreadListEntries(
+    messages: List<MessageUi>,
+    matchIndices: Map<Long, Set<Int>> = emptyMap(),
+    showDateHeaders: Boolean = true,
+): List<ThreadListEntry> {
+    val entries = mutableListOf<ThreadListEntry>()
+    var previousTimestamp: Long? = null
+    for (message in messages) {
+        if (showDateHeaders && (previousTimestamp == null || isDifferentDay(message.timestamp, previousTimestamp))) {
+            entries += ThreadListEntry.DateHeader(formatDateSeparator(message.timestamp))
+        }
+        entries += ThreadListEntry.Msg(message, matchIndices[message.id] ?: emptySet())
+        previousTimestamp = message.timestamp
+    }
+    return entries
+}
+
+@Composable
+private fun DateSeparator(label: String) {
+    val tokens = MessagesTheme.tokens
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+        Text(
+            label,
+            color = tokens.textTertiary,
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier
+                .background(tokens.surfaceAlt, RoundedCornerShape(8.dp))
+                .padding(horizontal = 12.dp, vertical = 5.dp),
+        )
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MessageBubble(message: MessageUi, onLongPress: () -> Unit) {
+private fun MessageBubble(message: MessageUi, onLongPress: () -> Unit, matchedIndices: Set<Int> = emptySet()) {
     val tokens = MessagesTheme.tokens
     val bg = if (message.isScheduled) tokens.surfaceAlt else if (message.isMine) tokens.accent else tokens.surfaceAlt
     val fg = if (message.isScheduled) tokens.textSecondary else if (message.isMine) tokens.accentText else tokens.textPrimary
@@ -203,7 +287,7 @@ private fun MessageBubble(message: MessageUi, onLongPress: () -> Unit) {
                 .combinedClickable(onClick = {}, onLongClick = onLongPress)
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
-            Text(message.text, color = fg, fontSize = 14.sp, lineHeight = 19.sp)
+            Text(highlightedText(message.text, matchedIndices), color = fg, fontSize = 14.sp, lineHeight = 19.sp)
             Text(message.timeLabel, color = fg.copy(alpha = 0.65f), fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
         }
     }

@@ -27,4 +27,11 @@ interface PassbookDao {
 
     @Query("DELETE FROM reminders WHERE id = :id")
     suspend fun deleteReminder(id: String)
+
+    /** Used by DriveBackupMerger to union-by-id instead of blindly re-inserting. */
+    @Query("SELECT id FROM transactions")
+    suspend fun allTransactionIds(): List<String>
+
+    @Query("SELECT id FROM reminders")
+    suspend fun allReminderIds(): List<String>
 }

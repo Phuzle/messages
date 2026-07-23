@@ -46,6 +46,23 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE threadId = :threadId ORDER BY timestamp DESC LIMIT 1")
     suspend fun latestForThread(threadId: String): MessageEntity?
 
+    /** Contact-info page's "First contact" row. */
+    @Query("SELECT MIN(timestamp) FROM messages WHERE threadId = :threadId")
+    suspend fun firstMessageTime(threadId: String): Long?
+
+    /** "Clear conversation" — returns the deleted rows first so the caller can offer undo. */
+    @Query("SELECT * FROM messages WHERE threadId = :threadId ORDER BY timestamp ASC")
+    suspend fun allForThread(threadId: String): List<MessageEntity>
+
+    @Query("DELETE FROM messages WHERE threadId = :threadId")
+    suspend fun deleteAllForThread(threadId: String)
+
+    /** DriveBackupMerger's de-dup check — messages have no natural key across independent
+     * installs (autoGenerate ids collide meaninglessly), so (threadId, body, timestamp, outgoing)
+     * stands in for one: same thread, same text, same instant, same direction is the same message. */
+    @Query("SELECT COUNT(*) FROM messages WHERE threadId = :threadId AND body = :body AND timestamp = :timestamp AND outgoing = :outgoing")
+    suspend fun countMatching(threadId: String, body: String, timestamp: Long, outgoing: Boolean): Int
+
     @Query("DELETE FROM messages WHERE timestamp < :cutoff AND threadId IN (SELECT id FROM threads WHERE category = 'Otp')")
     suspend fun purgeOtpMessagesBefore(cutoff: Long)
 

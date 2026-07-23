@@ -10,6 +10,8 @@ import com.phuzle.labs.messages.core.notifications.MessageNotifier
 import com.phuzle.labs.messages.core.push.UpdateChecker
 import com.phuzle.labs.messages.core.sms.SmsHistoryImporter
 import com.phuzle.labs.messages.core.sms.SmsSender
+import com.phuzle.labs.messages.data.backup.DriveBackupMerger
+import com.phuzle.labs.messages.data.backup.GoogleDriveBackupManager
 import com.phuzle.labs.messages.data.backup.LocalBackupManager
 import com.phuzle.labs.messages.data.db.AppDatabase
 import com.phuzle.labs.messages.data.prefs.SettingsRepository
@@ -35,6 +37,8 @@ class AppContainer(context: Context) {
     val draftRepository: DraftRepository by lazy { DraftRepository(database.draftDao()) }
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(appContext) }
     val backupManager: LocalBackupManager by lazy { LocalBackupManager(appContext) }
+    val driveBackupManager: GoogleDriveBackupManager by lazy { GoogleDriveBackupManager(appContext) }
+    val driveBackupMerger: DriveBackupMerger by lazy { DriveBackupMerger(appContext, database) }
     val contactLookup: ContactLookup by lazy { ContactLookup(appContext) }
     val regexRules: RegexRules by lazy { RegexRules.loadFrom(appContext) }
     val classifier: CategoryClassifier by lazy {
@@ -54,6 +58,14 @@ class AppContainer(context: Context) {
     }
 
     fun isDefaultSmsApp(): Boolean = com.phuzle.labs.messages.core.sms.DefaultSmsAppHelper.isDefaultSmsApp(appContext)
+
+    /** Gate for the Drive "Wi-Fi only" setting — checked fresh before every Drive network call,
+     * not just used to render a static label. */
+    fun isOnWifi(): Boolean {
+        val cm = appContext.getSystemService(android.net.ConnectivityManager::class.java) ?: return false
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        return caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+    }
 
     /**
      * Anonymous sign-in gives every install a stable Firebase Auth UID, so the console's

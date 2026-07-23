@@ -112,7 +112,7 @@ fun ThreadRow(
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
                     Text(
-                        thread.displayName,
+                        highlightedText(thread.displayName, thread.displayNameMatch),
                         color = tokens.textPrimary,
                         fontWeight = thread.nameWeight,
                         fontSize = 15.sp,
@@ -128,7 +128,7 @@ fun ThreadRow(
                     horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        thread.preview,
+                        highlightedText(thread.preview, thread.previewMatch),
                         color = tokens.textSecondary,
                         fontSize = 13.sp,
                         maxLines = 1,

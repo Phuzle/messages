@@ -24,6 +24,7 @@ import com.phuzle.labs.messages.ui.components.OtpModal
 import com.phuzle.labs.messages.ui.components.OverflowMenu
 import com.phuzle.labs.messages.ui.components.SyncingScreen
 import com.phuzle.labs.messages.ui.components.UndoBar
+import com.phuzle.labs.messages.ui.components.DriveRestoreDialog
 import com.phuzle.labs.messages.ui.components.UpdateAvailableDialog
 import android.net.Uri
 import com.phuzle.labs.messages.ui.dashboard.DashboardScreen
@@ -50,10 +51,11 @@ fun AppRoot(viewModel: AppViewModel) {
     MessagesTheme(themeMode = state.themeMode, accentHex = state.settings.accentHex) {
         val tokens = MessagesTheme.tokens
 
-        BackHandler(enabled = state.undoMessage != null || state.updateInfo != null || state.actionSheet != null || state.overflowMenuOpen || state.showDrawer || state.pushedScreen != null) {
+        BackHandler(enabled = state.undoMessage != null || state.updateInfo != null || state.driveRestoreAvailable || state.actionSheet != null || state.overflowMenuOpen || state.showDrawer || state.pushedScreen != null) {
             when {
                 state.undoMessage != null -> viewModel.dismissUndo()
                 state.updateInfo != null -> viewModel.dismissUpdate()
+                state.driveRestoreAvailable -> viewModel.dismissDriveRestorePrompt()
                 state.actionSheet != null -> viewModel.closeActionSheet()
                 state.overflowMenuOpen -> viewModel.closeOverflowMenu()
                 state.showDrawer -> viewModel.closeDrawer()
@@ -116,7 +118,7 @@ fun AppRoot(viewModel: AppViewModel) {
                 onDismiss = viewModel::closeOverflowMenu,
                 items = listOf(
                     MenuItem("Mark all as read", onClick = viewModel::markAllAsRead),
-                    MenuItem("Simulate incoming OTP", onClick = viewModel::simulateOtp),
+                    MenuItem(if (state.unreadOnly) "Show all messages" else "Show unread only", onClick = viewModel::toggleUnreadOnly),
                     MenuItem("Settings", onClick = viewModel::openSettings),
                 ),
             )
@@ -142,6 +144,12 @@ fun AppRoot(viewModel: AppViewModel) {
                     viewModel.dismissUpdate()
                 },
                 onDismiss = viewModel::dismissUpdate,
+            )
+
+            DriveRestoreDialog(
+                visible = state.driveRestoreAvailable,
+                onRestore = viewModel::confirmDriveRestore,
+                onDismiss = viewModel::dismissDriveRestorePrompt,
             )
 
             UndoBar(

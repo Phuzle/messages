@@ -2,6 +2,7 @@ package com.phuzle.labs.messages.data.repository
 
 import com.phuzle.labs.messages.data.db.dao.BlockedNumberDao
 import com.phuzle.labs.messages.data.db.dao.MessageDao
+import com.phuzle.labs.messages.data.db.dao.SearchCandidateRow
 import com.phuzle.labs.messages.data.db.dao.ThreadDao
 import com.phuzle.labs.messages.data.db.entity.BlockedNumberEntity
 import com.phuzle.labs.messages.data.db.entity.MessageEntity
@@ -140,6 +141,22 @@ class ThreadRepository(
         refreshLastMessage(message.threadId)
     }
 
+    suspend fun firstMessageTime(threadId: String): Long? = messageDao.firstMessageTime(threadId)
+
+    /** Contact info's "Clear conversation" — wipes every message but keeps the thread itself.
+     * Returns the deleted rows so the caller can offer undo. */
+    suspend fun clearConversation(threadId: String): List<MessageEntity> {
+        val all = messageDao.allForThread(threadId)
+        messageDao.deleteAllForThread(threadId)
+        refreshLastMessage(threadId)
+        return all
+    }
+
+    suspend fun restoreMessages(messages: List<MessageEntity>) {
+        messages.forEach { messageDao.insert(it) }
+        messages.firstOrNull()?.let { refreshLastMessage(it.threadId) }
+    }
+
     private suspend fun refreshLastMessage(threadId: String) {
         val latest = messageDao.latestForThread(threadId)
         threadDao.touchLastMessage(threadId, latest?.body ?: "No messages", latest?.timestamp ?: System.currentTimeMillis())
@@ -158,7 +175,7 @@ class ThreadRepository(
     suspend fun restore(id: String) = threadDao.setDeletedAt(id, null)
     suspend fun purgeDeletedBefore(cutoffMillis: Long) = threadDao.purgeDeletedBefore(cutoffMillis)
     suspend fun hardDelete(id: String) = threadDao.deleteById(id)
-    fun searchInboxIds(query: String): Flow<List<String>> = threadDao.searchInboxIds(query)
+    fun observeSearchCandidates(): Flow<List<SearchCandidateRow>> = threadDao.observeSearchCandidates()
     suspend fun purgeOtpMessagesBefore(cutoffMillis: Long) = messageDao.purgeOtpMessagesBefore(cutoffMillis)
 
     suspend fun block(number: String) = blockedNumberDao.block(BlockedNumberEntity(number))

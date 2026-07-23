@@ -1,5 +1,6 @@
 package com.phuzle.labs.messages.ui
 
+import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -13,6 +14,7 @@ import com.phuzle.labs.messages.data.prefs.AppSettings
 import com.phuzle.labs.messages.domain.model.Category
 import com.phuzle.labs.messages.domain.model.NotificationChannelIds
 import com.phuzle.labs.messages.domain.model.initialsFor
+import com.phuzle.labs.messages.domain.search.FuzzyMatcher
 import com.phuzle.labs.messages.ui.format.formatCentsSigned
 import com.phuzle.labs.messages.ui.format.formatDueRelative
 import com.phuzle.labs.messages.ui.format.formatMessageTime
@@ -75,6 +77,7 @@ private data class Ephemeral(
     val isLoadingOlderMessages: Boolean = false,
     val searchQuery: String = "",
     val activeCategory: Category = Category.All,
+    val unreadOnly: Boolean = false,
     val showDrawer: Boolean = false,
     val overflowMenuOpen: Boolean = false,
     val actionSheetThreadId: String? = null,
@@ -85,6 +88,9 @@ private data class Ephemeral(
     val composeRecipients: List<ContactSuggestionUi> = emptyList(),
     val composeCustomScheduleMillis: Long? = null,
     val composeDraftId: String? = null,
+    /** Set when Compose was opened from the Drafts list, so closing it (see closeCompose) returns
+     * there instead of falling back to the dashboard. */
+    val composeOpenedFromDrafts: Boolean = false,
     val composeToSuggestions: List<ContactSuggestionUi> = emptyList(),
     val privateChatsUnlockedThisSession: Boolean = false,
     val otpModal: OtpModalUi? = null,
@@ -95,6 +101,14 @@ private data class Ephemeral(
     val importDone: Int = 0,
     val importTotal: Int = 0,
     val threadOverflowMenuOpen: Boolean = false,
+    val threadSearchActive: Boolean = false,
+    val threadSearchQuery: String = "",
+    /** First-launch-only prompt (see checkFirstLaunchDriveRestore) offering to restore/merge a
+     * Google Drive backup found via a silent, no-UI sign-in. */
+    val driveRestoreAvailable: Boolean = false,
+    /** Fetched once when Thread Info opens (see openThreadInfo) — not worth a continuous reactive
+     * flow just for a "first contact" date that never changes after the fact. */
+    val threadInfoFirstContactAt: Long? = null,
     val messageActionTarget: MessageActionTargetUi? = null,
 )
 
@@ -168,13 +182,24 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         ThreadsSnapshot(lists[0], lists[1], lists[2], lists[3], lists[4], blocked)
     }
 
-    /** Real search — matches against a thread's sender name *or any message in its full history*,
-     * not just the cached last-message preview. Null means "no active search, don't filter". */
+    /** Real search — fuzzy-matches (see FuzzyMatcher) against a thread's sender name *or any
+     * message in its full history*, not just the cached last-message preview. Null means "no
+     * active search, don't filter". */
     private val searchMatchingIds: Flow<Set<String>?> = ephemeral
         .map { it.searchQuery.trim() }
         .distinctUntilChanged()
         .flatMapLatest { query ->
-            if (query.isEmpty()) flowOf(null) else container.threadRepository.searchInboxIds(query).map { it.toSet() }
+            if (query.isEmpty()) {
+                flowOf(null)
+            } else {
+                container.threadRepository.observeSearchCandidates().map { rows ->
+                    rows.mapNotNull { row ->
+                        val nameMatch = FuzzyMatcher.match(query, row.displayName)
+                        val bodyMatch = row.body?.let { FuzzyMatcher.match(query, it) }
+                        row.threadId.takeIf { nameMatch != null || bodyMatch != null }
+                    }.toSet()
+                }
+            }
         }
 
     private val passbookSnapshot: Flow<PassbookSnapshot> = combine(
@@ -217,6 +242,21 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         .combine(searchMatchingIds) { state, matches ->
             if (matches == null) state else state.copy(threads = state.threads.filter { matches.contains(it.id) })
         }
+        .combine(ephemeral.map { it.searchQuery.trim() }.distinctUntilChanged()) { state, query ->
+            // Bolding is purely cosmetic and only ever applies to the two fields actually shown in
+            // the row (displayName/preview) — a match found elsewhere in a thread's full history
+            // still includes the thread (see searchMatchingIds) but has nothing visible to bold.
+            if (query.isEmpty()) {
+                state
+            } else {
+                state.copy(threads = state.threads.map { t ->
+                    t.copy(
+                        displayNameMatch = FuzzyMatcher.match(query, t.displayName)?.matchedIndices ?: emptySet(),
+                        previewMatch = FuzzyMatcher.match(query, t.preview)?.matchedIndices ?: emptySet(),
+                    )
+                })
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppUiState())
 
     init {
@@ -242,10 +282,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         val categories = Category.entries.map { CategoryChipUi(it, it.label, it == eph.activeCategory) }
 
         // Real text search (against full message history, not just the cached preview) is applied
-        // as a separate layer over this state — see searchMatchingIds — so only category filtering
-        // happens here.
+        // as a separate layer over this state — see searchMatchingIds — so only category/unread
+        // filtering happens here.
         val filteredThreads = threads.inbox.filter { t ->
-            eph.activeCategory == Category.All || t.category == eph.activeCategory.name
+            (eph.activeCategory == Category.All || t.category == eph.activeCategory.name) &&
+                (!eph.unreadOnly || t.unread)
         }.map { it.toThreadUi() }
 
         val hasUnread = threads.inbox.any { it.unread }
@@ -293,6 +334,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 isOtp = category == Category.Otp,
                 isBlocked = threads.blocked.any { it.number == thread.sender },
                 latestOtpCode = latestIncoming?.let { container.regexRules.extractCode(it.body) },
+                firstContactLabel = eph.threadInfoFirstContactAt?.let { formatThreadListTime(it) },
             )
         }
         val currentThreadMessages = messages.map {
@@ -300,6 +342,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 id = it.id,
                 text = it.body,
                 timeLabel = if (it.scheduledFor != null && !it.sent) "Scheduled · ${it.scheduleLabel}" else formatMessageTime(it.timestamp),
+                timestamp = it.timestamp,
                 isMine = it.outgoing,
                 isScheduled = it.scheduledFor != null && !it.sent,
             )
@@ -328,6 +371,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             activeTab = eph.activeTab,
             searchQuery = eph.searchQuery,
             activeCategory = eph.activeCategory,
+            unreadOnly = eph.unreadOnly,
             categories = categories,
             threads = filteredThreads,
             hasUnread = hasUnread,
@@ -358,6 +402,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             isDefaultSmsApp = eph.isDefaultSmsApp,
             updateInfo = eph.updateInfo,
             threadOverflowMenuOpen = eph.threadOverflowMenuOpen,
+            threadSearchActive = eph.threadSearchActive,
+            threadSearchQuery = eph.threadSearchQuery,
+            driveRestoreAvailable = eph.driveRestoreAvailable,
             messageActionTarget = eph.messageActionTarget,
             isImportingHistory = eph.isImportingHistory,
             importDone = eph.importDone,
@@ -418,13 +465,22 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         it.copy(
             pushedScreen = PushedScreen.Compose, composeTo = "", composeBody = "", composeRecipients = emptyList(),
             composeCustomScheduleMillis = null, composeDraftId = null, composeToSuggestions = emptyList(),
+            composeOpenedFromDrafts = false,
         )
     }
 
-    /** Closing Compose (X icon or system back, see [goBack]) saves an unsent, non-empty draft. */
+    /** Closing Compose (X icon or system back, see [goBack]) saves an unsent, non-empty draft, and
+     * returns to the Drafts list if that's where Compose was opened from instead of the dashboard. */
     fun closeCompose() = viewModelScope.launch {
+        val openedFromDrafts = ephemeral.value.composeOpenedFromDrafts
         saveDraftIfNeeded()
-        ephemeral.update { it.copy(pushedScreen = null, composeToSuggestions = emptyList()) }
+        ephemeral.update {
+            it.copy(
+                pushedScreen = if (openedFromDrafts) PushedScreen.Drafts else null,
+                composeToSuggestions = emptyList(),
+                composeOpenedFromDrafts = false,
+            )
+        }
     }
 
     private suspend fun saveDraftIfNeeded() {
@@ -456,6 +512,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 composeDraftId = draft.id,
                 composeCustomScheduleMillis = null,
                 composeToSuggestions = emptyList(),
+                composeOpenedFromDrafts = true,
             )
         }
     }
@@ -481,7 +538,14 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     fun openRecycleBin() = settingsAwareNav(PushedScreen.RecycleBin)
     fun openArchivedScreen() = settingsAwareNav(PushedScreen.Archived)
-    fun openThreadInfo() = ephemeral.update { it.copy(pushedScreen = PushedScreen.ThreadInfo) }
+    fun openThreadInfo() {
+        ephemeral.update { it.copy(pushedScreen = PushedScreen.ThreadInfo, threadInfoFirstContactAt = null) }
+        viewModelScope.launch {
+            val id = ephemeral.value.activeThreadId ?: return@launch
+            val first = container.threadRepository.firstMessageTime(id)
+            ephemeral.update { it.copy(threadInfoFirstContactAt = first) }
+        }
+    }
     fun openPrivateChatsScreen() {
         settingsAwareNav(PushedScreen.PrivateChats)
         ephemeral.update { it.copy(privateChatsUnlockedThisSession = false) }
@@ -555,6 +619,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         container.threadRepository.markAllRead()
         ephemeral.update { it.copy(overflowMenuOpen = false) }
     }
+
+    fun toggleUnreadOnly() = ephemeral.update { it.copy(unreadOnly = !it.unreadOnly, overflowMenuOpen = false) }
 
     fun onSwipeRight(threadId: String) = performThreadAction(uiState.value.settings.swipeRightAction, threadId)
     fun onSwipeLeft(threadId: String) = performThreadAction(uiState.value.settings.swipeLeftAction, threadId)
@@ -790,13 +856,26 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     fun toggleBlockCurrent() = viewModelScope.launch {
         val thread = uiState.value.currentThread ?: return@launch
-        if (thread.isBlocked) container.threadRepository.unblock(thread.sender) else container.threadRepository.block(thread.sender)
+        if (thread.isBlocked) {
+            container.threadRepository.unblock(thread.sender)
+            toast("Unblocked ${thread.displayName}")
+        } else {
+            container.threadRepository.block(thread.sender)
+            toast("Blocked ${thread.displayName}")
+        }
     }
 
-    fun unblockNumber(number: String) = viewModelScope.launch { container.threadRepository.unblock(number) }
+    fun unblockNumber(number: String) = viewModelScope.launch {
+        container.threadRepository.unblock(number)
+        toast("Unblocked $number")
+    }
 
     fun toggleThreadOverflowMenu() = ephemeral.update { it.copy(threadOverflowMenuOpen = !it.threadOverflowMenuOpen) }
     fun closeThreadOverflowMenu() = ephemeral.update { it.copy(threadOverflowMenuOpen = false) }
+
+    fun openThreadSearch() = ephemeral.update { it.copy(threadSearchActive = true, threadOverflowMenuOpen = false) }
+    fun closeThreadSearch() = ephemeral.update { it.copy(threadSearchActive = false, threadSearchQuery = "") }
+    fun onThreadSearchChange(value: String) = ephemeral.update { it.copy(threadSearchQuery = value) }
 
     fun archiveCurrentThread() = viewModelScope.launch {
         val id = ephemeral.value.activeThreadId ?: return@launch
@@ -812,6 +891,15 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         closeThreadOverflowMenu()
         goBack()
         offerUndo("Chat deleted") { container.threadRepository.restore(id) }
+    }
+
+    /** Contact info's "Clear conversation" — wipes every message in this thread but keeps the
+     * thread (and its settings/category/block-state) around, unlike Delete which removes the
+     * whole conversation to the recycle bin. */
+    fun clearCurrentConversation() = viewModelScope.launch {
+        val id = ephemeral.value.activeThreadId ?: return@launch
+        val deleted = container.threadRepository.clearConversation(id)
+        offerUndo("Conversation cleared") { container.threadRepository.restoreMessages(deleted) }
     }
 
     // endregion
@@ -847,6 +935,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 composeCustomScheduleMillis = null,
                 composeDraftId = null,
                 composeToSuggestions = emptyList(),
+                composeOpenedFromDrafts = false,
                 messageActionTarget = null,
             )
         }
@@ -854,24 +943,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     // endregion
 
-    // region ---- OTP demo + hot-swap ----
-
-    /** The overflow menu's "Simulate incoming OTP" — exercises the full classify → store → notify path locally. */
-    fun simulateOtp() = viewModelScope.launch {
-        val code = (100000..999999).random().toString()
-        val body = "Your Northgate Bank verification code is $code. Do not share this code."
-        val (thread, message) = container.threadRepository.recordIncomingMessage(
-            sender = "Northgate Bank",
-            displayName = "Northgate Bank",
-            isBusiness = true,
-            category = Category.Otp,
-            body = body,
-            timestampMillis = System.currentTimeMillis(),
-        )
-        container.messageNotifier.notifyIncoming(thread, message, Category.Otp, code)
-        ephemeral.update { it.copy(overflowMenuOpen = false) }
-        checkOtpHotSwap()
-    }
+    // region ---- OTP hot-swap ----
 
     /** Called from Activity.onResume: shows the modal if an OTP arrived in the last 30 seconds. */
     fun checkOtpHotSwap() = viewModelScope.launch {
@@ -946,18 +1018,156 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun toggleCloudFallback() = viewModelScope.launch { container.settingsRepository.setCloudFallbackEnabled(!uiState.value.settings.cloudFallbackEnabled) }
     fun onServerUrlChange(value: String) = viewModelScope.launch { container.settingsRepository.setServerBaseUrl(value) }
     fun setBackupFrequency(frequency: String) = viewModelScope.launch { container.settingsRepository.setBackupFrequency(frequency) }
-    fun toggleCloud() = viewModelScope.launch { container.settingsRepository.setCloudBackupConnected(!uiState.value.settings.cloudBackupConnected) }
     fun toggleOtpEviction() = viewModelScope.launch { container.settingsRepository.setOtpEvictionEnabled(!uiState.value.settings.otpEvictionEnabled) }
 
     fun backupNow() = viewModelScope.launch {
         container.backupManager.backupNow(container.database)
         container.settingsRepository.setLastLocalBackupAt(System.currentTimeMillis())
+        toast("Backed up locally")
     }
 
     fun restoreNow() = viewModelScope.launch {
         if (container.backupManager.restoreNow()) {
             container.settingsRepository.setLastLocalRestoreAt(System.currentTimeMillis())
+            toast("Restored from local backup")
         }
+    }
+
+    // endregion
+
+    // region ---- Google Drive backup ----
+
+    private val _driveSignInRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val driveSignInRequests: SharedFlow<Unit> = _driveSignInRequests.asSharedFlow()
+
+    /** MainActivity collects this and calls startActivityForResult with
+     * container.driveBackupManager.signInIntent() — the intent itself needs an Activity, which the
+     * ViewModel doesn't have, so this just signals "please launch it" the same way toastEvents
+     * signals "please show this". */
+    fun requestDriveSignIn() = _driveSignInRequests.tryEmit(Unit)
+
+    fun handleDriveSignInResult(data: Intent?) = viewModelScope.launch {
+        val account = container.driveBackupManager.handleSignInResult(data)
+        val email = account?.email
+        if (email == null) {
+            toast("Google sign-in was cancelled or failed")
+            return@launch
+        }
+        container.settingsRepository.setGoogleAccountEmail(email)
+        container.settingsRepository.setCloudBackupConnected(true)
+        toast("Connected to Google Drive as $email")
+    }
+
+    fun disconnectGoogleDrive() = viewModelScope.launch {
+        container.driveBackupManager.signOut {}
+        container.settingsRepository.setGoogleAccountEmail(null)
+        container.settingsRepository.setCloudBackupConnected(false)
+        toast("Disconnected from Google Drive")
+    }
+
+    fun toggleDriveEnabled() = viewModelScope.launch {
+        container.settingsRepository.setCloudBackupConnected(!uiState.value.settings.cloudBackupConnected)
+    }
+
+    fun toggleDriveWifiOnly() = viewModelScope.launch {
+        container.settingsRepository.setDriveWifiOnly(!uiState.value.settings.driveWifiOnly)
+    }
+
+    fun driveBackupNow() = viewModelScope.launch {
+        val settings = uiState.value.settings
+        if (settings.driveWifiOnly && !container.isOnWifi()) {
+            toast("Waiting for Wi-Fi — this device only backs up to Drive on Wi-Fi (see Backup & Restore)")
+            return@launch
+        }
+        val account = container.driveBackupManager.lastSignedInAccount()
+        if (account == null) {
+            toast("Not connected to Google Drive")
+            return@launch
+        }
+        val token = container.driveBackupManager.accessToken(account)
+        if (token == null) {
+            toast("Couldn't reach Google Drive — check your connection and try again")
+            return@launch
+        }
+        val gzipped = container.backupManager.gzipDatabaseSnapshot(container.database)
+        val fileId = container.driveBackupManager.uploadBackup(token, "messages-${System.currentTimeMillis()}.bak", gzipped)
+        if (fileId == null) {
+            toast("Drive backup failed — see BackupSettingsScreen's doc comment for the Google Cloud setup this needs")
+            return@launch
+        }
+        container.driveBackupManager.pruneOldBackups(token)
+        container.settingsRepository.setLastDriveBackupAt(System.currentTimeMillis())
+        toast("Backed up to Google Drive")
+    }
+
+    /** Always a merge, never a destructive overwrite — unlike local Restore, which is explicitly a
+     * clean overwrite of an already-local, already-understood backup. Drive restores can happen at
+     * any time (not just first launch), potentially alongside real local data already on this
+     * device, so silently discarding it would be a bad surprise. See DriveBackupMerger. */
+    fun driveRestoreNow() = viewModelScope.launch {
+        val account = container.driveBackupManager.lastSignedInAccount()
+        if (account == null) {
+            toast("Not connected to Google Drive")
+            return@launch
+        }
+        val token = container.driveBackupManager.accessToken(account) ?: run {
+            toast("Couldn't reach Google Drive — check your connection and try again")
+            return@launch
+        }
+        val latest = container.driveBackupManager.listBackups(token).firstOrNull() ?: run {
+            toast("No Drive backup found")
+            return@launch
+        }
+        val gzipped = container.driveBackupManager.downloadBackup(token, latest.id) ?: run {
+            toast("Couldn't download the Drive backup")
+            return@launch
+        }
+        val raw = container.backupManager.gunzipDriveSnapshot(gzipped)
+        container.driveBackupMerger.merge(raw)
+        container.settingsRepository.setLastDriveRestoreAt(System.currentTimeMillis())
+        toast("Merged in messages from your Google Drive backup")
+    }
+
+    /** Called once at startup (see MainActivity/AppRoot). Only ever prompts once per install
+     * (driveRestorePromptShown) and only when there's nothing local to lose yet — an existing
+     * inbox with real messages should never get an unsolicited "want to restore?" popup. Uses a
+     * *silent* sign-in (no UI) — Google Play Services remembers this app's consent at the account
+     * level even across a reinstall, so this can genuinely detect "you've done this before on this
+     * device" without asking the user anything until there's actually a backup to offer. */
+    fun checkFirstLaunchDriveRestore() = viewModelScope.launch {
+        val settings = container.settingsRepository.settingsFlow.first()
+        if (settings.driveRestorePromptShown) return@launch
+        if (uiState.value.threads.isNotEmpty()) {
+            container.settingsRepository.setDriveRestorePromptShown(true)
+            return@launch
+        }
+        val account = container.driveBackupManager.silentSignIn()
+        if (account?.email == null) {
+            container.settingsRepository.setDriveRestorePromptShown(true)
+            return@launch
+        }
+        val token = container.driveBackupManager.accessToken(account)
+        if (token == null) {
+            container.settingsRepository.setDriveRestorePromptShown(true)
+            return@launch
+        }
+        if (container.driveBackupManager.listBackups(token).isEmpty()) {
+            container.settingsRepository.setDriveRestorePromptShown(true)
+            return@launch
+        }
+        container.settingsRepository.setGoogleAccountEmail(account.email)
+        ephemeral.update { it.copy(driveRestoreAvailable = true) }
+    }
+
+    fun confirmDriveRestore() {
+        ephemeral.update { it.copy(driveRestoreAvailable = false) }
+        viewModelScope.launch { container.settingsRepository.setDriveRestorePromptShown(true) }
+        driveRestoreNow()
+    }
+
+    fun dismissDriveRestorePrompt() = viewModelScope.launch {
+        ephemeral.update { it.copy(driveRestoreAvailable = false) }
+        container.settingsRepository.setDriveRestorePromptShown(true)
     }
 
     // endregion

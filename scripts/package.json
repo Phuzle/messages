@@ -1,0 +1,12 @@
+{
+  "name": "phuzle-messages-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Dev-only test-data generators for the emulator (not part of the app build).",
+  "scripts": {
+    "simulate": "node simulate_messages.mjs"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^9.3.0"
+  }
+}
