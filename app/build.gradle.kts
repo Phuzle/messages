@@ -7,6 +7,17 @@ plugins {
     alias(libs.plugins.firebase.crashlytics.plugin)
 }
 
+// CI (see .github/workflows/release.yml) overrides these via -PreleaseVersionCode/-PreleaseVersionName
+// when building from a published release tag; local/default builds keep the checked-in values.
+val releaseVersionCode = (project.findProperty("releaseVersionCode") as String?)?.toIntOrNull() ?: 1
+val releaseVersionName = project.findProperty("releaseVersionName") as String? ?: "0.0.1"
+
+// Release signing is CI-only, sourced from GitHub Actions secrets (see .github/workflows/release.yml)
+// and never committed — local `assembleRelease` builds stay unsigned when these aren't set, same as
+// before this existed, so no developer setup is required for anything except an actual GitHub release.
+val releaseKeystorePath = System.getenv("RELEASE_KEYSTORE_PATH")
+val hasReleaseSigning = !releaseKeystorePath.isNullOrBlank()
+
 android {
     namespace = "com.phuzle.labs.messages"
     compileSdk = 35
@@ -15,16 +26,28 @@ android {
         applicationId = "com.phuzle.labs.messages"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.0.1"
+        versionCode = releaseVersionCode
+        versionName = releaseVersionName
 
         vectorDrawables.useSupportLibrary = true
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
         }
     }
 
