@@ -21,7 +21,9 @@ jobs:
     steps:
       - name: Resolve release tag
         id: tag
-        run: echo "name=${{ github.event.release.tag_name || inputs.tag }}" >> "$GITHUB_OUTPUT"
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name || inputs.tag }}
+        run: echo "name=$TAG_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Checkout release tag
         uses: actions/checkout@v4
@@ -80,3 +82,89 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.name }}
           files: release-assets/*.apk
+
+  # Pushes a signed AAB straight to the Play Console — separate job (not a step above) so a
+  # Play-side failure never blocks the GitHub-release APK attach, and vice versa. Track is chosen
+  # from the tag's suffix (see RELEASING.md): -alpha* -> internal, -beta*/-rc* -> closed testing,
+  # anything else (a plain vX.Y.Z) -> open testing. Production is deliberately never selected here
+  # — promoting a build to Production stays a manual Play Console step, given the review stakes.
+  publish-play-store:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve release tag
+        id: tag
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name || inputs.tag }}
+        run: echo "name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.name }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Derive app version from tag
+        id: version
+        env:
+          TAG_NAME: ${{ steps.tag.outputs.name }}
+        run: |
+          echo "name=${TAG_NAME#v}" >> "$GITHUB_OUTPUT"
+          echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Determine Play Store track from tag suffix
+        id: track
+        env:
+          TAG_NAME: ${{ steps.tag.outputs.name }}
+        run: |
+          if [[ "$TAG_NAME" == *-alpha* ]]; then
+            echo "name=internal" >> "$GITHUB_OUTPUT"
+          elif [[ "$TAG_NAME" == *-beta* || "$TAG_NAME" == *-rc* ]]; then
+            echo "name=closed" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=open" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Decode release keystore
+        run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > "${{ runner.temp }}/release.keystore"
+
+      - name: Decode google-services.json
+        run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 --decode > app/google-services.json
+
+      - name: Build signed release AAB
+        env:
+          RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew bundleRelease \
+            -PreleaseVersionCode=${{ steps.version.outputs.code }} \
+            -PreleaseVersionName=${{ steps.version.outputs.name }} \
+            --no-daemon
+
+      - name: Write release notes for Play Store
+        env:
+          RELEASE_BODY: ${{ github.event.release.body || 'See the GitHub release for details.' }}
+        run: |
+          mkdir -p distribution/whatsnew
+          # Play Store caps release notes at 500 characters per locale.
+          printf '%s' "$RELEASE_BODY" | head -c 500 > distribution/whatsnew/whatsnew-en-US
+
+      - name: Upload to Play Store
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.phuzle.labs.messages
+          releaseFiles: app/build/outputs/bundle/release/app-release.aab
+          track: ${{ steps.track.outputs.name }}
+          status: completed
+          whatsNewDirectory: distribution/whatsnew
