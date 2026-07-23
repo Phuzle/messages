@@ -32,6 +32,8 @@ import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 
 private const val SUPPORT_EMAIL = "support@phuzle.com"
+private const val PRIVACY_POLICY_URL = "https://docs.phuzle.com/messages/privacy"
+private const val TERMS_URL = "https://docs.phuzle.com/messages/terms"
 
 @Composable
 fun AboutSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
@@ -88,6 +90,35 @@ fun AboutSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                 Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Package", color = tokens.textSecondary, fontSize = 13.sp)
                     Text(BuildConfig.APPLICATION_ID, color = tokens.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        }
+
+        Column {
+            SectionLabel("Legal", Modifier.padding(bottom = 8.dp))
+            SettingsCard {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { com.phuzle.labs.messages.core.util.openUrl(context, state.settings.inAppBrowser, PRIVACY_POLICY_URL) }
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Privacy Policy", color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    com.phuzle.labs.messages.ui.components.ChevronIcon()
+                }
+                SettingsRowDivider()
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { com.phuzle.labs.messages.core.util.openUrl(context, state.settings.inAppBrowser, TERMS_URL) }
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Terms of Service", color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    com.phuzle.labs.messages.ui.components.ChevronIcon()
                 }
             }
         }
