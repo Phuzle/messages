@@ -529,8 +529,14 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     private fun performThreadAction(action: String, threadId: String) = viewModelScope.launch {
         when (action) {
-            "archive" -> container.threadRepository.archive(threadId)
-            "delete" -> container.threadRepository.softDelete(threadId, System.currentTimeMillis())
+            "archive" -> {
+                container.threadRepository.archive(threadId)
+                offerUndo("Archived") { container.threadRepository.unarchive(threadId) }
+            }
+            "delete" -> {
+                container.threadRepository.softDelete(threadId, System.currentTimeMillis())
+                offerUndo("Chat deleted") { container.threadRepository.restore(threadId) }
+            }
             "toggleRead" -> {
                 val thread = container.threadRepository.getThread(threadId) ?: return@launch
                 container.threadRepository.toggleRead(threadId, thread.unread)

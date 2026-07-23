@@ -1,17 +1,16 @@
-FROM node:20-alpine AS build
+FROM oven/bun:1-alpine
 WORKDIR /app
+
 COPY package.json ./
-RUN npm install
+RUN bun install --production
+
 COPY tsconfig.json ./
 COPY src ./src
-RUN npm run build
 
-FROM node:20-alpine
-WORKDIR /app
-ENV NODE_ENV=production
-COPY package.json ./
-RUN npm install --omit=dev
-COPY --from=build /app/dist ./dist
+# The sqlite dataset (keywords/triggers) lives here; docker-compose mounts a host volume over
+# this path so keyword edits made through the API survive `docker compose up --build`.
+RUN mkdir -p data
 
 EXPOSE 8080
-CMD ["node", "dist/index.js"]
+# Bun runs TypeScript directly — no separate build/tsc step needed.
+CMD ["bun", "run", "src/index.ts"]

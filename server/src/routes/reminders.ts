@@ -1,17 +1,21 @@
-import { Router } from "express";
+import { Hono } from "hono";
 import { extractReminder } from "../classifier/reminderExtractor";
+import triggersRoute from "./triggers";
 
-const router = Router();
+const app = new Hono();
 
-router.post("/extract", (req, res) => {
-  const { body, receivedAtEpochMillis, timezoneOffsetMinutes } = req.body ?? {};
+app.post("/extract", async (c) => {
+  const payload = await c.req.json().catch(() => null);
+  const body = payload?.body;
   if (typeof body !== "string" || body.trim().length === 0) {
-    res.status(400).json({ error: "body (string) is required" });
-    return;
+    return c.json({ error: "body (string) is required" }, 400);
   }
-  const receivedAt = typeof receivedAtEpochMillis === "number" ? receivedAtEpochMillis : Date.now();
-  const offset = typeof timezoneOffsetMinutes === "number" ? timezoneOffsetMinutes : 0;
-  res.json(extractReminder(body, receivedAt, offset));
+  const receivedAt = typeof payload?.receivedAtEpochMillis === "number" ? payload.receivedAtEpochMillis : Date.now();
+  const offset = typeof payload?.timezoneOffsetMinutes === "number" ? payload.timezoneOffsetMinutes : 0;
+  return c.json(extractReminder(body, receivedAt, offset));
 });
 
-export default router;
+// /v1/reminders/triggers — CRUD over the trigger-phrase dataset (see ./triggers.ts)
+app.route("/triggers", triggersRoute);
+
+export default app;

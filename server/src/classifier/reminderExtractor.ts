@@ -6,7 +6,10 @@
  * narrow set of phrasings, and only returns `isReminder: true` when it found both a trigger phrase
  * *and* a due date/time it could actually resolve to a timestamp; a trigger phrase alone isn't
  * enough to be useful to the user.
+ *
+ * The trigger phrases live in SQLite (see ../db/database.ts, routes/triggers.ts), not here.
  */
+import { db } from "../db/database";
 
 export interface ReminderExtraction {
   isReminder: boolean;
@@ -15,22 +18,7 @@ export interface ReminderExtraction {
   dueAtEpochMillis?: number;
 }
 
-const TRIGGER_PHRASES = [
-  "reminder",
-  "due on",
-  "due by",
-  "payment due",
-  "appointment",
-  "scheduled for",
-  "renew",
-  "renewal",
-  "expires on",
-  "expiring on",
-  "meeting",
-  "rsvp",
-  "confirm your",
-  "please confirm",
-];
+const triggersStmt = db.query("SELECT phrase FROM trigger_phrases");
 
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 const MONTHS = [
@@ -39,7 +27,8 @@ const MONTHS = [
 ];
 
 function hasTrigger(text: string): boolean {
-  return TRIGGER_PHRASES.some((p) => text.includes(p));
+  const phrases = triggersStmt.all() as { phrase: string }[];
+  return phrases.some((p) => text.includes(p.phrase));
 }
 
 /** Extracts hour/minute (24h) from a "10am" / "10:30 pm" / "22:00" style fragment, if present. */

@@ -6,7 +6,12 @@
  * heuristic, not a trained model — there's no labeled dataset to train on here, and overclaiming
  * "AI" for a keyword scorer would be dishonest. It's deliberately a *superset* of the client's
  * rules (more keywords, weighted combinations) so it's worth the round trip.
+ *
+ * The keyword/weight rules themselves live in SQLite (see ../db/database.ts), not here — this
+ * file only holds the scoring logic and the two structural patterns (an OTP-shaped digit run, an
+ * amount-shaped number) that aren't really "keywords" a user would add through the API.
  */
+import { db } from "../db/database";
 
 export type Category = "PERSONAL" | "TRANSACTIONS" | "OTP" | "PROMOTIONS" | "OTHERS" | "UNKNOWN";
 
@@ -21,80 +26,13 @@ interface WeightedRule {
   weight: number;
 }
 
-const OTP_RULES: WeightedRule[] = [
-  { keyword: "otp", weight: 3 },
-  { keyword: "one-time password", weight: 3 },
-  { keyword: "one time password", weight: 3 },
-  { keyword: "verification code", weight: 3 },
-  { keyword: "security code", weight: 2.5 },
-  { keyword: "authentication code", weight: 2.5 },
-  { keyword: "login code", weight: 2.5 },
-  { keyword: "access code", weight: 2 },
-  { keyword: "passcode", weight: 2 },
-  { keyword: "confirmation code", weight: 2 },
-  { keyword: "do not share", weight: 1.5 },
-  { keyword: "never share", weight: 1.5 },
-  { keyword: "valid for", weight: 1 },
-  { keyword: "expires in", weight: 1 },
-];
 const OTP_CODE_PATTERN = /\b\d{4,8}\b/;
-
-const TRANSACTION_RULES: WeightedRule[] = [
-  { keyword: "debited", weight: 3 },
-  { keyword: "credited", weight: 3 },
-  { keyword: "spent", weight: 2.5 },
-  { keyword: "payment of", weight: 2.5 },
-  { keyword: "transaction of", weight: 2.5 },
-  { keyword: "withdrawn", weight: 2.5 },
-  { keyword: "balance", weight: 1.5 },
-  { keyword: "account ending", weight: 2 },
-  { keyword: "card ending", weight: 2 },
-  { keyword: "available limit", weight: 1.5 },
-  { keyword: "minimum due", weight: 2 },
-  { keyword: "statement", weight: 1 },
-  { keyword: "emi", weight: 1.5 },
-  { keyword: "upi", weight: 1.5 },
-  { keyword: "invoice", weight: 1 },
-  { keyword: "refund", weight: 1.5 },
-];
 const AMOUNT_PATTERN = /(?:\$|rs\.?|inr|usd|€|£)\s?\d[\d,]*\.?\d*/i;
 
-const PROMOTION_RULES: WeightedRule[] = [
-  { keyword: "% off", weight: 3 },
-  { keyword: "percent off", weight: 3 },
-  { keyword: "discount", weight: 2 },
-  { keyword: "coupon", weight: 2.5 },
-  { keyword: "promo code", weight: 2.5 },
-  { keyword: "free shipping", weight: 2 },
-  { keyword: "clearance", weight: 2 },
-  { keyword: "flash sale", weight: 2.5 },
-  { keyword: "limited time", weight: 1.5 },
-  { keyword: "exclusive offer", weight: 2 },
-  { keyword: "unsubscribe", weight: 1.5 },
-  { keyword: "reply stop", weight: 1.5 },
-  { keyword: "sale ends", weight: 1.5 },
-  { keyword: "shop now", weight: 1.5 },
-];
-
-const OTHERS_RULES: WeightedRule[] = [
-  { keyword: "advisory", weight: 2 },
-  { keyword: "alert", weight: 1.5 },
-  { keyword: "notice", weight: 1 },
-  { keyword: "reminder:", weight: 2 },
-  { keyword: "has shipped", weight: 2 },
-  { keyword: "out for delivery", weight: 2.5 },
-  { keyword: "delivered", weight: 1.5 },
-  { keyword: "appointment", weight: 2 },
-  { keyword: "scheduled maintenance", weight: 2.5 },
-  { keyword: "service outage", weight: 2.5 },
-  { keyword: "weather warning", weight: 2.5 },
-  { keyword: "evacuation", weight: 2.5 },
-  { keyword: "school closing", weight: 2 },
-  { keyword: "flight status", weight: 2 },
-  { keyword: "gate change", weight: 2 },
-  { keyword: "tracking number", weight: 2 },
-  { keyword: "your order", weight: 1 },
-];
+const rulesStmt = db.query("SELECT keyword, weight FROM keyword_rules WHERE category = ?");
+function rulesFor(category: string): WeightedRule[] {
+  return rulesStmt.all(category) as WeightedRule[];
+}
 
 function score(text: string, rules: WeightedRule[]): { total: number; matched: string[] } {
   let total = 0;
@@ -117,18 +55,18 @@ function confidenceFrom(totalScore: number): number {
 export function classify(rawBody: string): ClassificationResult {
   const text = rawBody.toLowerCase();
 
-  const otp = score(text, OTP_RULES);
+  const otp = score(text, rulesFor("OTP"));
   if (otp.total > 0 && OTP_CODE_PATTERN.test(rawBody)) {
     return { category: "OTP", confidence: confidenceFrom(otp.total + 1), matchedKeywords: otp.matched };
   }
 
-  const transaction = score(text, TRANSACTION_RULES);
+  const transaction = score(text, rulesFor("TRANSACTIONS"));
   if (transaction.total > 0 && AMOUNT_PATTERN.test(rawBody)) {
     return { category: "TRANSACTIONS", confidence: confidenceFrom(transaction.total + 1), matchedKeywords: transaction.matched };
   }
 
-  const promo = score(text, PROMOTION_RULES);
-  const others = score(text, OTHERS_RULES);
+  const promo = score(text, rulesFor("PROMOTIONS"));
+  const others = score(text, rulesFor("OTHERS"));
 
   if (promo.total > 0 || others.total > 0) {
     if (promo.total >= others.total) {

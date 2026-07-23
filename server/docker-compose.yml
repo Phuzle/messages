@@ -10,4 +10,9 @@ services:
       - "8080:8080"
     environment:
       - PORT=8080
-      - NODE_ENV=production
+      - DB_PATH=/app/data/keywords.sqlite
+    volumes:
+      # Keyword/trigger-phrase edits made through the API (see README) are written to this sqlite
+      # file — mount it from the host so `docker compose up --build` doesn't reset the dataset
+      # back to defaults every time the image is rebuilt.
+      - ./data:/app/data
