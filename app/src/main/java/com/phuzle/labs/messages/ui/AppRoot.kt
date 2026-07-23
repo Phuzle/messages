@@ -137,11 +137,15 @@ fun AppRoot(viewModel: AppViewModel) {
                         "Share",
                         DrawerIconType.Share,
                         {
+                            // A plain description with no link left whoever received it with no
+                            // way to actually get the app. Sharing the real Play Store listing
+                            // means a tap on the shared message takes them straight there.
+                            val playStoreUrl = "https://play.google.com/store/apps/details?id=${context.packageName}"
                             val sendIntent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
                                 putExtra(
                                     Intent.EXTRA_TEXT,
-                                    "Messages — a smart SMS app with automatic categorization, OTP quick-copy, and a built-in passbook.",
+                                    "Messages — a smart SMS app with automatic categorization, OTP quick-copy, and a built-in passbook.\n\n$playStoreUrl",
                                 )
                             }
                             context.startActivity(Intent.createChooser(sendIntent, "Share Messages"))
