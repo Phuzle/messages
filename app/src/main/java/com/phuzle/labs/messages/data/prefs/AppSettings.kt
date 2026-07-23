@@ -43,4 +43,8 @@ data class AppSettings(
     /** See RegexRules.CURRENT_VERSION — 0 (never applied) makes a fresh install harmlessly run
      * the reclassification pass once against an empty/just-imported thread list. */
     val appliedClassifierVersion: Int = 0,
+    /** Gates the SMS/default-handler permission prompts behind an explicit in-app explanation
+     * screen shown first — required by Play Store policy for apps requesting SMS/Call Log
+     * permissions ("Prominent Disclosure"), not just a nice-to-have. See SmsDisclosureScreen. */
+    val smsDisclosureAcknowledged: Boolean = false,
 )

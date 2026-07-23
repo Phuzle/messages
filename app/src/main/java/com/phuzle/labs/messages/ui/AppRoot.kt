@@ -70,6 +70,11 @@ fun AppRoot(viewModel: AppViewModel) {
             }
         }
 
+        if (!state.settings.smsDisclosureAcknowledged) {
+            com.phuzle.labs.messages.ui.onboarding.SmsDisclosureScreen(onContinue = viewModel::acknowledgeSmsDisclosure)
+            return@MessagesTheme
+        }
+
         if (state.isImportingHistory) {
             SyncingScreen(done = state.importDone, total = state.importTotal)
             return@MessagesTheme

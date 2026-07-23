@@ -49,6 +49,7 @@ class SettingsRepository(private val context: Context) {
         val CLOUD_FALLBACK_ENABLED = booleanPreferencesKey("cloud_fallback_enabled")
         val SERVER_BASE_URL = stringPreferencesKey("server_base_url")
         val APPLIED_CLASSIFIER_VERSION = intPreferencesKey("applied_classifier_version")
+        val SMS_DISCLOSURE_ACKNOWLEDGED = booleanPreferencesKey("sms_disclosure_acknowledged")
     }
 
     val settingsFlow: Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
@@ -84,6 +85,7 @@ class SettingsRepository(private val context: Context) {
             cloudFallbackEnabled = prefs[Keys.CLOUD_FALLBACK_ENABLED] ?: false,
             serverBaseUrl = prefs[Keys.SERVER_BASE_URL] ?: "http://10.0.2.2:8080/",
             appliedClassifierVersion = prefs[Keys.APPLIED_CLASSIFIER_VERSION] ?: 0,
+            smsDisclosureAcknowledged = prefs[Keys.SMS_DISCLOSURE_ACKNOWLEDGED] ?: false,
         )
     }
 
@@ -125,6 +127,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setCloudFallbackEnabled(enabled: Boolean) = edit { it[Keys.CLOUD_FALLBACK_ENABLED] = enabled }
     suspend fun setServerBaseUrl(url: String) = edit { it[Keys.SERVER_BASE_URL] = url }
     suspend fun setAppliedClassifierVersion(version: Int) = edit { it[Keys.APPLIED_CLASSIFIER_VERSION] = version }
+    suspend fun setSmsDisclosureAcknowledged(acknowledged: Boolean) = edit { it[Keys.SMS_DISCLOSURE_ACKNOWLEDGED] = acknowledged }
 
     private suspend fun edit(transform: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         context.settingsDataStore.edit(transform)

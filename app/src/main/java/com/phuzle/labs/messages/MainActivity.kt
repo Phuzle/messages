@@ -56,9 +56,17 @@ class MainActivity : FragmentActivity() {
             keepSplashScreenOn = false
         }
 
-        requestNeededPermissions()
         handleIntent(intent)
         setContent { AppRoot(viewModel) }
+
+        // Permission/role prompts only fire after the user has seen SmsDisclosureScreen and
+        // tapped Continue (see AppRoot) — required by Play Store's "Prominent Disclosure" policy
+        // for apps requesting SMS/Call Log access. requestSmsPermissionsIfAcknowledged() below
+        // covers a returning user on a later launch who already acknowledged it previously.
+        lifecycleScope.launch {
+            viewModel.smsPermissionRequests.collect { requestNeededPermissions() }
+        }
+        viewModel.requestSmsPermissionsIfAcknowledged()
 
         lifecycleScope.launch {
             viewModel.driveSignInRequests.collect { driveSignInLauncher.launch(appContainer.driveBackupManager.signInIntent()) }

@@ -1174,6 +1174,32 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     // endregion
 
+    // region ---- SMS prominent disclosure (Play Store policy requirement) ----
+
+    private val _smsPermissionRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** MainActivity collects this and actually fires the SMS/default-handler permission prompts
+     * — kept out of the ViewModel since requesting permissions needs an Activity. Only ever
+     * emitted once disclosure is acknowledged (see below), never eagerly on every cold start. */
+    val smsPermissionRequests: SharedFlow<Unit> = _smsPermissionRequests.asSharedFlow()
+
+    /** Called once at startup (see MainActivity). If a previous launch already acknowledged the
+     * disclosure, permission prompts should still fire on this launch too — e.g. the user denied
+     * a permission last time and we need to re-prompt. If disclosure hasn't been acknowledged yet,
+     * AppRoot shows SmsDisclosureScreen instead and this no-ops until acknowledgeSmsDisclosure(). */
+    fun requestSmsPermissionsIfAcknowledged() = viewModelScope.launch {
+        if (container.settingsRepository.settingsFlow.first().smsDisclosureAcknowledged) {
+            _smsPermissionRequests.tryEmit(Unit)
+        }
+    }
+
+    fun acknowledgeSmsDisclosure() = viewModelScope.launch {
+        container.settingsRepository.setSmsDisclosureAcknowledged(true)
+        _smsPermissionRequests.tryEmit(Unit)
+    }
+
+    // endregion
+
     // region ---- Google Drive backup ----
 
     private val _driveSignInRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
