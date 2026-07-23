@@ -1037,6 +1037,18 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun copySelectedMessage() {
+        val target = ephemeral.value.messageActionTarget ?: return
+        container.copyToClipboard("Message", target.text)
+        closeMessageActions()
+        toast("Message copied")
+    }
+
+    fun copyNumber(number: String) {
+        container.copyToClipboard("Number", number)
+        toast("Number copied")
+    }
+
     // endregion
 
     // region ---- OTP hot-swap ----

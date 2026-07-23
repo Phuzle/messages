@@ -1,9 +1,11 @@
 package com.phuzle.labs.messages.ui.settings
 import com.phuzle.labs.messages.ui.components.topBarContentPadding
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,6 +32,7 @@ import com.phuzle.labs.messages.ui.theme.ShapeMedium
 
 private val APP_LOCK_METHODS = listOf("fingerprint" to "Fingerprint", "face" to "Face Unlock", "pin" to "PIN")
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PrivacySettingsScreen(state: AppUiState, viewModel: AppViewModel) {
     val tokens = MessagesTheme.tokens
@@ -84,7 +87,9 @@ fun PrivacySettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                     state.blockedList.forEachIndexed { index, blocked ->
                         if (index > 0) SettingsRowDivider()
                         Row(
-                            Modifier.fillMaxWidth().padding(13.dp),
+                            Modifier.fillMaxWidth()
+                                .combinedClickable(onClick = {}, onLongClick = { viewModel.copyNumber(blocked.number) })
+                                .padding(13.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {

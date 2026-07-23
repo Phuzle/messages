@@ -2,9 +2,11 @@ package com.phuzle.labs.messages.ui.thread
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -95,7 +97,7 @@ fun ThreadInfoScreen(state: AppUiState, viewModel: AppViewModel) {
             Column(
                 Modifier.fillMaxWidth().padding(top = 20.dp).background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium),
             ) {
-                InfoRow("Number", thread.sender)
+                InfoRow("Number", thread.sender, onLongClick = { viewModel.copyNumber(thread.sender) })
                 SettingsRowDivider()
                 InfoRow("First contact", thread.firstContactLabel ?: "—")
                 SettingsRowDivider()
@@ -165,10 +167,16 @@ private fun TextActionRow(icon: ImageVector, label: String, color: androidx.comp
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun InfoRow(label: String, value: String) {
+private fun InfoRow(label: String, value: String, onLongClick: (() -> Unit)? = null) {
     val tokens = MessagesTheme.tokens
-    Row(Modifier.fillMaxWidth().padding(13.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .let { if (onLongClick != null) it.combinedClickable(onClick = {}, onLongClick = onLongClick) else it }
+            .padding(13.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
         Text(label, color = tokens.textSecondary, fontSize = 13.sp)
         Text(value, color = tokens.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     }

@@ -228,6 +228,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
         MessageActionSheet(
             visible = state.messageActionTarget != null,
             onDismiss = viewModel::closeMessageActions,
+            onCopy = viewModel::copySelectedMessage,
             onReply = viewModel::replyQuotingSelectedMessage,
             onForward = viewModel::forwardSelectedMessage,
             onDelete = viewModel::deleteSelectedMessage,

@@ -17,11 +17,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 
-/** The bottom sheet triggered by a long-press on a message bubble: reply/forward/delete. */
+/** The bottom sheet triggered by a long-press on a message bubble: copy/reply/forward/delete. */
 @Composable
 fun MessageActionSheet(
     visible: Boolean,
     onDismiss: () -> Unit,
+    onCopy: () -> Unit,
     onReply: () -> Unit,
     onForward: () -> Unit,
     onDelete: () -> Unit,
@@ -38,6 +39,8 @@ fun MessageActionSheet(
                 .background(tokens.surface, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
                 .padding(bottom = 20.dp),
         ) {
+            MessageActionRow("Copy", tokens.textPrimary, onCopy)
+            SettingsRowDivider()
             MessageActionRow("Reply", tokens.textPrimary, onReply)
             SettingsRowDivider()
             MessageActionRow("Forward", tokens.textPrimary, onForward)
