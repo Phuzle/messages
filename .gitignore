@@ -14,3 +14,6 @@
 
 # Firebase config — project-specific, regenerate per environment from the Firebase console
 /app/google-services.json
+
+# Play Store listing assets (screenshots, feature graphic) — generated locally, not source
+/store-assets/
