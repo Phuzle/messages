@@ -1,6 +1,6 @@
 {
   "name": "phuzle-messages-server",
-  "version": "2.0.0",
+  "version": "0.0.1",
   "description": "Layer 3 cloud fallback for Phuzle Messages: classification + reminder extraction for messages the on-device regex layer couldn't confidently handle. Runs on Bun + Hono; keyword/trigger-phrase datasets are stored in SQLite so they can be tuned via the API without a redeploy.",
   "private": true,
   "type": "module",

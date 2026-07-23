@@ -85,40 +85,9 @@ fun ChatsSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
             SettingsToggleRow("Open links in in-app browser", settings.inAppBrowser, { viewModel.toggleInAppBrowser() })
         }
 
-        Column {
-            SectionLabel("Smart categorization", Modifier.padding(bottom = 8.dp))
-            Column(
-                Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium),
-            ) {
-                SettingsToggleRow(
-                    "Use cloud fallback for unclear messages",
-                    settings.cloudFallbackEnabled,
-                    { viewModel.toggleCloudFallback() },
-                )
-                if (settings.cloudFallbackEnabled) {
-                    SettingsRowDivider()
-                    Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                        Text(
-                            "Server URL", color = tokens.textSecondary, fontSize = 12.5.sp,
-                            modifier = Modifier.padding(bottom = 6.dp),
-                        )
-                        FlatTextField(
-                            value = settings.serverBaseUrl,
-                            onValueChange = viewModel::onServerUrlChange,
-                            placeholder = "http://10.0.2.2:8080/",
-                            filled = true,
-                            fontSize = 13.sp,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        Text(
-                            "Only sent when Layer 1 can't confidently categorize a message, and only " +
-                                "after redacting numbers, emails, and phone-like sequences. Use the emulator " +
-                                "alias above, or your computer's wifi IP for a real device on the same network.",
-                            color = tokens.textTertiary, fontSize = 11.5.sp, modifier = Modifier.padding(top = 8.dp),
-                        )
-                    }
-                }
-            }
-        }
+        // "Smart categorization" (cloud fallback for Layer 1's Unknown bucket) is hidden for beta —
+        // untested in the field. The setting defaults to false and there's no UI path to enable it
+        // right now, so it stays fully inert; SmsDeliverReceiver's cloudFallbackEnabled check and
+        // CloudClassifierClient are left in place to bring back later, not removed.
     }
 }

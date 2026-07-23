@@ -60,7 +60,19 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     DATABASE_FILE_NAME,
-                ).addMigrations(MIGRATION_4_5).fallbackToDestructiveMigration().build().also { instance = it }
+                )
+                    .addMigrations(MIGRATION_4_5)
+                    // Deliberately no fallbackToDestructiveMigration(): with real, irreplaceable
+                    // user messages in this table, a future version bump that's missing its
+                    // Migration must crash loudly (forcing us to write one before shipping) rather
+                    // than silently wiping every thread/message/transaction on upgrade — a crash
+                    // is fixable with a patch release, a silent wipe is not. Downgrades (e.g.
+                    // sideloading an older build over a newer one, a dev-only scenario) are the one
+                    // case still allowed to reset, since older code has no way to understand a
+                    // newer schema anyway.
+                    .fallbackToDestructiveMigrationOnDowngrade()
+                    .build()
+                    .also { instance = it }
             }
 
         /** Used by [com.phuzle.labs.messages.data.backup.LocalBackupManager] before swapping the db file on restore. */

@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
+import android.util.Log
 import com.phuzle.labs.messages.appContainer
 import com.phuzle.labs.messages.domain.categorization.TransactionExtractor
 import com.phuzle.labs.messages.domain.model.Category
@@ -31,6 +32,24 @@ class SmsDeliverReceiver : BroadcastReceiver() {
         val container = context.appContainer
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                // The default SMS app must write incoming messages into the system provider
+                // itself — SMS_DELIVER is only a notification that a message arrived, not an
+                // automatic insert. Without this, every message received while this app holds the
+                // default role would live only in this app's private database: invisible to any
+                // other app, and gone system-wide on uninstall or a switch back to another SMS
+                // app. Best-effort — a provider failure must never block storing/notifying locally.
+                runCatching {
+                    val values = android.content.ContentValues().apply {
+                        put(Telephony.Sms.ADDRESS, sender)
+                        put(Telephony.Sms.BODY, body)
+                        put(Telephony.Sms.DATE, timestamp)
+                        put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_INBOX)
+                        put(Telephony.Sms.READ, 0)
+                        put(Telephony.Sms.SEEN, 0)
+                    }
+                    context.contentResolver.insert(Telephony.Sms.CONTENT_URI, values)
+                }.onFailure { Log.w("SmsDeliverReceiver", "Couldn't record incoming message in the system SMS provider", it) }
+
                 val contactName = container.contactLookup.displayNameFor(sender)
                 val displayName = contactName ?: sender
                 val isBusiness = contactName == null
