@@ -51,6 +51,12 @@ jobs:
       - name: Decode release keystore
         run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > "${{ runner.temp }}/release.keystore"
 
+      # The google-services Gradle plugin (applied in app/build.gradle.kts) fails the build
+      # outright if this file is missing — it's gitignored and never committed, so CI has to
+      # reconstitute it from a secret the same way it does the release keystore above.
+      - name: Decode google-services.json
+        run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 --decode > app/google-services.json
+
       - name: Build signed release APK
         env:
           RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
