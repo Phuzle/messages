@@ -1,5 +1,6 @@
 package com.phuzle.labs.messages.ui.thread
 
+import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -65,6 +66,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
     val thread = state.currentThread ?: return
     val listState = rememberLazyListState()
     val latestState = rememberUpdatedState(state)
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     // Bounded message buffer: scrolling near the top fetches one more page of history; scrolling
     // back down well clear of it releases those pages again so long threads don't sit fully in memory.
@@ -76,6 +78,28 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                 index > 20 -> viewModel.trimOlderMessages()
             }
         }
+    }
+
+    val inAppBrowser = state.settings.inAppBrowser
+    val onOpenUrl: (String) -> Unit = { url ->
+        val fullUrl = if (url.startsWith("http", ignoreCase = true)) url else "https://$url"
+        val uri = android.net.Uri.parse(fullUrl)
+        val launched = runCatching {
+            if (inAppBrowser) {
+                androidx.browser.customtabs.CustomTabsIntent.Builder().build().launchUrl(context, uri)
+            } else {
+                context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+            }
+        }.isSuccess
+        if (!launched) android.widget.Toast.makeText(context, "Couldn't open that link", android.widget.Toast.LENGTH_SHORT).show()
+    }
+    val onCall: (String) -> Unit = { number ->
+        val launched = runCatching { context.startActivity(Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:$number"))) }.isSuccess
+        if (!launched) android.widget.Toast.makeText(context, "No dialer app found", android.widget.Toast.LENGTH_SHORT).show()
+    }
+    val onEmail: (String) -> Unit = { email ->
+        val launched = runCatching { context.startActivity(Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("mailto:$email"))) }.isSuccess
+        if (!launched) android.widget.Toast.makeText(context, "No email app found", android.widget.Toast.LENGTH_SHORT).show()
     }
 
     val canSend = state.threadInput.isNotBlank()
@@ -114,6 +138,10 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                         entry.message,
                         matchedIndices = entry.matchedIndices,
                         onLongPress = { viewModel.openMessageActions(MessageActionTargetUi(entry.message.id, entry.message.text)) },
+                        onOpenUrl = onOpenUrl,
+                        onCall = onCall,
+                        onEmail = onEmail,
+                        onCopyEntity = viewModel::copyDetectedText,
                     )
                 }
             }
@@ -278,7 +306,15 @@ private fun DateSeparator(label: String) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MessageBubble(message: MessageUi, onLongPress: () -> Unit, matchedIndices: Set<Int> = emptySet()) {
+private fun MessageBubble(
+    message: MessageUi,
+    onLongPress: () -> Unit,
+    matchedIndices: Set<Int> = emptySet(),
+    onOpenUrl: (String) -> Unit = {},
+    onCall: (String) -> Unit = {},
+    onEmail: (String) -> Unit = {},
+    onCopyEntity: (String) -> Unit = {},
+) {
     val tokens = MessagesTheme.tokens
     val bg = if (message.isScheduled) tokens.surfaceAlt else if (message.isMine) tokens.accent else tokens.surfaceAlt
     val fg = if (message.isScheduled) tokens.textSecondary else if (message.isMine) tokens.accentText else tokens.textPrimary
@@ -291,6 +327,17 @@ private fun MessageBubble(message: MessageUi, onLongPress: () -> Unit, matchedIn
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
             Text(highlightedText(message.text, matchedIndices), color = fg, fontSize = 14.sp, lineHeight = 19.sp)
+            if (message.detectedEntities.isNotEmpty()) {
+                com.phuzle.labs.messages.ui.components.MessageEntityChips(
+                    entities = message.detectedEntities,
+                    contentColor = fg,
+                    onOpenUrl = onOpenUrl,
+                    onCall = onCall,
+                    onEmail = onEmail,
+                    onCopy = onCopyEntity,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
             Text(message.timeLabel, color = fg.copy(alpha = 0.65f), fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
         }
     }

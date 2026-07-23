@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -47,6 +48,7 @@ class SettingsRepository(private val context: Context) {
         val HISTORY_IMPORTED = booleanPreferencesKey("history_imported")
         val CLOUD_FALLBACK_ENABLED = booleanPreferencesKey("cloud_fallback_enabled")
         val SERVER_BASE_URL = stringPreferencesKey("server_base_url")
+        val APPLIED_CLASSIFIER_VERSION = intPreferencesKey("applied_classifier_version")
     }
 
     val settingsFlow: Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
@@ -81,6 +83,7 @@ class SettingsRepository(private val context: Context) {
             historyImported = prefs[Keys.HISTORY_IMPORTED] ?: false,
             cloudFallbackEnabled = prefs[Keys.CLOUD_FALLBACK_ENABLED] ?: false,
             serverBaseUrl = prefs[Keys.SERVER_BASE_URL] ?: "http://10.0.2.2:8080/",
+            appliedClassifierVersion = prefs[Keys.APPLIED_CLASSIFIER_VERSION] ?: 0,
         )
     }
 
@@ -121,6 +124,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setHistoryImported(imported: Boolean) = edit { it[Keys.HISTORY_IMPORTED] = imported }
     suspend fun setCloudFallbackEnabled(enabled: Boolean) = edit { it[Keys.CLOUD_FALLBACK_ENABLED] = enabled }
     suspend fun setServerBaseUrl(url: String) = edit { it[Keys.SERVER_BASE_URL] = url }
+    suspend fun setAppliedClassifierVersion(version: Int) = edit { it[Keys.APPLIED_CLASSIFIER_VERSION] = version }
 
     private suspend fun edit(transform: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         context.settingsDataStore.edit(transform)

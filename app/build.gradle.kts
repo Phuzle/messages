@@ -105,6 +105,7 @@ dependencies {
     implementation(libs.retrofit.converter.gson)
     implementation(libs.okhttp)
     implementation(libs.play.services.auth)
+    implementation(libs.androidx.browser)
 
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)

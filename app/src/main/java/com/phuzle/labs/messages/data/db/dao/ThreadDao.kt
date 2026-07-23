@@ -45,6 +45,15 @@ interface ThreadDao {
     @Query("SELECT * FROM threads WHERE sender = :sender LIMIT 1")
     suspend fun findBySender(sender: String): ThreadEntity?
 
+    /** One-shot (not a Flow) snapshot for AppViewModel.reclassifyThreadsIfNeeded — every thread
+     * regardless of archived/private/deleted, since a sender's category shouldn't depend on
+     * where the user happens to have filed the conversation. */
+    @Query("SELECT * FROM threads")
+    suspend fun getAllOnce(): List<ThreadEntity>
+
+    @Query("UPDATE threads SET category = :category WHERE id = :id")
+    suspend fun updateCategory(id: String, category: String)
+
     @Query("UPDATE threads SET unread = :unread WHERE id = :id")
     suspend fun setUnread(id: String, unread: Boolean)
 

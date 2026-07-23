@@ -70,6 +70,7 @@ class MainActivity : FragmentActivity() {
             viewModel.restoreFromFileRequests.collect { restoreFromFileLauncher.launch(arrayOf("*/*")) }
         }
         viewModel.checkFirstLaunchDriveRestore()
+        viewModel.reclassifyThreadsIfNeeded()
     }
 
     override fun onNewIntent(intent: Intent) {

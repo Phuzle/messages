@@ -35,6 +35,21 @@ class ThreadRepository(
     suspend fun storageOverview(): StorageOverview =
         StorageOverview(threadDao.countActiveThreads(), threadDao.countActiveSenders(), messageDao.countAll())
 
+    /** Re-runs [classify] against every existing thread's (sender, latest message) and updates
+     * just its `category` column when it changed — see AppViewModel.reclassifyThreadsIfNeeded and
+     * RegexRules.CURRENT_VERSION for why this exists and when it runs. Purely additive: never
+     * touches message rows, senders, or anything else, and a no-op write (category unchanged) is
+     * skipped so this doesn't spuriously invalidate reactive thread-list queries for every thread
+     * on every app launch. */
+    suspend fun reclassifyAllThreads(classify: (sender: String, latestBody: String) -> Category) {
+        threadDao.getAllOnce().forEach { thread ->
+            val recategorized = classify(thread.sender, thread.lastMessagePreview).name
+            if (recategorized != thread.category) {
+                threadDao.updateCategory(thread.id, recategorized)
+            }
+        }
+    }
+
     /** Real SMS_DELIVER path: find-or-create the thread for [sender], then append the message. */
     suspend fun recordIncomingMessage(
         sender: String,

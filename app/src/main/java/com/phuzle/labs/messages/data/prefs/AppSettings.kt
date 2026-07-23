@@ -40,4 +40,7 @@ data class AppSettings(
      * message text to a server. See server/README.md. */
     val cloudFallbackEnabled: Boolean = false,
     val serverBaseUrl: String = "http://10.0.2.2:8080/",
+    /** See RegexRules.CURRENT_VERSION — 0 (never applied) makes a fresh install harmlessly run
+     * the reclassification pass once against an empty/just-imported thread list. */
+    val appliedClassifierVersion: Int = 0,
 )

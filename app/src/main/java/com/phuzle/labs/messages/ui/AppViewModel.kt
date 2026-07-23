@@ -368,6 +368,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 timestamp = it.timestamp,
                 isMine = it.outgoing,
                 isScheduled = it.scheduledFor != null && !it.sent,
+                detectedEntities = com.phuzle.labs.messages.domain.text.MessageEntityDetector.detect(
+                    it.body, container.regexRules.otpKeywords, container.regexRules.otpCodePattern,
+                ),
             )
         }
 
@@ -1049,6 +1052,14 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         toast("Number copied")
     }
 
+    /** Backs the Copy chip under a detected phone/URL/email/code inside a message body (see
+     * MessageEntityDetector) — Open/Call/Email chips instead launch an intent directly from the
+     * composable, since that only needs a Context, not anything the ViewModel holds. */
+    fun copyDetectedText(value: String) {
+        container.copyToClipboard("Copied text", value)
+        toast("Copied")
+    }
+
     // endregion
 
     // region ---- OTP hot-swap ----
@@ -1399,6 +1410,21 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     // endregion
 
     // endregion
+
+    /** Called once at startup (see MainActivity). A future release that ships smarter
+     * classification rules (see RegexRules.CURRENT_VERSION) would otherwise silently do nothing
+     * for senders the app already has a thread for — categories are only ever decided once, when
+     * a thread is first created. Cheap no-op when the version hasn't changed since the last run. */
+    fun reclassifyThreadsIfNeeded() = viewModelScope.launch {
+        val settings = container.settingsRepository.settingsFlow.first()
+        if (settings.appliedClassifierVersion >= com.phuzle.labs.messages.domain.categorization.RegexRules.CURRENT_VERSION) return@launch
+        val succeeded = runCatching {
+            container.threadRepository.reclassifyAllThreads { sender, body -> container.classifier.classify(sender, body) }
+        }.isSuccess
+        // Only recorded on success — a failed pass (e.g. a transient DB error) should retry on the
+        // next launch rather than being silently skipped forever.
+        if (succeeded) container.settingsRepository.setAppliedClassifierVersion(com.phuzle.labs.messages.domain.categorization.RegexRules.CURRENT_VERSION)
+    }
 
     /** Called once at startup (see MainActivity/AppRoot). Only ever prompts once per install
      * (driveRestorePromptShown) and only when there's nothing local to lose yet — an existing

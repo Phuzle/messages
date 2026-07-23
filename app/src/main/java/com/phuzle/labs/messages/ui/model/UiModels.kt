@@ -68,6 +68,7 @@ data class MessageUi(
     val timestamp: Long,
     val isMine: Boolean,
     val isScheduled: Boolean,
+    val detectedEntities: List<com.phuzle.labs.messages.domain.text.DetectedEntity> = emptyList(),
 )
 
 data class CurrentThreadUi(
