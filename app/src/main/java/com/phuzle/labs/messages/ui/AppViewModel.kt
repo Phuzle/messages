@@ -537,6 +537,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun openRecycleBin() = settingsAwareNav(PushedScreen.RecycleBin)
+    fun openBackupList() {
+        settingsAwareNav(PushedScreen.BackupList)
+        loadBackupLists()
+    }
     fun openArchivedScreen() = settingsAwareNav(PushedScreen.Archived)
     fun openThreadInfo() {
         ephemeral.update { it.copy(pushedScreen = PushedScreen.ThreadInfo, threadInfoFirstContactAt = null) }
@@ -1049,8 +1053,17 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun handleDriveSignInResult(data: Intent?) = viewModelScope.launch {
         val account = container.driveBackupManager.handleSignInResult(data)
         val email = account?.email
-        if (email == null) {
+        if (account == null || email == null) {
             toast("Google sign-in was cancelled or failed")
+            return@launch
+        }
+        // A successful sign-in only proves an account was picked — it does NOT prove Drive access
+        // was granted (that's a separate consent step Play Services can skip or the user can deny
+        // independently of picking an account). Treating any successful sign-in as "connected"
+        // without this check was the exact bug: the app would proceed to back up to Drive with no
+        // real consent for that access at all.
+        if (!container.driveBackupManager.hasDriveScope(account)) {
+            toast("Signed in as $email, but Drive access wasn't granted — tap Connect again and allow access to Google Drive")
             return@launch
         }
         container.settingsRepository.setGoogleAccountEmail(email)
@@ -1127,6 +1140,64 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         container.settingsRepository.setLastDriveRestoreAt(System.currentTimeMillis())
         toast("Merged in messages from your Google Drive backup")
     }
+
+    // region ---- Backup list (pick-a-file restore, see BackupListScreen) ----
+
+    private val _backupListState = MutableStateFlow(com.phuzle.labs.messages.ui.model.BackupListUiState())
+    val backupListState: StateFlow<com.phuzle.labs.messages.ui.model.BackupListUiState> = _backupListState
+
+    /** Loads every local snapshot plus every Drive snapshot (if connected) — not just the newest of
+     * each, so a device migrating in from another install can see and pick an older one. */
+    fun loadBackupLists() = viewModelScope.launch {
+        _backupListState.update { it.copy(loading = true) }
+        val local = container.backupManager.listBackups()
+            .map { com.phuzle.labs.messages.ui.model.LocalBackupUi(it.fileName, it.timestampMillis) }
+
+        val account = container.driveBackupManager.lastSignedInAccount()
+        val drive = if (account == null) {
+            emptyList()
+        } else {
+            val token = container.driveBackupManager.accessToken(account)
+            if (token == null) emptyList() else container.driveBackupManager.listBackups(token)
+                .map { com.phuzle.labs.messages.ui.model.DriveBackupUi(it.id, it.name, it.createdTime) }
+        }
+        _backupListState.update { it.copy(loading = false, local = local, drive = drive, driveConnected = account != null) }
+    }
+
+    /** Destructive — overwrites the live database, unlike a Drive restore (always a merge). The
+     * confirmation dialog lives in BackupListScreen, matching the destructive-action rule the rest
+     * of the app follows (archive/delete/disconnect all confirm or offer undo). */
+    fun restoreLocalBackup(fileName: String) = viewModelScope.launch {
+        if (container.backupManager.restore(fileName)) {
+            container.settingsRepository.setLastLocalRestoreAt(System.currentTimeMillis())
+            toast("Restored from backup")
+        } else {
+            toast("Couldn't restore that backup")
+        }
+    }
+
+    /** Always a merge (see driveRestoreNow/DriveBackupMerger) — safe to run without a confirmation
+     * dialog since nothing local is ever discarded. */
+    fun restoreDriveBackup(fileId: String) = viewModelScope.launch {
+        val account = container.driveBackupManager.lastSignedInAccount() ?: run {
+            toast("Not connected to Google Drive")
+            return@launch
+        }
+        val token = container.driveBackupManager.accessToken(account) ?: run {
+            toast("Couldn't reach Google Drive — check your connection and try again")
+            return@launch
+        }
+        val gzipped = container.driveBackupManager.downloadBackup(token, fileId) ?: run {
+            toast("Couldn't download that Drive backup")
+            return@launch
+        }
+        val raw = container.backupManager.gunzipDriveSnapshot(gzipped)
+        container.driveBackupMerger.merge(raw)
+        container.settingsRepository.setLastDriveRestoreAt(System.currentTimeMillis())
+        toast("Merged in messages from that Drive backup")
+    }
+
+    // endregion
 
     /** Called once at startup (see MainActivity/AppRoot). Only ever prompts once per install
      * (driveRestorePromptShown) and only when there's nothing local to lose yet — an existing

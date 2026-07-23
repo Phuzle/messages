@@ -6,7 +6,7 @@ import com.phuzle.labs.messages.domain.model.Category
 
 enum class DashboardTab { Messages, Passbook, Reminders }
 
-enum class PushedScreen { Thread, ThreadInfo, Compose, Settings, RecycleBin, Archived, PrivateChats, Drafts, AccountDetail }
+enum class PushedScreen { Thread, ThreadInfo, Compose, Settings, RecycleBin, Archived, PrivateChats, Drafts, AccountDetail, BackupList }
 
 enum class SettingsSub(val title: String) {
     Notifications("Notifications"),
@@ -120,6 +120,15 @@ data class DeletedThreadUi(
 data class BlockedNumberUi(val number: String)
 
 data class PillOptionUi(val key: String, val label: String, val active: Boolean)
+
+data class LocalBackupUi(val fileName: String, val timestampMillis: Long)
+data class DriveBackupUi(val id: String, val name: String, val createdTime: String)
+data class BackupListUiState(
+    val loading: Boolean = false,
+    val local: List<LocalBackupUi> = emptyList(),
+    val drive: List<DriveBackupUi> = emptyList(),
+    val driveConnected: Boolean = false,
+)
 
 data class ContactSuggestionUi(val name: String, val number: String, val photoUri: String? = null)
 data class DraftUi(val id: String, val to: String, val bodyPreview: String, val timeLabel: String)

@@ -18,7 +18,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.domain.model.NotificationChannelIds
@@ -29,7 +28,6 @@ import com.phuzle.labs.messages.ui.components.SettingsRowDivider
 import com.phuzle.labs.messages.ui.components.SettingsToggleRow
 import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
-import com.phuzle.labs.messages.ui.theme.ShapeMedium
 
 private data class ChannelInfo(val id: String, val name: String, val importance: String, val behavior: String)
 
@@ -103,63 +101,5 @@ fun NotificationsSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                 }
             }
         }
-
-        Column {
-            SectionLabel("Notification Previews", Modifier.padding(bottom = 8.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                PreviewCard(tokens) {
-                    PreviewHeader("AUTHENTICATION", "now")
-                    Text(buildBoldPrefix("Northgate Bank", "Your verification code is 482913"), color = tokens.textPrimary, fontSize = 13.5.sp, modifier = Modifier.padding(top = 4.dp))
-                    Text(
-                        "Copy Code", color = tokens.accent, fontSize = 12.5.sp, fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(top = 8.dp).background(tokens.accentSoft, ShapeMedium).padding(horizontal = 14.dp, vertical = 6.dp),
-                    )
-                }
-                PreviewCard(tokens) {
-                    PreviewHeader("DIRECT MESSAGES", "now")
-                    Text(buildBoldPrefix("Jordan Reyes", "Are we still on for 7 tonight?"), color = tokens.textPrimary, fontSize = 13.5.sp, modifier = Modifier.padding(top = 4.dp))
-                    Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            "Reply…", color = tokens.textTertiary, fontSize = 12.5.sp,
-                            modifier = Modifier.weight(1f).background(tokens.inputBg, ShapeMedium).padding(horizontal = 10.dp, vertical = 6.dp),
-                        )
-                        Text(
-                            "Send", color = tokens.accent, fontSize = 12.5.sp, fontWeight = FontWeight.Bold,
-                            modifier = Modifier.background(tokens.accentSoft, ShapeMedium).padding(horizontal = 12.dp, vertical = 6.dp),
-                        )
-                    }
-                }
-                PreviewCard(tokens) {
-                    PreviewHeader("TRANSACTIONS", "now")
-                    Text(buildBoldPrefix("Horizon Card Services", "You spent \$42.10 at Corner Cafe"), color = tokens.textPrimary, fontSize = 13.5.sp, modifier = Modifier.padding(top = 4.dp))
-                }
-                PreviewCard(tokens, alt = true) {
-                    PreviewHeader("PROMOTIONAL", "silent")
-                    Text("Summit Wireless · 50% off your next bill", color = tokens.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
-                }
-            }
-        }
     }
 }
-
-@Composable
-private fun PreviewCard(tokens: com.phuzle.labs.messages.ui.theme.ThemeTokens, alt: Boolean = false, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
-    Column(
-        Modifier.fillMaxWidth()
-            .background(if (alt) tokens.surfaceAlt else tokens.surface, ShapeMedium)
-            .border(1.dp, tokens.border, ShapeMedium)
-            .padding(if (alt) 10.dp else 12.dp),
-        content = content,
-    )
-}
-
-@Composable
-private fun PreviewHeader(label: String, time: String) {
-    val tokens = MessagesTheme.tokens
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = tokens.textTertiary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Text(time, color = tokens.textTertiary, fontSize = 11.sp)
-    }
-}
-
-private fun buildBoldPrefix(name: String, rest: String) = "$name · $rest"

@@ -80,6 +80,7 @@ fun AppRoot(viewModel: AppViewModel) {
                 PushedScreen.PrivateChats -> PrivateChatsScreen(state, viewModel)
                 PushedScreen.Drafts -> DraftsScreen(state, viewModel)
                 PushedScreen.AccountDetail -> AccountDetailScreen(state, viewModel)
+                PushedScreen.BackupList -> com.phuzle.labs.messages.ui.settings.BackupListScreen(viewModel)
             }
 
             NavDrawer(

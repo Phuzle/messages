@@ -58,9 +58,19 @@ class GoogleDriveBackupManager(private val context: Context) {
 
     fun signInIntent(): Intent = signInClient().signInIntent
 
-    fun lastSignedInAccount(): GoogleSignInAccount? =
-        GoogleSignIn.getLastSignedInAccount(context)?.takeIf { GoogleSignIn.hasPermissions(it, Scope(DRIVE_APPDATA_SCOPE)) }
+    /** The scope requested in signInClient() being on the *options* only means it was asked for —
+     * it does not mean the user actually granted it. Every caller that cares whether Drive access
+     * is real (not just "some Google account is signed in") must check this explicitly, which is
+     * exactly the bug this existed to fix: handleSignInResult used to be trusted at face value. */
+    fun hasDriveScope(account: GoogleSignInAccount): Boolean = GoogleSignIn.hasPermissions(account, Scope(DRIVE_APPDATA_SCOPE))
 
+    fun lastSignedInAccount(): GoogleSignInAccount? =
+        GoogleSignIn.getLastSignedInAccount(context)?.takeIf { hasDriveScope(it) }
+
+    /** Raw sign-in result — null only on actual cancel/failure. This does *not* mean Drive access
+     * was granted; callers must check hasDriveScope(account) themselves before treating the user
+     * as "connected" (see AppViewModel.handleDriveSignInResult, which used to skip this check
+     * entirely and silently proceed on basic-profile-only sign-in with no Drive consent at all). */
     fun handleSignInResult(data: Intent?): GoogleSignInAccount? = runCatching {
         GoogleSignIn.getSignedInAccountFromIntent(data).getResult(ApiException::class.java)
     }.getOrNull()

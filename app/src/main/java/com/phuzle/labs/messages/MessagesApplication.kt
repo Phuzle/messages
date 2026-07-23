@@ -5,6 +5,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.phuzle.labs.messages.core.notifications.NotificationChannels
+import com.phuzle.labs.messages.work.AutoBackupWorker
 import com.phuzle.labs.messages.work.OtpEvictionWorker
 import com.phuzle.labs.messages.work.RecycleBinPurgeWorker
 import com.phuzle.labs.messages.work.ScheduledSendWorker
@@ -39,6 +40,11 @@ class MessagesApplication : Application() {
             ScheduledSendWorker.UNIQUE_WORK_NAME,
             ExistingPeriodicWorkPolicy.KEEP,
             PeriodicWorkRequestBuilder<ScheduledSendWorker>(15, TimeUnit.MINUTES).build(),
+        )
+        workManager.enqueueUniquePeriodicWork(
+            AutoBackupWorker.UNIQUE_WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<AutoBackupWorker>(6, TimeUnit.HOURS).build(),
         )
     }
 }

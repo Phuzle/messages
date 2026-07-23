@@ -46,9 +46,10 @@ fun ThreadRow(
 ) {
     val tokens = MessagesTheme.tokens
     val dismissState = rememberSwipeToDismissBoxState(
-        // A vertical fling with a slight horizontal wobble can otherwise cross the default 50%
-        // threshold and fire a swipe action by accident while the user is just scrolling the list.
-        positionalThreshold = { totalWidth -> totalWidth * 0.6f },
+        // Below Material3's 50% default so a normal reveal-and-release swipe actually commits —
+        // 0.6f (tried previously) made a deliberate swipe that clearly reveals the action label
+        // spring back without firing, which read as "the swipe doesn't work."
+        positionalThreshold = { totalWidth -> totalWidth * 0.35f },
         confirmValueChange = { value ->
             when (value) {
                 SwipeToDismissBoxValue.StartToEnd -> onSwipeRight()

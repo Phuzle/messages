@@ -20,7 +20,7 @@ import com.phuzle.labs.messages.ui.model.SettingsSub
 private data class SettingsCategoryInfo(val sub: SettingsSub, val hint: String)
 
 private val CATEGORIES = listOf(
-    SettingsCategoryInfo(SettingsSub.Notifications, "Channels, previews, lock screen"),
+    SettingsCategoryInfo(SettingsSub.Notifications, "Channels, lock screen"),
     SettingsCategoryInfo(SettingsSub.Appearance, "Theme & accent color"),
     SettingsCategoryInfo(SettingsSub.Privacy, "App lock, private chats, blocking"),
     SettingsCategoryInfo(SettingsSub.Chats, "Swipe actions, signature"),

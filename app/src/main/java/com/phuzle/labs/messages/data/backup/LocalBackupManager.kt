@@ -15,6 +15,8 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+data class LocalBackupFile(val fileName: String, val timestampMillis: Long)
+
 /**
  * The PRD's "mandatory local tier": an encrypted, gzipped snapshot of the Room database, stored
  * app-privately. Keeps the last [MAX_BACKUPS] snapshots (each backupNow() call adds one, timestamped,
@@ -39,6 +41,12 @@ class LocalBackupManager(private val context: Context) {
             ?.sortedByDescending { it.name } ?: emptyList()
 
     fun hasBackup(): Boolean = backupFiles().isNotEmpty()
+
+    /** Newest-first, for the backup-list screen — every snapshot, not just the latest. */
+    fun listBackups(): List<LocalBackupFile> = backupFiles().map { f ->
+        val timestamp = f.name.removePrefix("messages-").removeSuffix(".bak").toLongOrNull() ?: f.lastModified()
+        LocalBackupFile(f.name, timestamp)
+    }
 
     /** Checkpoints the WAL and gzips the raw db file — the shared first half of both the local
      * (AES-encrypted-on-top) and Drive (shipped as-is) backup paths. */
@@ -71,9 +79,19 @@ class LocalBackupManager(private val context: Context) {
 
     /** Decrypts + gunzips the most recent local snapshot back over the live db file, then resets
      * the Room instance. */
-    suspend fun restoreNow(): Boolean {
-        val latest = backupFiles().firstOrNull() ?: return false
-        val raw = decryptLocalSnapshot(latest.readBytes())
+    suspend fun restoreNow(): Boolean = backupFiles().firstOrNull()?.let { restoreFile(it) } ?: false
+
+    /** Same as [restoreNow] but for a specific snapshot the user picked from the backup-list
+     * screen, rather than always the newest one — e.g. restoring an older snapshot, or one that
+     * migrated in from another device. */
+    suspend fun restore(fileName: String): Boolean {
+        val file = File(backupDir, fileName)
+        if (!file.exists()) return false
+        return restoreFile(file)
+    }
+
+    private fun restoreFile(file: File): Boolean {
+        val raw = decryptLocalSnapshot(file.readBytes())
         writeOverLiveDatabase(raw)
         return true
     }
