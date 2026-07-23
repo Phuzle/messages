@@ -16,10 +16,15 @@ import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
 
 /**
- * adb-only testing hook, never exported to other apps — `android:exported="false"` in the
- * manifest means no third-party app can trigger it, only `adb shell am broadcast` (which targets
- * components directly regardless of the exported flag) or an on-device instrumented test. The
- * [BuildConfig.DEBUG] check is defense in depth on top of that.
+ * adb-only testing hook. `android:exported="true"` in the manifest is required for `adb shell am
+ * broadcast -n ...` to actually reach this component (verified empirically — some Android
+ * versions/devices do not let shell target a non-exported component via explicit intent, despite
+ * that being common folklore). The real gate against a third-party app on the *device* invoking
+ * this is the [BuildConfig.DEBUG] check below: it unconditionally no-ops in release builds, so a
+ * distributed release APK never runs any of this regardless of the exported flag. The residual
+ * risk — another locally-installed app spoofing an outgoing message or contact photo through this
+ * receiver — only exists for someone who builds and installs the *debug* variant themselves; a
+ * release build downloaded from GitHub is unaffected.
  *
  * Two actions:
  * - [ACTION_SIMULATE_OUTGOING]: exists because
