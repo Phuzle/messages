@@ -31,8 +31,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,18 +83,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
     }
 
     val inAppBrowser = state.settings.inAppBrowser
-    val onOpenUrl: (String) -> Unit = { url ->
-        val fullUrl = if (url.startsWith("http", ignoreCase = true)) url else "https://$url"
-        val uri = android.net.Uri.parse(fullUrl)
-        val launched = runCatching {
-            if (inAppBrowser) {
-                androidx.browser.customtabs.CustomTabsIntent.Builder().build().launchUrl(context, uri)
-            } else {
-                context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-            }
-        }.isSuccess
-        if (!launched) android.widget.Toast.makeText(context, "Couldn't open that link", android.widget.Toast.LENGTH_SHORT).show()
-    }
+    val onOpenUrl: (String) -> Unit = { url -> com.phuzle.labs.messages.core.util.openUrl(context, inAppBrowser, url) }
     val onCall: (String) -> Unit = { number ->
         val launched = runCatching { context.startActivity(Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:$number"))) }.isSuccess
         if (!launched) android.widget.Toast.makeText(context, "No dialer app found", android.widget.Toast.LENGTH_SHORT).show()
@@ -101,6 +92,14 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
         val launched = runCatching { context.startActivity(Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("mailto:$email"))) }.isSuccess
         if (!launched) android.widget.Toast.makeText(context, "No email app found", android.widget.Toast.LENGTH_SHORT).show()
     }
+
+    // Opening a conversation should land on the most recent message, like any other chat app —
+    // not at the top of whatever's currently loaded. Messages arrive asynchronously (a Flow, not
+    // available the instant this composable enters), so this fires once real content shows up
+    // for this thread rather than immediately on thread.id changing. Guarded by
+    // scrolledToBottomFor so it only happens on the initial open, never again when an older page
+    // loads in from scrolling up, or a new message quietly extends the list while already reading.
+    var scrolledToBottomFor by remember { mutableStateOf<String?>(null) }
 
     val canSend = state.threadInput.isNotBlank()
     val listEntries = remember(state.currentThreadMessages, state.threadSearchQuery) {
@@ -113,6 +112,13 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
             // bolded the same way the dashboard's thread-list search does (see FuzzyMatcher).
             val matches = state.currentThreadMessages.mapNotNull { m -> FuzzyMatcher.match(query, m.text)?.let { m to it.matchedIndices } }
             buildThreadListEntries(matches.map { it.first }, matches.associate { it.first.id to it.second }, showDateHeaders = false)
+        }
+    }
+
+    LaunchedEffect(thread.id, listEntries.size) {
+        if (listEntries.isNotEmpty() && scrolledToBottomFor != thread.id) {
+            listState.scrollToItem(listEntries.size - 1)
+            scrolledToBottomFor = thread.id
         }
     }
 
