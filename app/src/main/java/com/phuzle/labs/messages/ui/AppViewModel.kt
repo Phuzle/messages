@@ -117,6 +117,9 @@ private data class Ephemeral(
     /** First-launch-only prompt (see checkFirstLaunchDriveRestore) offering to restore/merge a
      * Google Drive backup found via a silent, no-UI sign-in. */
     val driveRestoreAvailable: Boolean = false,
+    /** See AppUiState.driveSignInNeededForRestore — silent sign-in couldn't tell either way, so
+     * this offers an explicit interactive sign-in (still with Skip) instead of just giving up. */
+    val driveSignInNeededForRestore: Boolean = false,
     /** Fetched once when Thread Info opens (see openThreadInfo) — not worth a continuous reactive
      * flow just for a "first contact" date that never changes after the fact. */
     val threadInfoFirstContactAt: Long? = null,
@@ -457,6 +460,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             threadSearchActive = eph.threadSearchActive,
             threadSearchQuery = eph.threadSearchQuery,
             driveRestoreAvailable = eph.driveRestoreAvailable,
+            driveSignInNeededForRestore = eph.driveSignInNeededForRestore,
             messageActionTarget = eph.messageActionTarget,
             isImportingHistory = eph.isImportingHistory,
             importDone = eph.importDone,
@@ -1308,11 +1312,17 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
      * signals "please show this". */
     fun requestDriveSignIn() = _driveSignInRequests.tryEmit(Unit)
 
+    /** Shared by two callers: Settings' "Connect to Google Drive" button, and the startup
+     * DriveSignInPromptScreen's "Sign in" button (see requestDriveSignInForRestore) — told apart by
+     * driveSignInNeededForRestore, since only the startup path should go on to check for backups
+     * and offer to restore afterward. */
     fun handleDriveSignInResult(data: Intent?) = viewModelScope.launch {
+        val fromStartupRestoreCheck = ephemeral.value.driveSignInNeededForRestore
         val account = container.driveBackupManager.handleSignInResult(data)
         val email = account?.email
         if (account == null || email == null) {
             toast("Google sign-in was cancelled or failed")
+            if (fromStartupRestoreCheck) skipDriveSignInForRestore()
             return@launch
         }
         // A successful sign-in only proves an account was picked — it does NOT prove Drive access
@@ -1322,11 +1332,16 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         // real consent for that access at all.
         if (!container.driveBackupManager.hasDriveScope(account)) {
             toast("Signed in as $email, but Drive access wasn't granted — tap Connect again and allow access to Google Drive")
+            if (fromStartupRestoreCheck) skipDriveSignInForRestore()
             return@launch
         }
         container.settingsRepository.setGoogleAccountEmail(email)
         container.settingsRepository.setCloudBackupConnected(true)
-        toast("Connected to Google Drive as $email")
+        if (fromStartupRestoreCheck) {
+            checkDriveBackupsAndOffer(account)
+        } else {
+            toast("Connected to Google Drive as $email")
+        }
     }
 
     fun disconnectGoogleDrive() = runBackupAction {
@@ -1550,44 +1565,71 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     /** Called once at startup (see MainActivity/AppRoot). Only ever prompts once per install
-     * (driveRestorePromptShown) and only when there's nothing local to lose yet — an existing
-     * inbox with real messages should never get an unsolicited "want to restore?" popup. Uses a
-     * *silent* sign-in (no UI) — Google Play Services remembers this app's consent at the account
-     * level even across a reinstall, so this can genuinely detect "you've done this before on this
-     * device" without asking the user anything until there's actually a backup to offer.
+     * (driveRestorePromptShown) — deliberately NOT gated on whether local threads already exist.
+     * That used to be the condition (skip the Drive check if storageOverview().chatCount > 0),
+     * on the theory that an established inbox shouldn't get an unsolicited "want to restore?"
+     * popup. In practice that made the whole feature unreachable: this function is called at the
+     * end of importHistoryOnce(), *after* the system SMS backfill already ran — and on any real
+     * phone with actual texting history, that backfill alone makes chatCount > 0 before this line
+     * ever executes, so the Drive check silently never fired, on every device, every time. The
+     * "don't surprise an established inbox" concern is instead handled by the dialog itself always
+     * offering Skip (see DriveRestoreDialog) and by DriveBackupMerger always merging, never
+     * overwriting — so showing this is safe regardless of what's already local.
      *
-     * Checks Room directly rather than uiState.value.threads: that StateFlow is built from a
-     * reactive Flow chain that may still be on its default empty seed value this early in
-     * startup, or may already reflect threads the SMS history import raced in concurrently
-     * (see AppViewModel.importHistoryOnce) — either way `uiState.value` at this exact moment
-     * isn't a reliable answer to "is there anything here already", only a direct query is. */
+     * Attempts a *silent* sign-in (no UI) first — when it works, Google Play Services can resolve
+     * "this account already granted this app Drive access" with zero interaction, which is worth
+     * trying since it's free. But silentSignIn() is NOT guaranteed to succeed just because the
+     * account consented before: for a scoped/sensitive permission like Drive (as opposed to basic
+     * profile/email), Play Services commonly returns ApiException(4) SIGN_IN_REQUIRED — "I can't
+     * tell silently, an interactive sign-in is needed" — and this is routine, not a bug, especially
+     * right after this app's own data was cleared (which wipes whatever local session state let a
+     * *previous* silent attempt short-circuit). Treating that failure as "no backup" (the previous
+     * version of this function) was itself the bug this fixes: it meant the Drive-restore step
+     * silently never appeared for real accounts with real backups. Now a silent-sign-in failure
+     * instead offers an explicit interactive "Sign in to check" step (driveSignInNeededForRestore),
+     * still with Skip — see handleDriveSignInResult for what happens after that sign-in returns. */
     fun checkFirstLaunchDriveRestore() = viewModelScope.launch {
-        // Already showing (the user hasn't decided yet) — importHistoryOnce calls this again on
-        // every onResume, not just the first, so this avoids redundant sign-in/Drive API calls
-        // for as long as the gate sits there waiting on a tap.
-        if (ephemeral.value.driveRestoreAvailable) return@launch
+        // Already showing one of the two prompts (the user hasn't decided yet) — importHistoryOnce
+        // calls this again on every onResume, not just the first, so this avoids redundant sign-in/
+        // Drive API calls for as long as either gate sits there waiting on a tap.
+        if (ephemeral.value.driveRestoreAvailable || ephemeral.value.driveSignInNeededForRestore) return@launch
         val settings = container.settingsRepository.settingsFlow.first()
         if (settings.driveRestorePromptShown) return@launch
-        if (container.threadRepository.storageOverview().chatCount > 0) {
-            container.settingsRepository.setDriveRestorePromptShown(true)
-            return@launch
-        }
         val account = container.driveBackupManager.silentSignIn()
         if (account?.email == null) {
-            container.settingsRepository.setDriveRestorePromptShown(true)
+            ephemeral.update { it.copy(driveSignInNeededForRestore = true) }
             return@launch
         }
+        checkDriveBackupsAndOffer(account)
+    }
+
+    /** Shared tail end of both the silent path above and the interactive path below — resolves an
+     * already-signed-in [account] to either "found a backup, offer to restore" or "nothing there,
+     * don't ask again this install". */
+    private suspend fun checkDriveBackupsAndOffer(account: com.google.android.gms.auth.api.signin.GoogleSignInAccount) {
         val token = container.driveBackupManager.accessToken(account)
         if (token == null) {
             container.settingsRepository.setDriveRestorePromptShown(true)
-            return@launch
+            ephemeral.update { it.copy(driveSignInNeededForRestore = false) }
+            return
         }
         if (container.driveBackupManager.listBackups(token).isEmpty()) {
             container.settingsRepository.setDriveRestorePromptShown(true)
-            return@launch
+            ephemeral.update { it.copy(driveSignInNeededForRestore = false) }
+            return
         }
-        container.settingsRepository.setGoogleAccountEmail(account.email)
-        ephemeral.update { it.copy(driveRestoreAvailable = true) }
+        container.settingsRepository.setGoogleAccountEmail(account.email!!)
+        ephemeral.update { it.copy(driveRestoreAvailable = true, driveSignInNeededForRestore = false) }
+    }
+
+    /** The startup screen's "Sign in" button (see DriveSignInPromptScreen) — reuses the exact same
+     * interactive sign-in flow as Settings' "Connect to Google Drive", just requested from a
+     * different place. handleDriveSignInResult tells the two apart via driveSignInNeededForRestore. */
+    fun requestDriveSignInForRestore() = requestDriveSignIn()
+
+    fun skipDriveSignInForRestore() = viewModelScope.launch {
+        ephemeral.update { it.copy(driveSignInNeededForRestore = false) }
+        container.settingsRepository.setDriveRestorePromptShown(true)
     }
 
     fun confirmDriveRestore() {

@@ -67,6 +67,12 @@ data class AppUiState(
     val threadSearchActive: Boolean = false,
     val threadSearchQuery: String = "",
     val driveRestoreAvailable: Boolean = false,
+    /** Silent sign-in couldn't determine whether a Drive backup exists (commonly a real Google
+     * Play Services ApiException 4 / SIGN_IN_REQUIRED, not a bug — silent resolution for a scoped
+     * permission like Drive is not guaranteed even for an account that consented before, especially
+     * right after app data is cleared) — see AppViewModel.checkFirstLaunchDriveRestore. This offers
+     * an explicit interactive sign-in instead of silently giving up, still with a Skip option. */
+    val driveSignInNeededForRestore: Boolean = false,
     val messageActionTarget: MessageActionTargetUi? = null,
     val multiSelectThreadIds: Set<String> = emptySet(),
 

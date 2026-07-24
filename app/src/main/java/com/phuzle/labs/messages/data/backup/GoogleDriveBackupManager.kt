@@ -3,6 +3,7 @@ package com.phuzle.labs.messages.data.backup
 import android.accounts.Account
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import com.google.android.gms.auth.GoogleAuthUtil
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
@@ -79,15 +80,22 @@ class GoogleDriveBackupManager(private val context: Context) {
         signInClient().signOut().addOnCompleteListener { if (cont.isActive) cont.resume(Unit) }
     }
 
-    /** No UI shown — Google Play Services remembers this app's consent at the Google *account*
-     * level, so this can succeed even right after a reinstall (no cached local session) as long
-     * as the same account previously granted Drive access on this device. Used by the
-     * first-launch "restore from Drive?" check to detect that without asking the user anything
-     * up front. Returns null (not an exception) on any failure, same as every other method here. */
+    /** No UI shown — an optimization attempt, not a guarantee: it succeeds for free when Play
+     * Services can resolve the account+scope with zero interaction, but for a scoped permission
+     * like Drive (as opposed to basic profile/email) it commonly fails with ApiException(4)
+     * SIGN_IN_REQUIRED even for an account that granted this exact access before — most reliably
+     * right after this app's own data was cleared, which wipes whatever local session state let a
+     * previous silent attempt short-circuit. That failure is routine, not exceptional, so it's
+     * logged at a level worth keeping (not filtered out) but callers must treat null as "can't
+     * tell silently, fall back to an interactive sign-in" — never as "no backup exists" (see
+     * AppViewModel.checkFirstLaunchDriveRestore, which used to make exactly that mistake). */
     suspend fun silentSignIn(): GoogleSignInAccount? = suspendCancellableCoroutine { cont ->
         signInClient().silentSignIn()
             .addOnSuccessListener { account -> if (cont.isActive) cont.resume(account) }
-            .addOnFailureListener { if (cont.isActive) cont.resume(null) }
+            .addOnFailureListener {
+                Log.i("GoogleDriveBackupManager", "silentSignIn couldn't resolve without interaction: $it")
+                if (cont.isActive) cont.resume(null)
+            }
     }
 
     /** Blocking OAuth token fetch — always called from a background dispatcher. Can throw

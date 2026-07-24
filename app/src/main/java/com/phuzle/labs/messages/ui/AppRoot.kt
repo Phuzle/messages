@@ -57,11 +57,12 @@ fun AppRoot(viewModel: AppViewModel) {
     MessagesTheme(themeMode = state.themeMode, accentHex = state.settings.accentHex) {
         val tokens = MessagesTheme.tokens
 
-        BackHandler(enabled = state.undoMessage != null || state.updateInfo != null || state.driveRestoreAvailable || state.actionSheet != null || state.overflowMenuOpen || state.showDrawer || state.multiSelectThreadIds.isNotEmpty() || state.pushedScreen != null) {
+        BackHandler(enabled = state.undoMessage != null || state.updateInfo != null || state.driveRestoreAvailable || state.driveSignInNeededForRestore || state.actionSheet != null || state.overflowMenuOpen || state.showDrawer || state.multiSelectThreadIds.isNotEmpty() || state.pushedScreen != null) {
             when {
                 state.undoMessage != null -> viewModel.dismissUndo()
                 state.updateInfo != null -> viewModel.dismissUpdate()
                 state.driveRestoreAvailable -> viewModel.dismissDriveRestorePrompt()
+                state.driveSignInNeededForRestore -> viewModel.skipDriveSignInForRestore()
                 state.actionSheet != null -> viewModel.closeActionSheet()
                 state.overflowMenuOpen -> viewModel.closeOverflowMenu()
                 state.showDrawer -> viewModel.closeDrawer()
@@ -93,6 +94,16 @@ fun AppRoot(viewModel: AppViewModel) {
                 visible = true,
                 onRestore = viewModel::confirmDriveRestore,
                 onDismiss = viewModel::dismissDriveRestorePrompt,
+            )
+            return@MessagesTheme
+        }
+
+        // Silent sign-in couldn't tell either way (see checkFirstLaunchDriveRestore) — offer the
+        // real interactive sign-in instead of silently giving up, still skippable.
+        if (state.driveSignInNeededForRestore) {
+            com.phuzle.labs.messages.ui.components.DriveSignInPromptScreen(
+                onSignIn = viewModel::requestDriveSignInForRestore,
+                onSkip = viewModel::skipDriveSignInForRestore,
             )
             return@MessagesTheme
         }
