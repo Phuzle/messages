@@ -86,7 +86,6 @@ private data class Ephemeral(
     val overflowMenuOpen: Boolean = false,
     val actionSheetThreadId: String? = null,
     val threadInput: String = "",
-    val threadOtpCopied: Boolean = false,
     val composeTo: String = "",
     val composeBody: String = "",
     val composeRecipients: List<ContactSuggestionUi> = emptyList(),
@@ -120,6 +119,9 @@ private data class Ephemeral(
     /** See AppUiState.driveSignInNeededForRestore — silent sign-in couldn't tell either way, so
      * this offers an explicit interactive sign-in (still with Skip) instead of just giving up. */
     val driveSignInNeededForRestore: Boolean = false,
+    /** True for the whole span of the startup-triggered restore-and-merge (see confirmDriveRestore)
+     * — keeps StartupFlowScreen showing a loader instead of revealing the dashboard mid-merge. */
+    val driveRestoreInProgress: Boolean = false,
     /** Fetched once when Thread Info opens (see openThreadInfo) — not worth a continuous reactive
      * flow just for a "first contact" date that never changes after the fact. */
     val threadInfoFirstContactAt: Long? = null,
@@ -364,7 +366,6 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         val activeThread = threads.allActive.firstOrNull { it.id == eph.activeThreadId }
         val currentThread = activeThread?.let { thread ->
             val category = Category.fromStoredName(thread.category)
-            val latestIncoming = messages.lastOrNull { !it.outgoing }
             CurrentThreadUi(
                 id = thread.id,
                 sender = thread.sender,
@@ -378,9 +379,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 channelName = channelNameFor(category),
                 infoTitle = if (thread.isBusiness) "Sender info" else "Contact info",
                 isReplyable = category.isReplyable,
-                isOtp = category == Category.Otp,
                 isBlocked = threads.blocked.any { it.number == thread.sender },
-                latestOtpCode = latestIncoming?.let { container.regexRules.extractCode(it.body) },
                 firstContactLabel = eph.threadInfoFirstContactAt?.let { formatThreadListTime(it) },
             )
         }
@@ -435,7 +434,6 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             isLoadingOlderMessages = eph.isLoadingOlderMessages,
             hasMoreOlderMessages = eph.hasMoreOlderMessages,
             threadInput = eph.threadInput,
-            threadOtpCopied = eph.threadOtpCopied,
             composeTo = eph.composeTo,
             composeBody = eph.composeBody,
             composeRecipients = eph.composeRecipients,
@@ -461,6 +459,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             threadSearchQuery = eph.threadSearchQuery,
             driveRestoreAvailable = eph.driveRestoreAvailable,
             driveSignInNeededForRestore = eph.driveSignInNeededForRestore,
+            driveRestoreInProgress = eph.driveRestoreInProgress,
             messageActionTarget = eph.messageActionTarget,
             isImportingHistory = eph.isImportingHistory,
             importDone = eph.importDone,
@@ -984,14 +983,6 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun copyThreadCode() = viewModelScope.launch {
-        val code = uiState.value.currentThread?.latestOtpCode ?: return@launch
-        container.copyToClipboard("OTP code", code)
-        ephemeral.update { it.copy(threadOtpCopied = true) }
-        delay(1500)
-        ephemeral.update { it.copy(threadOtpCopied = false) }
-    }
-
     // endregion
 
     // region ---- thread info / blocking ----
@@ -1365,7 +1356,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             toast("Waiting for Wi-Fi — this device only backs up to Drive on Wi-Fi (see Backup & Restore)")
             return@runBackupAction
         }
-        val account = container.driveBackupManager.lastSignedInAccount()
+        val account = container.driveBackupManager.resolveConnectedAccount()
         if (account == null) {
             toast("Not connected to Google Drive")
             return@runBackupAction
@@ -1389,24 +1380,30 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     /** Always a merge, never a destructive overwrite — unlike local Restore, which is explicitly a
      * clean overwrite of an already-local, already-understood backup. Drive restores can happen at
      * any time (not just first launch), potentially alongside real local data already on this
-     * device, so silently discarding it would be a bad surprise. See DriveBackupMerger. */
-    fun driveRestoreNow() = runBackupAction {
-        val account = container.driveBackupManager.lastSignedInAccount()
+     * device, so silently discarding it would be a bad surprise. See DriveBackupMerger.
+     *
+     * The actual work is the private suspend function below, shared with confirmDriveRestore's
+     * startup path — that path needs to *await* the merge (to keep StartupFlowScreen's loader up
+     * until it genuinely finishes) rather than fire-and-forget into runBackupAction's own coroutine. */
+    fun driveRestoreNow() = runBackupAction { performDriveRestore() }
+
+    private suspend fun performDriveRestore() {
+        val account = container.driveBackupManager.resolveConnectedAccount()
         if (account == null) {
             toast("Not connected to Google Drive")
-            return@runBackupAction
+            return
         }
         val token = container.driveBackupManager.accessToken(account) ?: run {
             toast("Couldn't reach Google Drive — check your connection and try again")
-            return@runBackupAction
+            return
         }
         val latest = container.driveBackupManager.listBackups(token).firstOrNull() ?: run {
             toast("No Drive backup found")
-            return@runBackupAction
+            return
         }
         val gzipped = container.driveBackupManager.downloadBackup(token, latest.id) ?: run {
             toast("Couldn't download the Drive backup")
-            return@runBackupAction
+            return
         }
         val raw = container.backupManager.gunzipDriveSnapshot(gzipped)
         container.driveBackupMerger.merge(raw)
@@ -1441,7 +1438,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         val local = container.backupManager.listBackups()
             .map { com.phuzle.labs.messages.ui.model.LocalBackupUi(it.fileName, it.timestampMillis) }
 
-        val account = container.driveBackupManager.lastSignedInAccount()
+        val account = container.driveBackupManager.resolveConnectedAccount()
         val drive = if (account == null) {
             emptyList()
         } else {
@@ -1479,7 +1476,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             _backupListState.update { it.copy(restoringKey = "drive:$fileId") }
             try {
-                val account = container.driveBackupManager.lastSignedInAccount() ?: run {
+                val account = container.driveBackupManager.resolveConnectedAccount() ?: run {
                     toast("Not connected to Google Drive")
                     return@launch
                 }
@@ -1564,6 +1561,34 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         if (succeeded) container.settingsRepository.setAppliedClassifierVersion(com.phuzle.labs.messages.domain.categorization.RegexRules.CURRENT_VERSION)
     }
 
+    /** Called once at startup (see MainActivity). One-time correction for installs that ran
+     * SmsHistoryImporter before it started extracting Passbook transactions from backfilled
+     * history (see that class's doc comment) — without this, anyone who did their SMS import
+     * before that fix shipped would have a permanently empty Passbook despite a full inbox of
+     * bank/card texts. Re-scans already-imported messages (not the system SMS provider) so it
+     * can't duplicate any message row; recordTransaction's own dedup check means re-processing a
+     * message the live receiver already recorded is a safe no-op, not a duplicate entry. */
+    fun backfillPassbookIfNeeded() = viewModelScope.launch {
+        val settings = container.settingsRepository.settingsFlow.first()
+        if (settings.passbookBackfilled) return@launch
+        val succeeded = runCatching {
+            container.threadRepository.transactionCandidateMessages().forEach { (thread, message) ->
+                com.phuzle.labs.messages.domain.categorization.TransactionExtractor
+                    .extract(message.body, container.regexRules.amountPattern, fallbackMerchant = thread.displayName)
+                    ?.let { tx ->
+                        container.passbookRepository.recordTransaction(
+                            merchant = tx.merchant,
+                            accountLast4 = tx.accountLast4,
+                            amountCents = tx.amountCents,
+                            isCredit = tx.isCredit,
+                            timestampMillis = message.timestamp,
+                        )
+                    }
+            }
+        }.isSuccess
+        if (succeeded) container.settingsRepository.setPassbookBackfilled(true)
+    }
+
     /** Called once at startup (see MainActivity/AppRoot). Only ever prompts once per install
      * (driveRestorePromptShown) — deliberately NOT gated on whether local threads already exist.
      * That used to be the condition (skip the Drive check if storageOverview().chatCount > 0),
@@ -1632,10 +1657,15 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         container.settingsRepository.setDriveRestorePromptShown(true)
     }
 
-    fun confirmDriveRestore() {
-        ephemeral.update { it.copy(driveRestoreAvailable = false) }
-        viewModelScope.launch { container.settingsRepository.setDriveRestorePromptShown(true) }
-        driveRestoreNow()
+    /** Awaits the merge directly (unlike driveRestoreNow's fire-and-forget) so driveRestoreInProgress
+     * stays true — and StartupFlowScreen keeps its loader up — for the merge's real duration,
+     * instead of dropping to the dashboard the instant the button is tapped while it's still
+     * downloading/merging in the background. */
+    fun confirmDriveRestore() = viewModelScope.launch {
+        ephemeral.update { it.copy(driveRestoreAvailable = false, driveRestoreInProgress = true) }
+        container.settingsRepository.setDriveRestorePromptShown(true)
+        performDriveRestore()
+        ephemeral.update { it.copy(driveRestoreInProgress = false) }
     }
 
     fun dismissDriveRestorePrompt() = viewModelScope.launch {

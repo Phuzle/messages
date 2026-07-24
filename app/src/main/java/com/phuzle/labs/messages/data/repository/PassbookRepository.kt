@@ -20,7 +20,12 @@ class PassbookRepository(private val dao: PassbookDao) {
     fun observeTransactions(): Flow<List<TransactionEntity>> = dao.observeTransactions()
     fun observeReminders(): Flow<List<ReminderEntity>> = dao.observeReminders()
 
+    /** Idempotent: skips the insert if a transaction with the same (merchant, accountLast4,
+     * amountCents, time) already exists, so calling this twice for the same real-world message —
+     * e.g. AppViewModel.backfillPassbookIfNeeded re-scanning history the live receiver already
+     * recorded — is a safe no-op rather than a duplicate row (see PassbookDao.countMatchingTransaction). */
     suspend fun recordTransaction(merchant: String, accountLast4: String, amountCents: Long, isCredit: Boolean, timestampMillis: Long) {
+        if (dao.countMatchingTransaction(merchant, accountLast4, amountCents, timestampMillis) > 0) return
         dao.insertTransactions(
             listOf(
                 TransactionEntity(

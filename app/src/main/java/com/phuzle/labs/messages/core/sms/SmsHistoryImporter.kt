@@ -7,7 +7,10 @@ import com.phuzle.labs.messages.data.db.dao.MessageDao
 import com.phuzle.labs.messages.data.db.dao.ThreadDao
 import com.phuzle.labs.messages.data.db.entity.MessageEntity
 import com.phuzle.labs.messages.data.db.entity.ThreadEntity
+import com.phuzle.labs.messages.data.repository.PassbookRepository
 import com.phuzle.labs.messages.domain.categorization.CategoryClassifier
+import com.phuzle.labs.messages.domain.categorization.RegexRules
+import com.phuzle.labs.messages.domain.categorization.TransactionExtractor
 import com.phuzle.labs.messages.domain.model.AvatarPalette
 import com.phuzle.labs.messages.domain.model.Category
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +28,15 @@ import java.util.UUID
  * blocking I/O, so the whole thing runs on [Dispatchers.IO]; running it on the caller's dispatcher
  * (as an earlier version of this did) would freeze the UI for as long as the import takes on a
  * phone with a lot of history.
+ *
+ * Also runs [TransactionExtractor] on every message this classifies as Transactions, same as
+ * [SmsDeliverReceiver] does for live messages — without this, Passbook would stay completely
+ * empty after any reset/reinstall/Drive-restore despite the inbox itself being full of bank/card
+ * texts, since this backfill used to be the *only* path that never fed Passbook at all. Reminders
+ * are deliberately NOT backfilled here: that extraction is Layer 3 (cloud fallback, currently
+ * hidden/opt-in — see AppContainer.cloudClassifierClient), and firing one network call per
+ * historical message during a bulk import would be slow, costly, and untested at that volume; a
+ * user with cloud fallback on will still get reminders for anything that arrives from here on.
  */
 class SmsHistoryImporter(
     private val context: Context,
@@ -32,6 +44,8 @@ class SmsHistoryImporter(
     private val messageDao: MessageDao,
     private val contactLookup: ContactLookup,
     private val classifier: CategoryClassifier,
+    private val passbookRepository: PassbookRepository,
+    private val regexRules: RegexRules,
 ) {
     suspend fun importAll(onProgress: (done: Int, total: Int) -> Unit) = withContext(Dispatchers.IO) {
         val cursor = context.contentResolver.query(
@@ -80,6 +94,22 @@ class SmsHistoryImporter(
                         systemSmsId = systemSmsId,
                     ),
                 )
+
+                // Mirrors SmsDeliverReceiver's per-message classify-then-extract — a thread's
+                // stored category only ever reflects its first message (see findOrTouchThread), so
+                // this re-classifies each row independently rather than trusting the thread's label,
+                // exactly like the live receiver does.
+                if (!outgoing && classifier.classify(address, body) == Category.Transactions) {
+                    TransactionExtractor.extract(body, regexRules.amountPattern, fallbackMerchant = thread.displayName)?.let { tx ->
+                        passbookRepository.recordTransaction(
+                            merchant = tx.merchant,
+                            accountLast4 = tx.accountLast4,
+                            amountCents = tx.amountCents,
+                            isCredit = tx.isCredit,
+                            timestampMillis = date,
+                        )
+                    }
+                }
 
                 done++
                 // Reporting on every row would itself flood the UI with state updates on a large

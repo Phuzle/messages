@@ -86,6 +86,7 @@ class MainActivity : FragmentActivity() {
         // so the "is there already something here" check reflects the post-sync state, matching
         // the intended startup sequence (disclosure -> sync -> drive restore offer -> dashboard).
         viewModel.reclassifyThreadsIfNeeded()
+        viewModel.backfillPassbookIfNeeded()
     }
 
     override fun onNewIntent(intent: Intent) {

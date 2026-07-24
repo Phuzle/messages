@@ -98,6 +98,17 @@ class GoogleDriveBackupManager(private val context: Context) {
             }
     }
 
+    /** The account to actually use for a Drive API call — every caller that used to call
+     * [lastSignedInAccount] alone should call this instead. [lastSignedInAccount] is a bare local
+     * cache read (no network, no Play Services round-trip) and can come back null even minutes
+     * after a real successful sign-in in the exact same app process — this app's own
+     * "connected"/e-mail settings are the durable record of whether the user connected Drive, but
+     * they aren't themselves a live, usable [GoogleSignInAccount]. [silentSignIn] is the same
+     * "try to resolve for free" fallback used at startup (see checkFirstLaunchDriveRestore) and can
+     * succeed here even when the bare cache read just failed. Still returns null if both fail —
+     * callers are responsible for falling back to an interactive sign-in from there if they can. */
+    suspend fun resolveConnectedAccount(): GoogleSignInAccount? = lastSignedInAccount() ?: silentSignIn()
+
     /** Blocking OAuth token fetch — always called from a background dispatcher. Can throw
      * UserRecoverableAuthException if consent was somehow skipped during sign-in; treated the same
      * as any other failure here (surfaced as null -> caller shows a toast) rather than

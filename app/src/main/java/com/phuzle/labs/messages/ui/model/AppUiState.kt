@@ -35,7 +35,6 @@ data class AppUiState(
     val isLoadingOlderMessages: Boolean = false,
     val hasMoreOlderMessages: Boolean = true,
     val threadInput: String = "",
-    val threadOtpCopied: Boolean = false,
 
     val composeTo: String = "",
     val composeBody: String = "",
@@ -73,6 +72,8 @@ data class AppUiState(
      * right after app data is cleared) — see AppViewModel.checkFirstLaunchDriveRestore. This offers
      * an explicit interactive sign-in instead of silently giving up, still with a Skip option. */
     val driveSignInNeededForRestore: Boolean = false,
+    /** See AppViewModel's field of the same name — the actual restore-and-merge is in flight. */
+    val driveRestoreInProgress: Boolean = false,
     val messageActionTarget: MessageActionTargetUi? = null,
     val multiSelectThreadIds: Set<String> = emptySet(),
 

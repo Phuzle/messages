@@ -50,7 +50,7 @@ class AppContainer(context: Context) {
     val messageNotifier: MessageNotifier by lazy { MessageNotifier(appContext, settingsRepository) }
     val updateChecker: UpdateChecker by lazy { UpdateChecker() }
     val smsHistoryImporter: SmsHistoryImporter by lazy {
-        SmsHistoryImporter(appContext, database.threadDao(), database.messageDao(), contactLookup, classifier)
+        SmsHistoryImporter(appContext, database.threadDao(), database.messageDao(), contactLookup, classifier, passbookRepository, regexRules)
     }
     val cloudClassifierClient: CloudClassifierClient by lazy { CloudClassifierClient() }
 

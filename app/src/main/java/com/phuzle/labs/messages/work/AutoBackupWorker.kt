@@ -35,7 +35,7 @@ class AutoBackupWorker(context: Context, params: WorkerParameters) : CoroutineWo
     }
 
     private suspend fun backupToDrive(container: com.phuzle.labs.messages.AppContainer) {
-        val account = container.driveBackupManager.lastSignedInAccount() ?: return
+        val account = container.driveBackupManager.resolveConnectedAccount() ?: return
         val token = container.driveBackupManager.accessToken(account) ?: return
         val gzipped = container.backupManager.gzipDatabaseSnapshot(container.database)
         container.driveBackupManager.uploadBackup(token, "messages-${System.currentTimeMillis()}.bak", gzipped) ?: return

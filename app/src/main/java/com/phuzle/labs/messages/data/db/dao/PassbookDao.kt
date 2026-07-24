@@ -32,6 +32,14 @@ interface PassbookDao {
     @Query("SELECT id FROM transactions")
     suspend fun allTransactionIds(): List<String>
 
+    /** PassbookRepository.recordTransaction's dedup check — (merchant, accountLast4, amountCents,
+     * time) stands in for a natural key here, the same idea as MessageDao.countMatching, so
+     * calling recordTransaction twice for what is genuinely the same real-world transaction (e.g.
+     * AppViewModel.backfillPassbookIfNeeded re-scanning messages the live receiver already
+     * recorded) is a safe no-op instead of a duplicate row. */
+    @Query("SELECT COUNT(*) FROM transactions WHERE merchant = :merchant AND accountLast4 = :accountLast4 AND amountCents = :amountCents AND time = :time")
+    suspend fun countMatchingTransaction(merchant: String, accountLast4: String, amountCents: Long, time: Long): Int
+
     @Query("SELECT id FROM reminders")
     suspend fun allReminderIds(): List<String>
 }

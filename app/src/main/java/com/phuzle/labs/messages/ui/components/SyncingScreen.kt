@@ -23,7 +23,13 @@ import com.phuzle.labs.messages.ui.theme.MessagesTheme
  * pre-existing on-device SMS the first time we gain the default-SMS-app role.
  */
 @Composable
-fun SyncingScreen(done: Int, total: Int, modifier: Modifier = Modifier) {
+fun SyncingScreen(
+    done: Int,
+    total: Int,
+    modifier: Modifier = Modifier,
+    title: String = "Syncing your messages",
+    subtitle: String? = null,
+) {
     val tokens = MessagesTheme.tokens
     Box(modifier.fillMaxSize().background(tokens.bg), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 40.dp)) {
@@ -41,14 +47,14 @@ fun SyncingScreen(done: Int, total: Int, modifier: Modifier = Modifier) {
             }
 
             Text(
-                "Syncing your messages",
+                title,
                 color = tokens.textPrimary,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(top = 20.dp),
             )
             Text(
-                if (total > 0) "Synced $done of $total messages" else "Preparing…",
+                subtitle ?: if (total > 0) "Synced $done of $total messages" else "Preparing…",
                 color = tokens.textTertiary,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(top = 6.dp),

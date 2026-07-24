@@ -89,9 +89,7 @@ data class CurrentThreadUi(
     val channelName: String,
     val infoTitle: String,
     val isReplyable: Boolean,
-    val isOtp: Boolean,
     val isBlocked: Boolean,
-    val latestOtpCode: String?,
     val firstContactLabel: String?,
 )
 

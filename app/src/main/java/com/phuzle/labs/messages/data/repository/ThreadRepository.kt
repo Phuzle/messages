@@ -55,6 +55,18 @@ class ThreadRepository(
         }
     }
 
+    /** AppViewModel.backfillPassbookIfNeeded's source data — every inbound message belonging to a
+     * thread already categorized Transactions, paired with that thread (for its displayName as
+     * TransactionExtractor's merchant fallback). Installs that ran SmsHistoryImporter before it
+     * extracted transactions (see that class's doc comment) never got these into Passbook at all;
+     * this lets that one-time backfill happen against already-imported data instead of requiring
+     * a re-scan of the system SMS provider (which risks duplicating messages, since insert there
+     * has no dedup check). */
+    suspend fun transactionCandidateMessages(): List<Pair<ThreadEntity, MessageEntity>> =
+        threadDao.getAllOnce()
+            .filter { it.category == Category.Transactions.name }
+            .flatMap { thread -> messageDao.allForThread(thread.id).filterNot { it.outgoing }.map { thread to it } }
+
     /** Real SMS_DELIVER path: find-or-create the thread for [sender], then append the message.
      * [subscriptionId] is the SIM this message arrived on, when knowable (see SubscriptionHelper)
      * — stored on the message and remembered on the thread so a later reply defaults to going out

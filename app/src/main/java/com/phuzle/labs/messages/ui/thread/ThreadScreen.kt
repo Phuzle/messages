@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -133,36 +132,30 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                 item { MessageSkeletonRow(alignEnd = false) }
                 item { MessageSkeletonRow(alignEnd = true) }
             }
-            items(
-                listEntries,
-                key = { entry -> when (entry) { is ThreadListEntry.DateHeader -> "date-${entry.label}"; is ThreadListEntry.Msg -> entry.message.id } },
-                contentType = { entry -> entry is ThreadListEntry.DateHeader },
-            ) { entry ->
+            // Each date's header is a stickyHeader (not a plain item) so it pins to the top while
+            // that day's messages scroll past underneath — otherwise, opening a day with enough
+            // messages to fill the screen means the only way to tell which day you're looking at
+            // is to scroll all the way back up to its header.
+            listEntries.forEach { entry ->
                 when (entry) {
-                    is ThreadListEntry.DateHeader -> DateSeparator(entry.label)
-                    is ThreadListEntry.Msg -> MessageBubble(
-                        entry.message,
-                        matchedIndices = entry.matchedIndices,
-                        onLongPress = { viewModel.openMessageActions(MessageActionTargetUi(entry.message.id, entry.message.text)) },
-                        onOpenUrl = onOpenUrl,
-                        onCall = onCall,
-                        onEmail = onEmail,
-                        onCopyEntity = viewModel::copyDetectedText,
-                    )
-                }
-            }
-            if (thread.isOtp && thread.latestOtpCode != null) {
-                item {
-                    Text(
-                        if (state.threadOtpCopied) "Copied ✓" else "Copy Code",
-                        color = tokens.accent,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .background(tokens.accentSoft, RoundedCornerShape(9.dp))
-                            .clickable(onClick = viewModel::copyThreadCode)
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                    )
+                    is ThreadListEntry.DateHeader -> {
+                        stickyHeader(key = "date-${entry.label}", contentType = "date-header") {
+                            DateSeparator(entry.label)
+                        }
+                    }
+                    is ThreadListEntry.Msg -> {
+                        item(key = entry.message.id, contentType = "message") {
+                            MessageBubble(
+                                entry.message,
+                                matchedIndices = entry.matchedIndices,
+                                onLongPress = { viewModel.openMessageActions(MessageActionTargetUi(entry.message.id, entry.message.text)) },
+                                onOpenUrl = onOpenUrl,
+                                onCall = onCall,
+                                onEmail = onEmail,
+                                onCopyEntity = viewModel::copyDetectedText,
+                            )
+                        }
+                    }
                 }
             }
         }

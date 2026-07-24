@@ -28,9 +28,7 @@ import com.phuzle.labs.messages.ui.components.MenuItem
 import com.phuzle.labs.messages.ui.components.NavDrawer
 import com.phuzle.labs.messages.ui.components.OtpModal
 import com.phuzle.labs.messages.ui.components.OverflowMenu
-import com.phuzle.labs.messages.ui.components.SyncingScreen
 import com.phuzle.labs.messages.ui.components.UndoBar
-import com.phuzle.labs.messages.ui.components.DriveRestoreDialog
 import com.phuzle.labs.messages.ui.components.UpdateAvailableDialog
 import android.net.Uri
 import com.phuzle.labs.messages.ui.dashboard.DashboardScreen
@@ -71,40 +69,21 @@ fun AppRoot(viewModel: AppViewModel) {
             }
         }
 
-        // Covers both "never granted yet" (fresh install) and "granted once, then the user made
-        // a different app default" identically — the app can't do anything useful without this
-        // role either way, so both cases get the same explanation-and-request screen rather than
-        // silently falling through to a dashboard that can't actually show anything current.
-        if (!state.isDefaultSmsApp) {
-            com.phuzle.labs.messages.ui.onboarding.SmsDisclosureScreen(onContinue = viewModel::requestBecomeDefaultSmsApp)
-            return@MessagesTheme
-        }
-
-        if (state.isImportingHistory) {
-            SyncingScreen(done = state.importDone, total = state.importTotal)
-            return@MessagesTheme
-        }
-
-        // Third step of the startup sequence, checked only once local sync above has actually
-        // finished (see AppViewModel.importHistoryOnce, which is what triggers this check) — a
-        // proper full-screen step the user must Restore or Skip, not a stray overlay that could
-        // pop up over an already-visible dashboard.
-        if (state.driveRestoreAvailable) {
-            DriveRestoreDialog(
-                visible = true,
-                onRestore = viewModel::confirmDriveRestore,
-                onDismiss = viewModel::dismissDriveRestorePrompt,
-            )
-            return@MessagesTheme
-        }
-
-        // Silent sign-in couldn't tell either way (see checkFirstLaunchDriveRestore) — offer the
-        // real interactive sign-in instead of silently giving up, still skippable.
-        if (state.driveSignInNeededForRestore) {
-            com.phuzle.labs.messages.ui.components.DriveSignInPromptScreen(
-                onSignIn = viewModel::requestDriveSignInForRestore,
-                onSkip = viewModel::skipDriveSignInForRestore,
-            )
+        // Single parent for the whole startup sequence (disclosure -> sync -> Drive sign-in/
+        // restore offer) — see StartupFlowScreen's doc comment for why this used to be four
+        // separate gates that flickered through the dashboard in the gaps between them.
+        // !settings.driveRestorePromptShown is what bridges those gaps: it stays false for the
+        // entire span from launch until the Drive decision is truly finalized (found nothing,
+        // skipped, or restored), covering every moment where none of the other conditions happen
+        // to be true yet.
+        val startupActive = !state.isDefaultSmsApp ||
+            state.isImportingHistory ||
+            state.driveSignInNeededForRestore ||
+            state.driveRestoreAvailable ||
+            state.driveRestoreInProgress ||
+            !state.settings.driveRestorePromptShown
+        if (startupActive) {
+            com.phuzle.labs.messages.ui.components.StartupFlowScreen(state = state, viewModel = viewModel)
             return@MessagesTheme
         }
 
