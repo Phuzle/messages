@@ -61,6 +61,8 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.launch
 
 private data class Ephemeral(
@@ -1089,15 +1091,34 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         if (isDefault) importHistoryOnce()
     }
 
+    /** setDefaultSmsAppStatus(true) fires from more than one place within milliseconds of each
+     * other right after the role is granted — MainActivity's roleRequestLauncher callback and
+     * the onResume() that follows it practically immediately. Without this lock, both calls read
+     * historyImported=false before either had a chance to write it back true, so the whole
+     * import ran twice concurrently and duplicated every message. The mutex makes the second
+     * caller wait for the first to actually finish (and persist historyImported) before it gets
+     * to check that flag itself, so it correctly no-ops instead of re-running the import. */
+    private val historyImportMutex = Mutex()
+
     /** Backfills pre-existing on-device SMS the first time we gain the default-SMS-app role. */
     private fun importHistoryOnce() = viewModelScope.launch {
-        if (container.settingsRepository.settingsFlow.first().historyImported) return@launch
-        ephemeral.update { it.copy(isImportingHistory = true, importDone = 0, importTotal = 0) }
-        container.smsHistoryImporter.importAll { done, total ->
-            ephemeral.update { it.copy(importDone = done, importTotal = total) }
+        historyImportMutex.withLock {
+            if (container.settingsRepository.settingsFlow.first().historyImported) return@withLock
+            ephemeral.update { it.copy(isImportingHistory = true, importDone = 0, importTotal = 0) }
+            try {
+                container.smsHistoryImporter.importAll { done, total ->
+                    ephemeral.update { it.copy(importDone = done, importTotal = total) }
+                }
+                container.settingsRepository.setHistoryImported(true)
+            } catch (e: Exception) {
+                // Deliberately not rethrown: historyImported stays false so this retries next
+                // launch, but a transient failure here (e.g. a Room I/O hiccup) must never crash
+                // the app outright and strand the user on the syncing screen forever.
+                toast("Couldn't finish importing your existing messages — will retry next time you open the app")
+            } finally {
+                ephemeral.update { it.copy(isImportingHistory = false) }
+            }
         }
-        container.settingsRepository.setHistoryImported(true)
-        ephemeral.update { it.copy(isImportingHistory = false) }
     }
 
     // endregion
@@ -1179,24 +1200,21 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private val _smsPermissionRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
     /** MainActivity collects this and actually fires the SMS/default-handler permission prompts
-     * — kept out of the ViewModel since requesting permissions needs an Activity. Only ever
-     * emitted once disclosure is acknowledged (see below), never eagerly on every cold start. */
+     * — kept out of the ViewModel since requesting permissions needs an Activity.
+     *
+     * AppRoot gates its entire UI behind `!state.isDefaultSmsApp` and shows SmsDisclosureScreen
+     * whenever that's true — on a fresh install (nothing granted yet), and again any time the
+     * user switches to a different default SMS app later, since the app can't do anything
+     * useful without that role. That single condition covers "first ever launch" and "lost the
+     * role since" identically, so there's no separate persisted "have they seen this before"
+     * flag to fall out of sync with reality: the gate simply reflects the role's actual current
+     * state rather than a snapshot of whether it was once explained. This function is what the
+     * gate's Continue/"Set as default" button calls — deliberately user-triggered, never fired
+     * automatically on cold start, so we're never popping a system permission dialog the user
+     * didn't just ask for. */
     val smsPermissionRequests: SharedFlow<Unit> = _smsPermissionRequests.asSharedFlow()
 
-    /** Called once at startup (see MainActivity). If a previous launch already acknowledged the
-     * disclosure, permission prompts should still fire on this launch too — e.g. the user denied
-     * a permission last time and we need to re-prompt. If disclosure hasn't been acknowledged yet,
-     * AppRoot shows SmsDisclosureScreen instead and this no-ops until acknowledgeSmsDisclosure(). */
-    fun requestSmsPermissionsIfAcknowledged() = viewModelScope.launch {
-        if (container.settingsRepository.settingsFlow.first().smsDisclosureAcknowledged) {
-            _smsPermissionRequests.tryEmit(Unit)
-        }
-    }
-
-    fun acknowledgeSmsDisclosure() = viewModelScope.launch {
-        container.settingsRepository.setSmsDisclosureAcknowledged(true)
-        _smsPermissionRequests.tryEmit(Unit)
-    }
+    fun requestBecomeDefaultSmsApp() = _smsPermissionRequests.tryEmit(Unit)
 
     // endregion
 
@@ -1457,11 +1475,17 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
      * inbox with real messages should never get an unsolicited "want to restore?" popup. Uses a
      * *silent* sign-in (no UI) — Google Play Services remembers this app's consent at the account
      * level even across a reinstall, so this can genuinely detect "you've done this before on this
-     * device" without asking the user anything until there's actually a backup to offer. */
+     * device" without asking the user anything until there's actually a backup to offer.
+     *
+     * Checks Room directly rather than uiState.value.threads: that StateFlow is built from a
+     * reactive Flow chain that may still be on its default empty seed value this early in
+     * startup, or may already reflect threads the SMS history import raced in concurrently
+     * (see AppViewModel.importHistoryOnce) — either way `uiState.value` at this exact moment
+     * isn't a reliable answer to "is there anything here already", only a direct query is. */
     fun checkFirstLaunchDriveRestore() = viewModelScope.launch {
         val settings = container.settingsRepository.settingsFlow.first()
         if (settings.driveRestorePromptShown) return@launch
-        if (uiState.value.threads.isNotEmpty()) {
+        if (container.threadRepository.storageOverview().chatCount > 0) {
             container.settingsRepository.setDriveRestorePromptShown(true)
             return@launch
         }

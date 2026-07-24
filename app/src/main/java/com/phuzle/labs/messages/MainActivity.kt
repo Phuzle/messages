@@ -30,6 +30,12 @@ class MainActivity : FragmentActivity() {
 
     private val roleRequestLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         viewModel.setDefaultSmsAppStatus(DefaultSmsAppHelper.isDefaultSmsApp(this))
+        // Contacts/notifications aren't part of the SMS role's own permission bundle, so they
+        // still need their own runtime request — done here, after the role result comes back,
+        // rather than launched back-to-back with it: firing two ActivityResultLauncher.launch()
+        // calls without waiting for the first is unreliable (the earlier request can be
+        // superseded before its dialog ever renders).
+        requestRuntimePermissions()
     }
 
     private val driveSignInLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -59,14 +65,13 @@ class MainActivity : FragmentActivity() {
         handleIntent(intent)
         setContent { AppRoot(viewModel) }
 
-        // Permission/role prompts only fire after the user has seen SmsDisclosureScreen and
-        // tapped Continue (see AppRoot) — required by Play Store's "Prominent Disclosure" policy
-        // for apps requesting SMS/Call Log access. requestSmsPermissionsIfAcknowledged() below
-        // covers a returning user on a later launch who already acknowledged it previously.
+        // Permission/role prompts only fire from a user tap on AppRoot's gate screen (shown
+        // whenever !isDefaultSmsApp) — required by Play Store's "Prominent Disclosure" policy for
+        // apps requesting SMS/Call Log access, and also means we never pop a system dialog the
+        // user didn't just ask for.
         lifecycleScope.launch {
             viewModel.smsPermissionRequests.collect { requestNeededPermissions() }
         }
-        viewModel.requestSmsPermissionsIfAcknowledged()
 
         lifecycleScope.launch {
             viewModel.driveSignInRequests.collect { driveSignInLauncher.launch(appContainer.driveBackupManager.signInIntent()) }
@@ -98,20 +103,22 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun requestNeededPermissions() {
-        val permissions = mutableListOf(
-            Manifest.permission.RECEIVE_SMS,
-            Manifest.permission.SEND_SMS,
-            Manifest.permission.READ_SMS,
-            Manifest.permission.READ_CONTACTS,
-        )
+        if (!DefaultSmsAppHelper.isDefaultSmsApp(this)) {
+            roleRequestLauncher.launch(DefaultSmsAppHelper.requestRoleIntent(this))
+        } else {
+            requestRuntimePermissions()
+        }
+    }
+
+    /** SMS/RECEIVE/SEND permissions come bundled with the role grant above and don't need (and,
+     * launched right alongside the role request, wouldn't reliably show) their own prompt — only
+     * contacts and notifications are independent of that role and need asking here. */
+    private fun requestRuntimePermissions() {
+        val permissions = mutableListOf(Manifest.permission.READ_CONTACTS)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions += Manifest.permission.POST_NOTIFICATIONS
         }
         permissionLauncher.launch(permissions.toTypedArray())
-
-        if (!DefaultSmsAppHelper.isDefaultSmsApp(this)) {
-            roleRequestLauncher.launch(DefaultSmsAppHelper.requestRoleIntent(this))
-        }
     }
 
     companion object {

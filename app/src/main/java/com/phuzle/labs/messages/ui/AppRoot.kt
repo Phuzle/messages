@@ -70,8 +70,12 @@ fun AppRoot(viewModel: AppViewModel) {
             }
         }
 
-        if (!state.settings.smsDisclosureAcknowledged) {
-            com.phuzle.labs.messages.ui.onboarding.SmsDisclosureScreen(onContinue = viewModel::acknowledgeSmsDisclosure)
+        // Covers both "never granted yet" (fresh install) and "granted once, then the user made
+        // a different app default" identically — the app can't do anything useful without this
+        // role either way, so both cases get the same explanation-and-request screen rather than
+        // silently falling through to a dashboard that can't actually show anything current.
+        if (!state.isDefaultSmsApp) {
+            com.phuzle.labs.messages.ui.onboarding.SmsDisclosureScreen(onContinue = viewModel::requestBecomeDefaultSmsApp)
             return@MessagesTheme
         }
 
