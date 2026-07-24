@@ -39,7 +39,7 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                 // default role would live only in this app's private database: invisible to any
                 // other app, and gone system-wide on uninstall or a switch back to another SMS
                 // app. Best-effort — a provider failure must never block storing/notifying locally.
-                runCatching {
+                val systemSmsId = runCatching {
                     val values = android.content.ContentValues().apply {
                         put(Telephony.Sms.ADDRESS, sender)
                         put(Telephony.Sms.BODY, body)
@@ -48,8 +48,8 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                         put(Telephony.Sms.READ, 0)
                         put(Telephony.Sms.SEEN, 0)
                     }
-                    context.contentResolver.insert(Telephony.Sms.CONTENT_URI, values)
-                }.onFailure { Log.w("SmsDeliverReceiver", "Couldn't record incoming message in the system SMS provider", it) }
+                    container.smsProviderSync.idFromInsertedUri(context.contentResolver.insert(Telephony.Sms.CONTENT_URI, values))
+                }.onFailure { Log.w("SmsDeliverReceiver", "Couldn't record incoming message in the system SMS provider", it) }.getOrNull()
 
                 val contactName = container.contactLookup.displayNameFor(sender)
                 val displayName = contactName ?: sender
@@ -74,6 +74,7 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                     timestampMillis = timestamp,
                     photoUri = photoUri,
                     subscriptionId = subscriptionId,
+                    systemSmsId = systemSmsId,
                 )
 
                 if (category == Category.Transactions) {

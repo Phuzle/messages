@@ -9,6 +9,7 @@ import com.phuzle.labs.messages.core.contacts.ContactLookup
 import com.phuzle.labs.messages.core.notifications.MessageNotifier
 import com.phuzle.labs.messages.core.push.UpdateChecker
 import com.phuzle.labs.messages.core.sms.SmsHistoryImporter
+import com.phuzle.labs.messages.core.sms.SmsProviderSync
 import com.phuzle.labs.messages.core.sms.SmsSender
 import com.phuzle.labs.messages.data.backup.DriveBackupMerger
 import com.phuzle.labs.messages.data.backup.GoogleDriveBackupManager
@@ -30,8 +31,9 @@ class AppContainer(context: Context) {
     private val appContext = context.applicationContext
 
     val database: AppDatabase by lazy { AppDatabase.getInstance(appContext) }
+    val smsProviderSync: SmsProviderSync by lazy { SmsProviderSync(appContext) }
     val threadRepository: ThreadRepository by lazy {
-        ThreadRepository(database.threadDao(), database.messageDao(), database.blockedNumberDao())
+        ThreadRepository(database.threadDao(), database.messageDao(), database.blockedNumberDao(), smsProviderSync)
     }
     val passbookRepository: PassbookRepository by lazy { PassbookRepository(database.passbookDao()) }
     val draftRepository: DraftRepository by lazy { DraftRepository(database.draftDao()) }

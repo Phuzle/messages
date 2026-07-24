@@ -36,7 +36,7 @@ class SmsHistoryImporter(
     suspend fun importAll(onProgress: (done: Int, total: Int) -> Unit) = withContext(Dispatchers.IO) {
         val cursor = context.contentResolver.query(
             Telephony.Sms.CONTENT_URI,
-            arrayOf(Telephony.Sms.ADDRESS, Telephony.Sms.BODY, Telephony.Sms.DATE, Telephony.Sms.TYPE, Telephony.Sms.READ),
+            arrayOf(Telephony.Sms._ID, Telephony.Sms.ADDRESS, Telephony.Sms.BODY, Telephony.Sms.DATE, Telephony.Sms.TYPE, Telephony.Sms.READ),
             null,
             null,
             "${Telephony.Sms.DATE} ASC",
@@ -45,6 +45,7 @@ class SmsHistoryImporter(
         cursor.use {
             val total = it.count
             onProgress(0, total)
+            val idIdx = it.getColumnIndex(Telephony.Sms._ID)
             val addressIdx = it.getColumnIndex(Telephony.Sms.ADDRESS)
             val bodyIdx = it.getColumnIndex(Telephony.Sms.BODY)
             val dateIdx = it.getColumnIndex(Telephony.Sms.DATE)
@@ -67,9 +68,18 @@ class SmsHistoryImporter(
                 // READ on a sent message means something different there (delivery/seen-by-us
                 // bookkeeping) and has no bearing on this app's inbound-unread concept.
                 val isUnread = !outgoing && readIdx >= 0 && it.getInt(readIdx) == 0
+                // Correlates this row back to the system provider (see MessageEntity.systemSmsId)
+                // so read/delete actions taken here from now on can write through to it, and so
+                // later reconciliation passes can tell "still there" from "deleted elsewhere".
+                val systemSmsId = if (idIdx >= 0) it.getLong(idIdx) else null
 
                 val thread = findOrTouchThread(address, body, date, outgoing, isUnread)
-                messageDao.insert(MessageEntity(threadId = thread.id, body = body, timestamp = date, outgoing = outgoing, read = !isUnread))
+                messageDao.insert(
+                    MessageEntity(
+                        threadId = thread.id, body = body, timestamp = date, outgoing = outgoing, read = !isUnread,
+                        systemSmsId = systemSmsId,
+                    ),
+                )
 
                 done++
                 // Reporting on every row would itself flood the UI with state updates on a large

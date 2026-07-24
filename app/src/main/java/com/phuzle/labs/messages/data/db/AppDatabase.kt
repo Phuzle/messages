@@ -29,7 +29,7 @@ const val DATABASE_FILE_NAME = "messages.db"
         ReminderEntity::class,
         DraftEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -76,6 +76,19 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Correlates a message to its row in the system Telephony.Sms provider (see
+         * MessageEntity.systemSmsId) so read-state and delete actions can write through to that
+         * shared table, and so regaining the default-SMS-app role can reconcile against deletes/
+         * read-changes made by whichever app was default in the meantime — neither direction was
+         * synced before this. NULL for every pre-existing row: we don't retroactively know which
+         * system row an already-imported message came from, so those simply have nothing to sync
+         * against until they're touched again (unaffected — same as never having this column). */
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN systemSmsId INTEGER DEFAULT NULL")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -83,7 +96,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DATABASE_FILE_NAME,
                 )
-                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                     // Deliberately no fallbackToDestructiveMigration(): with real, irreplaceable
                     // user messages in this table, a future version bump that's missing its
                     // Migration must crash loudly (forcing us to write one before shipping) rather

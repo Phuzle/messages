@@ -1,8 +1,10 @@
 package com.phuzle.labs.messages.data.repository
 
+import com.phuzle.labs.messages.core.sms.SmsProviderSync
 import com.phuzle.labs.messages.data.db.dao.BlockedNumberDao
 import com.phuzle.labs.messages.data.db.dao.MessageDao
 import com.phuzle.labs.messages.data.db.dao.SearchCandidateRow
+import com.phuzle.labs.messages.data.db.dao.SystemLinkedMessageRow
 import com.phuzle.labs.messages.data.db.dao.ThreadDao
 import com.phuzle.labs.messages.data.db.dao.ThreadUnreadCount
 import com.phuzle.labs.messages.data.db.entity.BlockedNumberEntity
@@ -16,6 +18,7 @@ class ThreadRepository(
     private val threadDao: ThreadDao,
     private val messageDao: MessageDao,
     private val blockedNumberDao: BlockedNumberDao,
+    private val smsProviderSync: SmsProviderSync,
 ) {
     fun observeInbox(): Flow<List<ThreadEntity>> = threadDao.observeInbox()
     fun observeAllActive(): Flow<List<ThreadEntity>> = threadDao.observeAllActive()
@@ -55,7 +58,8 @@ class ThreadRepository(
     /** Real SMS_DELIVER path: find-or-create the thread for [sender], then append the message.
      * [subscriptionId] is the SIM this message arrived on, when knowable (see SubscriptionHelper)
      * — stored on the message and remembered on the thread so a later reply defaults to going out
-     * via that same SIM. */
+     * via that same SIM. [systemSmsId] is the row this message got when SmsDeliverReceiver wrote
+     * it into the system provider — see MessageEntity.systemSmsId. */
     suspend fun recordIncomingMessage(
         sender: String,
         displayName: String,
@@ -65,6 +69,7 @@ class ThreadRepository(
         timestampMillis: Long,
         photoUri: String? = null,
         subscriptionId: Int? = null,
+        systemSmsId: Long? = null,
     ): Pair<ThreadEntity, MessageEntity> {
         val existing = threadDao.findBySender(sender)
         val thread = if (existing != null) {
@@ -103,7 +108,7 @@ class ThreadRepository(
         }
         val message = MessageEntity(
             threadId = thread.id, body = body, timestamp = timestampMillis, outgoing = false, read = false,
-            subscriptionId = subscriptionId,
+            subscriptionId = subscriptionId, systemSmsId = systemSmsId,
         )
         val id = messageDao.insert(message)
         return thread to message.copy(id = id)
@@ -163,14 +168,31 @@ class ThreadRepository(
         return message.copy(id = id)
     }
 
+    /** Backfills the system provider's row id onto an already-inserted outgoing message, once
+     * SmsSender.send() actually performs the write-through insert (which happens after this app's
+     * own Room row already exists — sending is deliberately deferred behind the undo window, so
+     * the two can't happen in one step the way they do for incoming messages). */
+    suspend fun setSystemSmsId(messageId: Long, systemSmsId: Long) = messageDao.setSystemSmsId(messageId, systemSmsId)
+
     /** Deletes the message and recomputes the thread's cached preview so the inbox never shows a
      * stale last-message after its own last message is removed. Returns the deleted row so the
-     * caller can offer a real "undo" by re-inserting it with [restoreMessage]. */
+     * caller can offer a real "undo" by re-inserting it with [restoreMessage]. Also deletes the
+     * matching row from the system SMS provider (if any) so the message doesn't keep existing
+     * there — see MessageEntity.systemSmsId — though "undo" only restores it here, not there. */
     suspend fun deleteMessage(threadId: String, messageId: Long): MessageEntity? {
         val deleted = messageDao.findById(messageId)
         messageDao.deleteById(messageId)
         refreshLastMessage(threadId)
+        deleted?.systemSmsId?.let { smsProviderSync.delete(listOf(it)) }
         return deleted
+    }
+
+    /** Reconciliation-only (see AppViewModel.reconcileWithSystemProvider): removes a message
+     * purely because its system-provider row is already gone — there is nothing to sync back to
+     * the provider here, since that absence is exactly why this is being called. */
+    suspend fun deleteReconciledMessage(threadId: String, messageId: Long) {
+        messageDao.deleteById(messageId)
+        refreshLastMessage(threadId)
     }
 
     suspend fun restoreMessage(message: MessageEntity) {
@@ -181,11 +203,13 @@ class ThreadRepository(
     suspend fun firstMessageTime(threadId: String): Long? = messageDao.firstMessageTime(threadId)
 
     /** Contact info's "Clear conversation" — wipes every message but keeps the thread itself.
-     * Returns the deleted rows so the caller can offer undo. */
+     * Returns the deleted rows so the caller can offer undo. Also delete-throughs every one of
+     * those messages' system-provider rows, same reasoning as [deleteMessage]. */
     suspend fun clearConversation(threadId: String): List<MessageEntity> {
         val all = messageDao.allForThread(threadId)
         messageDao.deleteAllForThread(threadId)
         refreshLastMessage(threadId)
+        smsProviderSync.delete(all.mapNotNull { it.systemSmsId })
         return all
     }
 
@@ -206,26 +230,60 @@ class ThreadRepository(
     /** [currentlyUnread] true means the call is transitioning the thread TO read — in that case
      * every message in it is marked read too, not just the thread-level flag, so the numbered
      * unread badge clears along with the dot. Going the other way (marking unread) has no single
-     * message to un-read, so only the thread-level flag flips; see ThreadUi's fallback display. */
+     * message to un-read, so only the thread-level flag flips; see ThreadUi's fallback display.
+     * Also write-throughs the read state to the system SMS provider so switching back to another
+     * SMS app (or anything else reading that shared table) doesn't show these as unread again. */
     suspend fun toggleRead(id: String, currentlyUnread: Boolean) {
         threadDao.setUnread(id, !currentlyUnread)
-        if (currentlyUnread) messageDao.markThreadRead(id)
+        if (currentlyUnread) {
+            val systemIds = messageDao.unreadSystemSmsIdsForThread(id)
+            messageDao.markThreadRead(id)
+            smsProviderSync.markRead(systemIds)
+        }
     }
 
     suspend fun markAllRead() {
+        val systemIds = messageDao.allUnreadSystemSmsIds()
         threadDao.markAllRead()
         messageDao.markAllRead()
+        smsProviderSync.markRead(systemIds)
     }
     suspend fun archive(id: String) = threadDao.setArchived(id, true)
     suspend fun unarchive(id: String) = threadDao.setArchived(id, false)
     suspend fun setPrivate(id: String, isPrivate: Boolean) = threadDao.setPrivate(id, isPrivate)
     suspend fun softDelete(id: String, whenMillis: Long) = threadDao.setDeletedAt(id, whenMillis)
     suspend fun restore(id: String) = threadDao.setDeletedAt(id, null)
-    suspend fun purgeDeletedBefore(cutoffMillis: Long) = threadDao.purgeDeletedBefore(cutoffMillis)
-    suspend fun hardDelete(id: String) = threadDao.deleteById(id)
+
+    /** The 30-day auto-purge worker. Gathers every about-to-be-purged thread's messages'
+     * systemSmsIds *before* the delete (Room's cascade wipes the message rows along with the
+     * thread), then delete-throughs them so purging here doesn't leave them behind forever in
+     * the system provider. */
+    suspend fun purgeDeletedBefore(cutoffMillis: Long) {
+        val threadIds = threadDao.deletedThreadIdsBefore(cutoffMillis)
+        val systemIds = messageDao.systemSmsIdsForThreads(threadIds)
+        threadDao.purgeDeletedBefore(cutoffMillis)
+        smsProviderSync.delete(systemIds)
+    }
+
+    /** Recycle bin's "Empty" — same delete-through reasoning as [purgeDeletedBefore], for a single
+     * user-picked thread instead of everything past the 30-day cutoff. */
+    suspend fun hardDelete(id: String) {
+        val systemIds = messageDao.systemSmsIdsForThread(id)
+        threadDao.deleteById(id)
+        smsProviderSync.delete(systemIds)
+    }
+
     fun observeSearchCandidates(): Flow<List<SearchCandidateRow>> = threadDao.observeSearchCandidates()
     suspend fun purgeOtpMessagesBefore(cutoffMillis: Long) = messageDao.purgeOtpMessagesBefore(cutoffMillis)
 
     suspend fun block(number: String) = blockedNumberDao.block(BlockedNumberEntity(number))
     suspend fun unblock(number: String) = blockedNumberDao.unblock(BlockedNumberEntity(number))
+
+    // region ---- system SMS provider reconciliation (see AppViewModel.reconcileWithSystemProvider) ----
+
+    suspend fun messagesLinkedToSystemProvider(): List<SystemLinkedMessageRow> = messageDao.allWithSystemSmsId()
+    suspend fun setMessageReadState(messageId: Long, read: Boolean) = messageDao.setReadState(messageId, read)
+    suspend fun refreshThreadUnreadFlag(threadId: String) = threadDao.setUnread(threadId, messageDao.unreadCountForThread(threadId) > 0)
+
+    // endregion
 }

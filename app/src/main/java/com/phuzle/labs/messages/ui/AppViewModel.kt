@@ -935,7 +935,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             // not just the local row — undo cancels this job before it ever calls SmsSender.
             val sendJob = viewModelScope.launch {
                 delay(UNDO_WINDOW_MS)
-                sent.forEach { runCatching { container.smsSender.send(it.number, body, subscriptionId) } }
+                sent.forEach {
+                    runCatching { container.smsSender.send(it.number, body, subscriptionId) }
+                        .getOrNull()?.let { systemSmsId -> container.threadRepository.setSystemSmsId(it.messageId, systemSmsId) }
+                }
             }
             offerUndo(if (sent.size == 1) "Message sent" else "${sent.size} messages sent") {
                 sendJob.cancel()
@@ -969,6 +972,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         val sendJob = viewModelScope.launch {
             delay(UNDO_WINDOW_MS)
             runCatching { container.smsSender.send(thread.sender, text, subscriptionId) }
+                .getOrNull()?.let { systemSmsId -> container.threadRepository.setSystemSmsId(message.id, systemSmsId) }
         }
         offerUndo("Message sent") {
             sendJob.cancel()
@@ -1124,7 +1128,37 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         if (isDefault) {
             importHistoryOnce()
             refreshAvailableSims()
+            reconcileWithSystemProvider()
         }
+    }
+
+    /** Read state and deletes only ever write through to the system SMS provider one way — this
+     * app to the provider (see ThreadRepository.toggleRead/deleteMessage/etc). While some *other*
+     * app held the default-SMS-app role, it could have changed that shared table on its own
+     * (marked something read, deleted a message/conversation) with zero way for this app to know,
+     * since it isn't running and holds no observer on it. This is the other half: called every
+     * time we (re)gain the default role, it diffs every message we've previously linked to a
+     * system-provider row (MessageEntity.systemSmsId) against a fresh snapshot of that table —
+     * anything now missing was deleted elsewhere and gets removed here too; any inbound message
+     * whose system READ flag no longer matches ours gets its local read state corrected to match.
+     * Messages that never got a systemSmsId (a prior provider write failed) have nothing to
+     * diff against and are skipped, same as if this pass never ran for them. */
+    private fun reconcileWithSystemProvider() = viewModelScope.launch(Dispatchers.IO) {
+        val linked = container.threadRepository.messagesLinkedToSystemProvider()
+        if (linked.isEmpty()) return@launch
+        val systemSnapshot = container.smsProviderSync.allRowsSnapshot()
+        val affectedThreads = mutableSetOf<String>()
+        for (row in linked) {
+            val systemRead = systemSnapshot[row.systemSmsId]
+            if (systemRead == null) {
+                container.threadRepository.deleteReconciledMessage(row.threadId, row.id)
+                affectedThreads += row.threadId
+            } else if (!row.outgoing && row.read != systemRead) {
+                container.threadRepository.setMessageReadState(row.id, systemRead)
+                affectedThreads += row.threadId
+            }
+        }
+        affectedThreads.forEach { container.threadRepository.refreshThreadUnreadFlag(it) }
     }
 
     /** setDefaultSmsAppStatus(true) fires from more than one place within milliseconds of each

@@ -38,4 +38,11 @@ data class MessageEntity(
      * for single-SIM devices, devices/API levels that deny READ_PHONE_STATE, and every message
      * that predates this column — none of those are errors, just "no per-SIM info available". */
     val subscriptionId: Int? = null,
+    /** This message's row id in the system Telephony.Sms provider, when the best-effort write
+     * there succeeded (see SmsDeliverReceiver/SmsSender/SmsHistoryImporter). Lets read-state and
+     * delete actions taken in this app write through to that shared table (SmsProviderSync), and
+     * lets AppViewModel.reconcileWithSystemProvider notice deletes/read-changes made by whichever
+     * app was default in between — both directions the app previously never synced at all. Null
+     * only if that provider write failed, in which case there is nothing to sync against. */
+    val systemSmsId: Long? = null,
 )

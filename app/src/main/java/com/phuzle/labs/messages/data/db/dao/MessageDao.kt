@@ -92,6 +92,42 @@ interface MessageDao {
     /** Companion to ThreadDao.markAllRead() for the overflow menu's "Mark all as read". */
     @Query("UPDATE messages SET read = 1 WHERE outgoing = 0")
     suspend fun markAllRead()
+
+    // region ---- system SMS provider sync (see SmsProviderSync / MessageEntity.systemSmsId) ----
+
+    @Query("UPDATE messages SET systemSmsId = :systemSmsId WHERE id = :id")
+    suspend fun setSystemSmsId(id: Long, systemSmsId: Long)
+
+    @Query("SELECT systemSmsId FROM messages WHERE id = :id AND systemSmsId IS NOT NULL")
+    suspend fun systemSmsIdForMessage(id: Long): Long?
+
+    @Query("SELECT systemSmsId FROM messages WHERE threadId = :threadId AND systemSmsId IS NOT NULL")
+    suspend fun systemSmsIdsForThread(threadId: String): List<Long>
+
+    @Query("SELECT systemSmsId FROM messages WHERE threadId IN (:threadIds) AND systemSmsId IS NOT NULL")
+    suspend fun systemSmsIdsForThreads(threadIds: List<String>): List<Long>
+
+    @Query("SELECT systemSmsId FROM messages WHERE threadId = :threadId AND outgoing = 0 AND read = 0 AND systemSmsId IS NOT NULL")
+    suspend fun unreadSystemSmsIdsForThread(threadId: String): List<Long>
+
+    @Query("SELECT systemSmsId FROM messages WHERE outgoing = 0 AND read = 0 AND systemSmsId IS NOT NULL")
+    suspend fun allUnreadSystemSmsIds(): List<Long>
+
+    @Query("UPDATE messages SET read = :read WHERE id = :id")
+    suspend fun setReadState(id: Long, read: Boolean)
+
+    @Query("SELECT COUNT(*) FROM messages WHERE threadId = :threadId AND outgoing = 0 AND read = 0")
+    suspend fun unreadCountForThread(threadId: String): Int
+
+    /** Every message that has a system-provider counterpart — reconciliation's starting point
+     * (see AppViewModel.reconcileWithSystemProvider). Rows without one (systemSmsId IS NULL, e.g.
+     * a provider write that failed) have nothing to diff against and are correctly excluded. */
+    @Query("SELECT id, threadId, systemSmsId, read, outgoing FROM messages WHERE systemSmsId IS NOT NULL")
+    suspend fun allWithSystemSmsId(): List<SystemLinkedMessageRow>
+
+    // endregion
 }
 
 data class ThreadUnreadCount(val threadId: String, val count: Int)
+
+data class SystemLinkedMessageRow(val id: Long, val threadId: String, val systemSmsId: Long, val read: Boolean, val outgoing: Boolean)

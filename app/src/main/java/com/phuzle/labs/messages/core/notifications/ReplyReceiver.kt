@@ -23,8 +23,8 @@ class ReplyReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val subscriptionId = container.threadRepository.getThread(threadId)?.preferredSubscriptionId
-                container.smsSender.send(sender, replyText, subscriptionId)
-                container.threadRepository.appendOutgoingMessage(
+                val systemSmsId = container.smsSender.send(sender, replyText, subscriptionId)
+                val message = container.threadRepository.appendOutgoingMessage(
                     threadId = threadId,
                     body = replyText,
                     scheduledFor = null,
@@ -32,6 +32,7 @@ class ReplyReceiver : BroadcastReceiver() {
                     nowMillis = System.currentTimeMillis(),
                     subscriptionId = subscriptionId,
                 )
+                if (systemSmsId != null) container.threadRepository.setSystemSmsId(message.id, systemSmsId)
                 container.messageNotifier.confirmReplySent(threadId, sender, replyText)
             } finally {
                 pendingResult.finish()
