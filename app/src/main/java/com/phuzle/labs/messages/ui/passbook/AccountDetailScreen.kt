@@ -7,10 +7,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -109,41 +107,34 @@ fun AccountDetailScreen(state: AppUiState, viewModel: AppViewModel) {
                         )
                     }
                 } else {
-                    item {
-                        Column(Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium)) {
-                            state.transactions.forEachIndexed { index, tx ->
-                                if (index > 0) {
-                                    Spacer(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(1.dp).background(tokens.border))
-                                }
-                                Row(
-                                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
+                    items(state.transactions, key = { it.id }) { tx ->
+                        Row(
+                            Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    Modifier.size(38.dp)
+                                        .background(if (tx.isCredit) tokens.success.copy(alpha = 0.14f) else tokens.danger.copy(alpha = 0.14f), CircleShape),
+                                    contentAlignment = Alignment.Center,
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(
-                                            Modifier.size(34.dp)
-                                                .background(if (tx.isCredit) tokens.success.copy(alpha = 0.14f) else tokens.danger.copy(alpha = 0.14f), CircleShape),
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            Icon(
-                                                if (tx.isCredit) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward,
-                                                contentDescription = null,
-                                                tint = if (tx.isCredit) tokens.success else tokens.danger,
-                                                modifier = Modifier.size(16.dp),
-                                            )
-                                        }
-                                        Column(Modifier.padding(start = 10.dp)) {
-                                            Text(tx.merchant, color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                            Text(tx.timeLabel, color = tokens.textTertiary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
-                                        }
-                                    }
-                                    Text(
-                                        tx.amountLabel, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                                        color = if (tx.isCredit) tokens.success else tokens.danger,
+                                    Icon(
+                                        if (tx.isCredit) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward,
+                                        contentDescription = null,
+                                        tint = if (tx.isCredit) tokens.success else tokens.danger,
+                                        modifier = Modifier.size(16.dp),
                                     )
                                 }
+                                Column(Modifier.padding(start = 12.dp)) {
+                                    Text(tx.merchant, color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                    Text(tx.timeLabel, color = tokens.textTertiary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+                                }
                             }
+                            Text(
+                                tx.amountLabel, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                                color = if (tx.isCredit) tokens.success else tokens.danger,
+                            )
                         }
                     }
                 }

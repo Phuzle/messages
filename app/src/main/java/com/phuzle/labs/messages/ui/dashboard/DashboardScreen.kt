@@ -58,7 +58,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -148,8 +147,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(top = topContentPadding, bottom = bottomContentPadding, start = 16.dp, end = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(top = topContentPadding, bottom = bottomContentPadding),
                 ) {
                     items(state.accounts, key = { it.last4 }) { account ->
                         AccountCard(account = account, onClick = { viewModel.openAccountDetail(account.last4) }, modifier = Modifier.animateItem())
@@ -394,28 +392,25 @@ private fun AccountCard(account: AccountUi, onClick: () -> Unit, modifier: Modif
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(tokens.surface, ShapeMedium)
-            .border(1.dp, if (account.selected) tokens.accent else tokens.border, ShapeMedium)
-            .clip(ShapeMedium)
+            .background(if (account.selected) tokens.accentSoft else tokens.bg)
             .clickable(onClick = onClick)
-            .padding(14.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(40.dp).background(tokens.accentSoft, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Filled.AccountBalanceWallet, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(19.dp)) }
-            Column(Modifier.padding(start = 12.dp)) {
-                Text("•• ${account.last4}", color = tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    "${account.transactionCount} transaction${if (account.transactionCount == 1) "" else "s"}",
-                    color = tokens.textTertiary, fontSize = 12.5.sp, modifier = Modifier.padding(top = 3.dp),
-                )
+        Box(
+            Modifier.size(44.dp).background(tokens.accentSoft, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) { Icon(Icons.Filled.AccountBalanceWallet, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(19.dp)) }
+        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("•• ${account.last4}", color = tokens.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                Text(account.netLabel, color = amountColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
+            Text(
+                "${account.transactionCount} transaction${if (account.transactionCount == 1) "" else "s"}",
+                color = tokens.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp),
+            )
         }
-        Text(account.netLabel, color = amountColor, fontSize = 16.5.sp, fontWeight = FontWeight.Bold)
     }
 }
 
