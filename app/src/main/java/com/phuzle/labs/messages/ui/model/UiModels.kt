@@ -120,6 +120,7 @@ data class DeletedThreadUi(
     val initials: String,
     val avatarColor: Color,
     val isBusiness: Boolean,
+    val category: Category,
     val preview: String,
 )
 

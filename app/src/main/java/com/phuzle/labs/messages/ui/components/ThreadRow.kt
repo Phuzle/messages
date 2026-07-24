@@ -149,7 +149,7 @@ fun ThreadRow(
                         }
                     }
                 } else {
-                    AvatarBubble(thread.initials, thread.avatarColor, thread.isBusiness, photoUri = thread.photoUri)
+                    AvatarBubble(thread.category, thread.avatarColor, thread.isBusiness, photoUri = thread.photoUri)
                 }
             }
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {

@@ -380,7 +380,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
 
         fun toDeleted(t: ThreadEntity) = DeletedThreadUi(
-            t.id, t.displayName, initialsFor(t.displayName), androidx.compose.ui.graphics.Color(t.avatarColor), t.isBusiness, t.lastMessagePreview,
+            t.id, t.displayName, initialsFor(t.displayName), androidx.compose.ui.graphics.Color(t.avatarColor), t.isBusiness,
+            Category.fromStoredName(t.category), t.lastMessagePreview,
         )
 
         val actionSheet = eph.actionSheetThreadId?.let { id ->

@@ -106,7 +106,7 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             AvatarBubble(
-                                initials = contact.name.take(1).uppercase(), color = tokens.accent, isBusiness = false,
+                                category = com.phuzle.labs.messages.domain.model.Category.Personal, color = tokens.accent, isBusiness = false,
                                 size = 28.dp, photoUri = contact.photoUri,
                             )
                             Column(Modifier.weight(1f)) {

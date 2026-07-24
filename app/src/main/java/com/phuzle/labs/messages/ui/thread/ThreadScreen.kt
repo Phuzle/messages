@@ -188,7 +188,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        AvatarBubble(thread.initials, thread.avatarColor, thread.isBusiness, size = 34.dp, photoUri = thread.photoUri)
+                        AvatarBubble(thread.category, thread.avatarColor, thread.isBusiness, size = 34.dp, photoUri = thread.photoUri)
                         Text(thread.displayName, color = tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                     }
                     Box(Modifier.size(36.dp).roundClickable(onClick = viewModel::toggleThreadOverflowMenu), contentAlignment = Alignment.Center) {

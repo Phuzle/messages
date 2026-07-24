@@ -39,7 +39,7 @@ fun SimpleThreadRow(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AvatarBubble(item.initials, item.avatarColor, item.isBusiness, size = 40.dp)
+        AvatarBubble(item.category, item.avatarColor, item.isBusiness, size = 40.dp)
         Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
             Text(item.sender, color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             Text(item.preview, color = tokens.textTertiary, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
