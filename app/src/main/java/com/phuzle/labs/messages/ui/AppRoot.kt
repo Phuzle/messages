@@ -84,6 +84,19 @@ fun AppRoot(viewModel: AppViewModel) {
             return@MessagesTheme
         }
 
+        // Third step of the startup sequence, checked only once local sync above has actually
+        // finished (see AppViewModel.importHistoryOnce, which is what triggers this check) — a
+        // proper full-screen step the user must Restore or Skip, not a stray overlay that could
+        // pop up over an already-visible dashboard.
+        if (state.driveRestoreAvailable) {
+            DriveRestoreDialog(
+                visible = true,
+                onRestore = viewModel::confirmDriveRestore,
+                onDismiss = viewModel::dismissDriveRestorePrompt,
+            )
+            return@MessagesTheme
+        }
+
         if (!state.appUnlockedThisSession) {
             com.phuzle.labs.messages.ui.components.BiometricGate(
                 key = "app_lock",
@@ -189,12 +202,6 @@ fun AppRoot(viewModel: AppViewModel) {
                     viewModel.dismissUpdate()
                 },
                 onDismiss = viewModel::dismissUpdate,
-            )
-
-            DriveRestoreDialog(
-                visible = state.driveRestoreAvailable,
-                onRestore = viewModel::confirmDriveRestore,
-                onDismiss = viewModel::dismissDriveRestorePrompt,
             )
 
             UndoBar(

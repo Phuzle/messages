@@ -82,7 +82,9 @@ class MainActivity : FragmentActivity() {
         lifecycleScope.launch {
             viewModel.restoreFromFileRequests.collect { restoreFromFileLauncher.launch(arrayOf("*/*")) }
         }
-        viewModel.checkFirstLaunchDriveRestore()
+        // Not called directly here: it's chained after importHistoryOnce() (see AppViewModel)
+        // so the "is there already something here" check reflects the post-sync state, matching
+        // the intended startup sequence (disclosure -> sync -> drive restore offer -> dashboard).
         viewModel.reclassifyThreadsIfNeeded()
     }
 

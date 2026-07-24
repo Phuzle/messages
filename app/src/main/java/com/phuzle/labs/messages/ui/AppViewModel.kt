@@ -1103,22 +1103,31 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     /** Backfills pre-existing on-device SMS the first time we gain the default-SMS-app role. */
     private fun importHistoryOnce() = viewModelScope.launch {
         historyImportMutex.withLock {
-            if (container.settingsRepository.settingsFlow.first().historyImported) return@withLock
-            ephemeral.update { it.copy(isImportingHistory = true, importDone = 0, importTotal = 0) }
-            try {
-                container.smsHistoryImporter.importAll { done, total ->
-                    ephemeral.update { it.copy(importDone = done, importTotal = total) }
+            val alreadyImported = container.settingsRepository.settingsFlow.first().historyImported
+            if (!alreadyImported) {
+                ephemeral.update { it.copy(isImportingHistory = true, importDone = 0, importTotal = 0) }
+                try {
+                    container.smsHistoryImporter.importAll { done, total ->
+                        ephemeral.update { it.copy(importDone = done, importTotal = total) }
+                    }
+                    container.settingsRepository.setHistoryImported(true)
+                } catch (e: Exception) {
+                    // Deliberately not rethrown: historyImported stays false so this retries next
+                    // launch, but a transient failure here (e.g. a Room I/O hiccup) must never
+                    // crash the app outright and strand the user on the syncing screen forever.
+                    toast("Couldn't finish importing your existing messages — will retry next time you open the app")
+                } finally {
+                    ephemeral.update { it.copy(isImportingHistory = false) }
                 }
-                container.settingsRepository.setHistoryImported(true)
-            } catch (e: Exception) {
-                // Deliberately not rethrown: historyImported stays false so this retries next
-                // launch, but a transient failure here (e.g. a Room I/O hiccup) must never crash
-                // the app outright and strand the user on the syncing screen forever.
-                toast("Couldn't finish importing your existing messages — will retry next time you open the app")
-            } finally {
-                ephemeral.update { it.copy(isImportingHistory = false) }
             }
         }
+        // Third startup step, and only checked here — after local sync has definitively finished
+        // (or been confirmed already done) — so "is there already something here worth not
+        // overwriting" reflects the post-import state, matching the intended sequence: disclosure,
+        // then sync, then (only if still empty) offer to restore from Drive. checkFirstLaunchDriveRestore
+        // itself is cheap to call redundantly on every later launch — it no-ops immediately once
+        // driveRestorePromptShown is set.
+        checkFirstLaunchDriveRestore()
     }
 
     // endregion
@@ -1483,6 +1492,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
      * (see AppViewModel.importHistoryOnce) — either way `uiState.value` at this exact moment
      * isn't a reliable answer to "is there anything here already", only a direct query is. */
     fun checkFirstLaunchDriveRestore() = viewModelScope.launch {
+        // Already showing (the user hasn't decided yet) — importHistoryOnce calls this again on
+        // every onResume, not just the first, so this avoids redundant sign-in/Drive API calls
+        // for as long as the gate sits there waiting on a tap.
+        if (ephemeral.value.driveRestoreAvailable) return@launch
         val settings = container.settingsRepository.settingsFlow.first()
         if (settings.driveRestorePromptShown) return@launch
         if (container.threadRepository.storageOverview().chatCount > 0) {
