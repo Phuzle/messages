@@ -36,7 +36,7 @@ class SmsHistoryImporter(
     suspend fun importAll(onProgress: (done: Int, total: Int) -> Unit) = withContext(Dispatchers.IO) {
         val cursor = context.contentResolver.query(
             Telephony.Sms.CONTENT_URI,
-            arrayOf(Telephony.Sms.ADDRESS, Telephony.Sms.BODY, Telephony.Sms.DATE, Telephony.Sms.TYPE),
+            arrayOf(Telephony.Sms.ADDRESS, Telephony.Sms.BODY, Telephony.Sms.DATE, Telephony.Sms.TYPE, Telephony.Sms.READ),
             null,
             null,
             "${Telephony.Sms.DATE} ASC",
@@ -49,6 +49,7 @@ class SmsHistoryImporter(
             val bodyIdx = it.getColumnIndex(Telephony.Sms.BODY)
             val dateIdx = it.getColumnIndex(Telephony.Sms.DATE)
             val typeIdx = it.getColumnIndex(Telephony.Sms.TYPE)
+            val readIdx = it.getColumnIndex(Telephony.Sms.READ)
             if (addressIdx < 0 || bodyIdx < 0 || dateIdx < 0) return@withContext
 
             var done = 0
@@ -62,9 +63,13 @@ class SmsHistoryImporter(
                 val date = it.getLong(dateIdx)
                 val type = if (typeIdx >= 0) it.getInt(typeIdx) else Telephony.Sms.MESSAGE_TYPE_INBOX
                 val outgoing = type == Telephony.Sms.MESSAGE_TYPE_SENT || type == Telephony.Sms.MESSAGE_TYPE_OUTBOX
+                // Outgoing messages are never "unread" regardless of what the system row says —
+                // READ on a sent message means something different there (delivery/seen-by-us
+                // bookkeeping) and has no bearing on this app's inbound-unread concept.
+                val isUnread = !outgoing && readIdx >= 0 && it.getInt(readIdx) == 0
 
-                val thread = findOrTouchThread(address, body, date, outgoing)
-                messageDao.insert(MessageEntity(threadId = thread.id, body = body, timestamp = date, outgoing = outgoing))
+                val thread = findOrTouchThread(address, body, date, outgoing, isUnread)
+                messageDao.insert(MessageEntity(threadId = thread.id, body = body, timestamp = date, outgoing = outgoing, read = !isUnread))
 
                 done++
                 // Reporting on every row would itself flood the UI with state updates on a large
@@ -74,14 +79,24 @@ class SmsHistoryImporter(
         }
     }
 
-    private suspend fun findOrTouchThread(address: String, body: String, date: Long, outgoing: Boolean): ThreadEntity {
+    private suspend fun findOrTouchThread(address: String, body: String, date: Long, outgoing: Boolean, isUnread: Boolean): ThreadEntity {
         val existing = threadDao.findBySender(address)
         if (existing != null) {
+            // Rows arrive in ascending date order, so a thread's unread flag needs to accumulate
+            // across every message seen for it so far, not just reflect whichever happened to be
+            // processed last — a thread with any unread message anywhere in its history should
+            // end up unread, matching what the system SMS provider itself considered true.
+            val stillUnread = existing.unread || isUnread
             if (date >= existing.lastMessageTime) {
-                val updated = existing.copy(lastMessagePreview = body, lastMessageTime = date)
+                val updated = existing.copy(lastMessagePreview = body, lastMessageTime = date, unread = stillUnread)
                 // @Update, not upsert()/INSERT-OR-REPLACE: REPLACE deletes-then-reinserts the
                 // conflicting row, which cascades onDelete=CASCADE and wipes every message
                 // already imported for this thread. Plain UPDATE touches only this row.
+                threadDao.update(updated)
+                return updated
+            }
+            if (stillUnread != existing.unread) {
+                val updated = existing.copy(unread = stillUnread)
                 threadDao.update(updated)
                 return updated
             }
@@ -100,7 +115,7 @@ class SmsHistoryImporter(
             photoUri = photoUri,
             lastMessagePreview = body,
             lastMessageTime = date,
-            unread = false,
+            unread = isUnread,
         )
         threadDao.upsert(created)
         return created

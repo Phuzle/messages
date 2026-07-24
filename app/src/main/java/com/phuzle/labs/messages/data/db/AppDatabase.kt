@@ -29,7 +29,7 @@ const val DATABASE_FILE_NAME = "messages.db"
         ReminderEntity::class,
         DraftEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -54,6 +54,18 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Adds per-message read state (see MessageEntity.read) so unread counts can reflect real
+         * messages instead of just a thread-level flag, and so SmsHistoryImporter can finally
+         * carry over each message's actual read/unread state from the system SMS provider instead
+         * of importing everything as read. DEFAULT 1 (read) for every pre-existing row: they were
+         * already being treated as read before this column existed, so this changes nothing for
+         * anyone upgrading, only for messages inserted after. */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN read INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -61,7 +73,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DATABASE_FILE_NAME,
                 )
-                    .addMigrations(MIGRATION_4_5)
+                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
                     // Deliberately no fallbackToDestructiveMigration(): with real, irreplaceable
                     // user messages in this table, a future version bump that's missing its
                     // Migration must crash loudly (forcing us to write one before shipping) rather

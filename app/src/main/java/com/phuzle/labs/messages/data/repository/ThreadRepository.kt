@@ -4,6 +4,7 @@ import com.phuzle.labs.messages.data.db.dao.BlockedNumberDao
 import com.phuzle.labs.messages.data.db.dao.MessageDao
 import com.phuzle.labs.messages.data.db.dao.SearchCandidateRow
 import com.phuzle.labs.messages.data.db.dao.ThreadDao
+import com.phuzle.labs.messages.data.db.dao.ThreadUnreadCount
 import com.phuzle.labs.messages.data.db.entity.BlockedNumberEntity
 import com.phuzle.labs.messages.data.db.entity.MessageEntity
 import com.phuzle.labs.messages.data.db.entity.ThreadEntity
@@ -26,6 +27,7 @@ class ThreadRepository(
     suspend fun olderMessagesThan(threadId: String, beforeTimestamp: Long, limit: Int): List<MessageEntity> =
         messageDao.olderThan(threadId, beforeTimestamp, limit)
     fun observeBlockedNumbers(): Flow<List<BlockedNumberEntity>> = blockedNumberDao.observeAll()
+    fun observeUnreadCounts(): Flow<List<ThreadUnreadCount>> = messageDao.observeUnreadCounts()
 
     suspend fun getThread(id: String): ThreadEntity? = threadDao.findById(id)
     suspend fun isBlocked(number: String): Boolean = blockedNumberDao.isBlocked(number)
@@ -93,7 +95,7 @@ class ThreadRepository(
             threadDao.upsert(created)
             created
         }
-        val message = MessageEntity(threadId = thread.id, body = body, timestamp = timestampMillis, outgoing = false)
+        val message = MessageEntity(threadId = thread.id, body = body, timestamp = timestampMillis, outgoing = false, read = false)
         val id = messageDao.insert(message)
         return thread to message.copy(id = id)
     }
@@ -186,8 +188,19 @@ class ThreadRepository(
     suspend fun dueScheduledMessages(now: Long) = messageDao.dueScheduled(now)
     suspend fun markMessageSent(messageId: Long, sentAt: Long) = messageDao.markSent(messageId, sentAt)
 
-    suspend fun toggleRead(id: String, currentlyUnread: Boolean) = threadDao.setUnread(id, !currentlyUnread)
-    suspend fun markAllRead() = threadDao.markAllRead()
+    /** [currentlyUnread] true means the call is transitioning the thread TO read — in that case
+     * every message in it is marked read too, not just the thread-level flag, so the numbered
+     * unread badge clears along with the dot. Going the other way (marking unread) has no single
+     * message to un-read, so only the thread-level flag flips; see ThreadUi's fallback display. */
+    suspend fun toggleRead(id: String, currentlyUnread: Boolean) {
+        threadDao.setUnread(id, !currentlyUnread)
+        if (currentlyUnread) messageDao.markThreadRead(id)
+    }
+
+    suspend fun markAllRead() {
+        threadDao.markAllRead()
+        messageDao.markAllRead()
+    }
     suspend fun archive(id: String) = threadDao.setArchived(id, true)
     suspend fun unarchive(id: String) = threadDao.setArchived(id, false)
     suspend fun setPrivate(id: String, isPrivate: Boolean) = threadDao.setPrivate(id, isPrivate)

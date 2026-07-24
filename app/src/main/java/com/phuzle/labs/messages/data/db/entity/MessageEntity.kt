@@ -28,4 +28,10 @@ data class MessageEntity(
     val scheduleLabel: String? = null,
     /** For scheduled outgoing messages: true once the send WorkManager job has actually fired. */
     val sent: Boolean = true,
+    /** Inbound-only in practice (outgoing messages are never "unread"). Defaults true so every
+     * pre-existing row from before this column existed, and every message this app itself
+     * composes, is trivially correct without a migration having to special-case them. Real
+     * incoming messages are explicitly inserted with this false; SmsHistoryImporter instead
+     * carries over each message's actual Telephony.Sms.READ value from the system provider. */
+    val read: Boolean = true,
 )

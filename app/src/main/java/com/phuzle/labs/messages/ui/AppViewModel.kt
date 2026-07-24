@@ -129,6 +129,7 @@ private data class ThreadsSnapshot(
     val deleted: List<ThreadEntity>,
     val privateList: List<ThreadEntity>,
     val blocked: List<BlockedNumberEntity>,
+    val unreadCounts: Map<String, Int>,
 )
 
 private data class PassbookSnapshot(
@@ -200,7 +201,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     ) { inbox, allActive, archived, deleted, private ->
         listOf(inbox, allActive, archived, deleted, private)
     }.combine(container.threadRepository.observeBlockedNumbers()) { lists, blocked ->
-        ThreadsSnapshot(lists[0], lists[1], lists[2], lists[3], lists[4], blocked)
+        lists to blocked
+    }.combine(container.threadRepository.observeUnreadCounts()) { (lists, blocked), counts ->
+        ThreadsSnapshot(lists[0], lists[1], lists[2], lists[3], lists[4], blocked, counts.associate { it.threadId to it.count })
     }
 
     /** Real search — fuzzy-matches (see FuzzyMatcher) against a thread's sender name *or any
@@ -312,7 +315,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         val filteredThreads = threads.inbox.filter { t ->
             (eph.activeCategory == Category.All || t.category == eph.activeCategory.name) &&
                 (!eph.unreadOnly || t.unread)
-        }.map { it.toThreadUi() }
+        }.map { it.toThreadUi(threads.unreadCounts[it.id] ?: 0) }
 
         val hasUnread = threads.inbox.any { it.unread }
 
@@ -451,7 +454,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         return numbers.joinToString(", ") { container.contactLookup.displayNameFor(it) ?: it }
     }
 
-    private fun ThreadEntity.toThreadUi(): com.phuzle.labs.messages.ui.model.ThreadUi = com.phuzle.labs.messages.ui.model.ThreadUi(
+    private fun ThreadEntity.toThreadUi(realUnreadCount: Int): com.phuzle.labs.messages.ui.model.ThreadUi = com.phuzle.labs.messages.ui.model.ThreadUi(
         id = id,
         sender = sender,
         displayName = displayName,
@@ -463,6 +466,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         preview = lastMessagePreview,
         timeLabel = formatThreadListTime(lastMessageTime),
         unread = unread,
+        unreadCount = if (realUnreadCount > 0) realUnreadCount else if (unread) 1 else 0,
         nameWeight = if (unread) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Medium,
     )
 

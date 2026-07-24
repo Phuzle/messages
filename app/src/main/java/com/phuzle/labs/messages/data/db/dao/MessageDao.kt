@@ -76,4 +76,22 @@ interface MessageDao {
             "WHERE t.category = 'Otp' AND m.outgoing = 0 ORDER BY m.timestamp DESC LIMIT 1"
     )
     suspend fun latestIncomingOtpMessage(): MessageEntity?
+
+    /** Per-thread unread *message* counts (not just the thread-level unread flag) — the numbered
+     * badge on each dashboard row. Only inbound messages count; an outgoing message is never
+     * "unread". */
+    @Query("SELECT threadId, COUNT(*) AS count FROM messages WHERE outgoing = 0 AND read = 0 GROUP BY threadId")
+    fun observeUnreadCounts(): Flow<List<ThreadUnreadCount>>
+
+    /** Opening a thread (or explicitly marking one read) reads every message in it, not just the
+     * latest — otherwise the numbered badge would still show older unread messages the user just
+     * scrolled past. */
+    @Query("UPDATE messages SET read = 1 WHERE threadId = :threadId AND outgoing = 0")
+    suspend fun markThreadRead(threadId: String)
+
+    /** Companion to ThreadDao.markAllRead() for the overflow menu's "Mark all as read". */
+    @Query("UPDATE messages SET read = 1 WHERE outgoing = 0")
+    suspend fun markAllRead()
 }
+
+data class ThreadUnreadCount(val threadId: String, val count: Int)

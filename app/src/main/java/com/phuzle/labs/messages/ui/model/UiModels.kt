@@ -53,6 +53,11 @@ data class ThreadUi(
     val preview: String,
     val timeLabel: String,
     val unread: Boolean,
+    /** Real per-message unread count when known; falls back to 1 when [unread] is true but no
+     * individual message is flagged unread (e.g. after a manual "mark as unread" swipe, which
+     * has no specific message to un-read) so the badge still shows *something* rather than a
+     * confusing blank. See AppViewModel's threadsSnapshot for how this is computed. */
+    val unreadCount: Int,
     val nameWeight: FontWeight,
     /** Character indices within [displayName]/[preview] that matched the active fuzzy search
      * query — empty when there's no active search or the match came from elsewhere in the
