@@ -8,7 +8,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -124,8 +123,15 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = topBarContentPadding(70.dp), bottom = 84.dp, start = 14.dp, end = 14.dp),
+            // The top inset lives here, on the LazyColumn's own bounds, rather than in
+            // contentPadding — stickyHeader pins to this Composable's top edge and ignores
+            // contentPadding entirely (confirmed via uiautomator: the pinned header's bounds sat
+            // at y≈13px, i.e. the true top of the screen). With the inset in contentPadding, the
+            // header pins there too, landing completely hidden behind the opaque GlassBar drawn
+            // over it — it IS sticking, just invisibly. Shrinking the LazyColumn itself instead
+            // makes its top edge (and thus the sticky pin point) land exactly where the header
+            // should visually rest, just below the bar.
+            modifier = Modifier.fillMaxSize().padding(top = topBarContentPadding(70.dp), bottom = 84.dp, start = 14.dp, end = 14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (state.isLoadingOlderMessages) {
@@ -290,7 +296,15 @@ private fun buildThreadListEntries(
 @Composable
 private fun DateSeparator(label: String) {
     val tokens = MessagesTheme.tokens
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+    // Solid full-width band, not just a transparent-surround pill: while pinned, this renders
+    // directly on top of whatever message is currently scrolled to the front — see the
+    // LazyColumn's modifier comment above — so it needs its own opaque backing (matching the
+    // screen background) to fully mask that message instead of letting it show through around
+    // the pill.
+    Row(
+        Modifier.fillMaxWidth().background(tokens.bg).padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.Center,
+    ) {
         Text(
             label,
             color = tokens.textTertiary,

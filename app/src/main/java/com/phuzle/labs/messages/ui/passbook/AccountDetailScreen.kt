@@ -3,15 +3,22 @@ package com.phuzle.labs.messages.ui.passbook
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -20,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -77,7 +85,9 @@ fun AccountDetailScreen(state: AppUiState, viewModel: AppViewModel) {
                     ) {
                         Text("Account ending $last4", color = tokens.textSecondary, fontSize = 13.sp)
                         Text(
-                            account?.netLabel ?: "—", color = tokens.textPrimary, fontSize = 26.sp, fontWeight = FontWeight.Bold,
+                            account?.netLabel ?: "—",
+                            color = if (account?.netIsCredit == true) tokens.success else if (account != null) tokens.danger else tokens.textPrimary,
+                            fontSize = 28.sp, fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(top = 6.dp),
                         )
                         Text(
@@ -101,18 +111,36 @@ fun AccountDetailScreen(state: AppUiState, viewModel: AppViewModel) {
                 } else {
                     item {
                         Column(Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium)) {
-                            state.transactions.forEach { tx ->
+                            state.transactions.forEachIndexed { index, tx ->
+                                if (index > 0) {
+                                    Spacer(Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(1.dp).background(tokens.border))
+                                }
                                 Row(
                                     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Column {
-                                        Text(tx.merchant, color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                        Text(tx.timeLabel, color = tokens.textTertiary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            Modifier.size(34.dp)
+                                                .background(if (tx.isCredit) tokens.success.copy(alpha = 0.14f) else tokens.danger.copy(alpha = 0.14f), CircleShape),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Icon(
+                                                if (tx.isCredit) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward,
+                                                contentDescription = null,
+                                                tint = if (tx.isCredit) tokens.success else tokens.danger,
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                        }
+                                        Column(Modifier.padding(start = 10.dp)) {
+                                            Text(tx.merchant, color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                            Text(tx.timeLabel, color = tokens.textTertiary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+                                        }
                                     }
                                     Text(
                                         tx.amountLabel, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                                        color = if (tx.isCredit) tokens.accent else tokens.textPrimary,
+                                        color = if (tx.isCredit) tokens.success else tokens.danger,
                                     )
                                 }
                             }

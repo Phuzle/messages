@@ -1254,10 +1254,36 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    /** The single "Backup now" action (see BackupSettingsScreen) — always backs up locally, and
+     * also to Drive when that's enabled, instead of the two separate buttons this used to be
+     * split across. Local always runs first and unconditionally; Drive is best-effort on top of
+     * it, so a Drive failure (offline, waiting for Wi-Fi, revoked access) never prevents the local
+     * snapshot — which is the one thing every device can always fall back to — from happening. */
     fun backupNow() = runBackupAction {
         container.backupManager.backupNow(container.database)
         container.settingsRepository.setLastLocalBackupAt(System.currentTimeMillis())
-        toast("Backed up locally")
+
+        val settings = uiState.value.settings
+        if (!settings.cloudBackupConnected) {
+            toast("Backed up locally")
+            return@runBackupAction
+        }
+        toast(if (performDriveBackup()) "Backed up locally and to Google Drive" else "Backed up locally — Drive backup didn't go through")
+    }
+
+    /** The Drive half of [backupNow] — also reused by nothing else right now, but kept separate
+     * from the local half so a Drive-specific failure reason (offline, no Wi-Fi, disconnected)
+     * stays easy to reason about on its own. Returns whether it actually completed. */
+    private suspend fun performDriveBackup(): Boolean {
+        val settings = uiState.value.settings
+        if (settings.driveWifiOnly && !container.isOnWifi()) return false
+        val account = container.driveBackupManager.resolveConnectedAccount() ?: return false
+        val token = container.driveBackupManager.accessToken(account) ?: return false
+        val gzipped = container.backupManager.gzipDatabaseSnapshot(container.database)
+        container.driveBackupManager.uploadBackup(token, "messages-${System.currentTimeMillis()}.bak", gzipped) ?: return false
+        container.driveBackupManager.pruneOldBackups(token)
+        container.settingsRepository.setLastDriveBackupAt(System.currentTimeMillis())
+        return true
     }
 
     fun restoreNow() = runBackupAction {
@@ -1348,33 +1374,6 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     fun toggleDriveWifiOnly() = viewModelScope.launch {
         container.settingsRepository.setDriveWifiOnly(!uiState.value.settings.driveWifiOnly)
-    }
-
-    fun driveBackupNow() = runBackupAction {
-        val settings = uiState.value.settings
-        if (settings.driveWifiOnly && !container.isOnWifi()) {
-            toast("Waiting for Wi-Fi — this device only backs up to Drive on Wi-Fi (see Backup & Restore)")
-            return@runBackupAction
-        }
-        val account = container.driveBackupManager.resolveConnectedAccount()
-        if (account == null) {
-            toast("Not connected to Google Drive")
-            return@runBackupAction
-        }
-        val token = container.driveBackupManager.accessToken(account)
-        if (token == null) {
-            toast("Couldn't reach Google Drive — check your connection and try again")
-            return@runBackupAction
-        }
-        val gzipped = container.backupManager.gzipDatabaseSnapshot(container.database)
-        val fileId = container.driveBackupManager.uploadBackup(token, "messages-${System.currentTimeMillis()}.bak", gzipped)
-        if (fileId == null) {
-            toast("Drive backup failed — see BackupSettingsScreen's doc comment for the Google Cloud setup this needs")
-            return@runBackupAction
-        }
-        container.driveBackupManager.pruneOldBackups(token)
-        container.settingsRepository.setLastDriveBackupAt(System.currentTimeMillis())
-        toast("Backed up to Google Drive")
     }
 
     /** Always a merge, never a destructive overwrite — unlike local Restore, which is explicitly a

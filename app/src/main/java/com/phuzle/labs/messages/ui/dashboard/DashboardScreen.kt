@@ -390,7 +390,7 @@ private fun BottomTabButton(
 @Composable
 private fun AccountCard(account: AccountUi, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val tokens = MessagesTheme.tokens
-    val amountColor = if (account.netIsCredit) tokens.accent else tokens.textPrimary
+    val amountColor = if (account.netIsCredit) tokens.success else tokens.danger
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -398,18 +398,24 @@ private fun AccountCard(account: AccountUi, onClick: () -> Unit, modifier: Modif
             .border(1.dp, if (account.selected) tokens.accent else tokens.border, ShapeMedium)
             .clip(ShapeMedium)
             .clickable(onClick = onClick)
-            .padding(16.dp),
+            .padding(14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column {
-            Text("•• ${account.last4}", color = tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            Text(
-                "${account.transactionCount} transaction${if (account.transactionCount == 1) "" else "s"}",
-                color = tokens.textTertiary, fontSize = 12.5.sp, modifier = Modifier.padding(top = 3.dp),
-            )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(40.dp).background(tokens.accentSoft, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Filled.AccountBalanceWallet, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(19.dp)) }
+            Column(Modifier.padding(start = 12.dp)) {
+                Text("•• ${account.last4}", color = tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "${account.transactionCount} transaction${if (account.transactionCount == 1) "" else "s"}",
+                    color = tokens.textTertiary, fontSize = 12.5.sp, modifier = Modifier.padding(top = 3.dp),
+                )
+            }
         }
-        Text(account.netLabel, color = amountColor, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Text(account.netLabel, color = amountColor, fontSize = 16.5.sp, fontWeight = FontWeight.Bold)
     }
 }
 
