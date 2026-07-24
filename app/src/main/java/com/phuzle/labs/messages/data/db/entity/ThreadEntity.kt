@@ -23,4 +23,9 @@ data class ThreadEntity(
     val isPrivate: Boolean = false,
     /** null while active; set to the deletion instant once soft-deleted, purged after 30 days. */
     val deletedAt: Long? = null,
+    /** The SIM this conversation last used, on a multi-SIM device — set from every incoming
+     * message's subscriptionId and every reply sent from this thread, so a reply defaults to
+     * going out on the same SIM the conversation has been happening on instead of whatever the
+     * system considers the default SIM. Null on single-SIM devices/API levels without this info. */
+    val preferredSubscriptionId: Int? = null,
 )

@@ -27,6 +27,7 @@ class SmsDeliverReceiver : BroadcastReceiver() {
         val sender = parts[0].originatingAddress ?: return
         val body = parts.joinToString(separator = "") { it.messageBody ?: "" }
         val timestamp = parts[0].timestampMillis
+        val subscriptionId = SubscriptionHelper.subscriptionIdFromIntent(intent)
 
         val pendingResult = goAsync()
         val container = context.appContainer
@@ -72,6 +73,7 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                     body = body,
                     timestampMillis = timestamp,
                     photoUri = photoUri,
+                    subscriptionId = subscriptionId,
                 )
 
                 if (category == Category.Transactions) {

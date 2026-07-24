@@ -8,13 +8,13 @@ import android.util.Log
 /** Thin wrapper around [SmsManager] — real sends, since we're the default SMS app. */
 class SmsSender(private val context: Context) {
 
-    fun send(destination: String, body: String) {
-        val manager = if (android.os.Build.VERSION.SDK_INT >= 31) {
-            context.getSystemService(SmsManager::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            SmsManager.getDefault()
-        }
+    /** [subscriptionId], when given, sends via that specific SIM (e.g. the SIM a conversation has
+     * been happening on — see ThreadEntity.preferredSubscriptionId) instead of whatever the system
+     * currently considers the default SMS subscription. A SIM can be removed/deactivated after a
+     * thread last remembered it, so resolving it is best-effort: falling back to the plain default
+     * manager rather than failing the send outright. */
+    fun send(destination: String, body: String, subscriptionId: Int? = null) {
+        val manager = resolveManager(subscriptionId)
         val parts = manager.divideMessage(body)
         manager.sendMultipartTextMessage(destination, null, parts, null, null)
 
@@ -33,5 +33,17 @@ class SmsSender(private val context: Context) {
             }
             context.contentResolver.insert(Telephony.Sms.CONTENT_URI, values)
         }.onFailure { Log.w("SmsSender", "Couldn't record sent message in the system SMS provider", it) }
+    }
+
+    private fun resolveManager(subscriptionId: Int?): SmsManager {
+        if (subscriptionId != null) {
+            runCatching { SmsManager.getSmsManagerForSubscriptionId(subscriptionId) }.getOrNull()?.let { return it }
+        }
+        return if (android.os.Build.VERSION.SDK_INT >= 31) {
+            context.getSystemService(SmsManager::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            SmsManager.getDefault()
+        }
     }
 }

@@ -72,6 +72,13 @@ interface ThreadDao {
     @Query("UPDATE threads SET unread = 0 WHERE deletedAt IS NULL")
     suspend fun markAllRead()
 
+    /** See ThreadEntity.preferredSubscriptionId — only ever called with a non-null subscription
+     * id (recordIncomingMessage/reply-send skip this entirely when none is knowable), so an
+     * already-known SIM is never overwritten with "unknown" just because one later message
+     * happened not to carry the extra. */
+    @Query("UPDATE threads SET preferredSubscriptionId = :subscriptionId WHERE id = :id")
+    suspend fun setPreferredSubscriptionId(id: String, subscriptionId: Int)
+
     @Query("DELETE FROM threads WHERE deletedAt IS NOT NULL AND deletedAt < :cutoff")
     suspend fun purgeDeletedBefore(cutoff: Long)
 

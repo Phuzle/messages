@@ -10,6 +10,11 @@
     <uses-permission android:name="android.permission.RECEIVE_MMS" />
     <uses-permission android:name="android.permission.RECEIVE_WAP_PUSH" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Lets multi-SIM devices report which SIMs are active, so incoming messages can be tagged
+         with the SIM they arrived on and replies can go out via that same SIM (see
+         core/sms/SubscriptionHelper.kt). Devices without telephony, or where this is denied,
+         simply fall back to the single default SmsManager as before. -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />

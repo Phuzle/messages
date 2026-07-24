@@ -13,7 +13,7 @@ class ScheduledSendWorker(context: Context, params: WorkerParameters) : Coroutin
         val due = container.threadRepository.dueScheduledMessages(now)
         for (message in due) {
             val thread = container.threadRepository.getThread(message.threadId) ?: continue
-            container.smsSender.send(thread.sender, message.body)
+            container.smsSender.send(thread.sender, message.body, message.subscriptionId)
             container.threadRepository.markMessageSent(message.id, now)
         }
         return Result.success()

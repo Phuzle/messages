@@ -34,4 +34,8 @@ data class MessageEntity(
      * incoming messages are explicitly inserted with this false; SmsHistoryImporter instead
      * carries over each message's actual Telephony.Sms.READ value from the system provider. */
     val read: Boolean = true,
+    /** Which SIM this message arrived/was sent on, when knowable (see SubscriptionHelper). Null
+     * for single-SIM devices, devices/API levels that deny READ_PHONE_STATE, and every message
+     * that predates this column — none of those are errors, just "no per-SIM info available". */
+    val subscriptionId: Int? = null,
 )

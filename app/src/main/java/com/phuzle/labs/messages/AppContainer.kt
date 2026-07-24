@@ -69,6 +69,12 @@ class AppContainer(context: Context) {
 
     fun isDefaultSmsApp(): Boolean = com.phuzle.labs.messages.core.sms.DefaultSmsAppHelper.isDefaultSmsApp(appContext)
 
+    /** Empty on single-SIM devices (the overwhelmingly common case) and wherever READ_PHONE_STATE
+     * isn't granted — see SubscriptionHelper. Callers treat empty the same as "nothing to pick
+     * from, just use the system default SIM", never as an error. */
+    fun activeSims(): List<com.phuzle.labs.messages.core.sms.SimOption> =
+        com.phuzle.labs.messages.core.sms.SubscriptionHelper.activeSims(appContext)
+
     /** Gate for the Drive "Wi-Fi only" setting — checked fresh before every Drive network call,
      * not just used to render a static label. */
     fun isOnWifi(): Boolean {

@@ -117,6 +117,26 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
                     }
                 }
             }
+            if (state.availableSims.size > 1) {
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    val selectedId = state.composeSelectedSubscriptionId ?: state.availableSims.first().subscriptionId
+                    state.availableSims.forEach { sim ->
+                        val selected = sim.subscriptionId == selectedId
+                        Text(
+                            sim.label,
+                            color = if (selected) tokens.accentText else tokens.textSecondary,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .clip(ShapePill)
+                                .background(if (selected) tokens.accent else tokens.surfaceAlt, ShapePill)
+                                .clickable(onClick = { viewModel.selectComposeSim(sim.subscriptionId) })
+                                .padding(horizontal = 12.dp, vertical = 7.dp),
+                        )
+                    }
+                }
+            }
             Spacer(Modifier.height(10.dp))
             com.phuzle.labs.messages.ui.components.SettingsRowDivider()
             Spacer(Modifier.height(12.dp))

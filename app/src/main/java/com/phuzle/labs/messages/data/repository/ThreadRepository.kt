@@ -52,7 +52,10 @@ class ThreadRepository(
         }
     }
 
-    /** Real SMS_DELIVER path: find-or-create the thread for [sender], then append the message. */
+    /** Real SMS_DELIVER path: find-or-create the thread for [sender], then append the message.
+     * [subscriptionId] is the SIM this message arrived on, when knowable (see SubscriptionHelper)
+     * — stored on the message and remembered on the thread so a later reply defaults to going out
+     * via that same SIM. */
     suspend fun recordIncomingMessage(
         sender: String,
         displayName: String,
@@ -61,6 +64,7 @@ class ThreadRepository(
         body: String,
         timestampMillis: Long,
         photoUri: String? = null,
+        subscriptionId: Int? = null,
     ): Pair<ThreadEntity, MessageEntity> {
         val existing = threadDao.findBySender(sender)
         val thread = if (existing != null) {
@@ -73,6 +77,7 @@ class ThreadRepository(
                 // A reply from a previously-deleted/archived sender surfaces back in the inbox.
                 deletedAt = null,
                 archived = false,
+                preferredSubscriptionId = subscriptionId ?: existing.preferredSubscriptionId,
             )
             // @Update, not upsert()/INSERT-OR-REPLACE: REPLACE deletes-then-reinserts the
             // conflicting row, which cascades onDelete=CASCADE and wipes every message this
@@ -91,16 +96,21 @@ class ThreadRepository(
                 lastMessagePreview = body,
                 lastMessageTime = timestampMillis,
                 unread = true,
+                preferredSubscriptionId = subscriptionId,
             )
             threadDao.upsert(created)
             created
         }
-        val message = MessageEntity(threadId = thread.id, body = body, timestamp = timestampMillis, outgoing = false, read = false)
+        val message = MessageEntity(
+            threadId = thread.id, body = body, timestamp = timestampMillis, outgoing = false, read = false,
+            subscriptionId = subscriptionId,
+        )
         val id = messageDao.insert(message)
         return thread to message.copy(id = id)
     }
 
-    /** Compose / thread-reply path. When [scheduledFor] is set the message is queued, not sent yet. */
+    /** Compose / thread-reply path. When [scheduledFor] is set the message is queued, not sent yet.
+     * [subscriptionId] is the SIM this was (or will be) sent from, when the caller resolved one. */
     suspend fun composeOutgoingThread(
         to: String,
         body: String,
@@ -109,6 +119,7 @@ class ThreadRepository(
         nowMillis: Long,
         displayName: String = to,
         photoUri: String? = null,
+        subscriptionId: Int? = null,
     ): Pair<ThreadEntity, MessageEntity> {
         val existing = threadDao.findBySender(to)
         val thread = existing ?: ThreadEntity(
@@ -122,8 +133,9 @@ class ThreadRepository(
             lastMessagePreview = body,
             lastMessageTime = nowMillis,
             unread = false,
+            preferredSubscriptionId = subscriptionId,
         ).also { threadDao.upsert(it) }
-        return thread to appendOutgoingMessage(thread.id, body, scheduledFor, scheduleLabel, nowMillis)
+        return thread to appendOutgoingMessage(thread.id, body, scheduledFor, scheduleLabel, nowMillis, subscriptionId)
     }
 
     suspend fun appendOutgoingMessage(
@@ -132,6 +144,7 @@ class ThreadRepository(
         scheduledFor: Long?,
         scheduleLabel: String?,
         nowMillis: Long,
+        subscriptionId: Int? = null,
     ): MessageEntity {
         val message = MessageEntity(
             threadId = threadId,
@@ -141,10 +154,12 @@ class ThreadRepository(
             scheduledFor = scheduledFor,
             scheduleLabel = scheduleLabel,
             sent = scheduledFor == null,
+            subscriptionId = subscriptionId,
         )
         val id = messageDao.insert(message)
         val preview = if (scheduledFor != null) "Scheduled for $scheduleLabel" else body
         threadDao.touchLastMessage(threadId, preview, nowMillis)
+        if (subscriptionId != null) threadDao.setPreferredSubscriptionId(threadId, subscriptionId)
         return message.copy(id = id)
     }
 

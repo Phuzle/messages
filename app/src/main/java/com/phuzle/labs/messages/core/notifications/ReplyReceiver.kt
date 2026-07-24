@@ -22,13 +22,15 @@ class ReplyReceiver : BroadcastReceiver() {
         val container = context.appContainer
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                container.smsSender.send(sender, replyText)
+                val subscriptionId = container.threadRepository.getThread(threadId)?.preferredSubscriptionId
+                container.smsSender.send(sender, replyText, subscriptionId)
                 container.threadRepository.appendOutgoingMessage(
                     threadId = threadId,
                     body = replyText,
                     scheduledFor = null,
                     scheduleLabel = null,
                     nowMillis = System.currentTimeMillis(),
+                    subscriptionId = subscriptionId,
                 )
                 container.messageNotifier.confirmReplySent(threadId, sender, replyText)
             } finally {

@@ -29,7 +29,7 @@ const val DATABASE_FILE_NAME = "messages.db"
         ReminderEntity::class,
         DraftEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -66,6 +66,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Multi-SIM support (see MessageEntity.subscriptionId / ThreadEntity.preferredSubscriptionId):
+         * both columns default to NULL, meaning "no per-SIM info" — exactly how every pre-existing
+         * message/thread should read, since none of them have a known subscription. */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN subscriptionId INTEGER DEFAULT NULL")
+                db.execSQL("ALTER TABLE threads ADD COLUMN preferredSubscriptionId INTEGER DEFAULT NULL")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -73,7 +83,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DATABASE_FILE_NAME,
                 )
-                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     // Deliberately no fallbackToDestructiveMigration(): with real, irreplaceable
                     // user messages in this table, a future version bump that's missing its
                     // Migration must crash loudly (forcing us to write one before shipping) rather

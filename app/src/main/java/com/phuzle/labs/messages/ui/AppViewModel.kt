@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.phuzle.labs.messages.AppContainer
+import com.phuzle.labs.messages.core.sms.SubscriptionHelper
 import com.phuzle.labs.messages.data.db.entity.BlockedNumberEntity
 import com.phuzle.labs.messages.data.db.entity.MessageEntity
 import com.phuzle.labs.messages.data.db.entity.ReminderEntity
@@ -37,6 +38,7 @@ import com.phuzle.labs.messages.ui.model.OtpModalUi
 import com.phuzle.labs.messages.ui.model.PushedScreen
 import com.phuzle.labs.messages.ui.model.ReminderUi
 import com.phuzle.labs.messages.ui.model.SettingsSub
+import com.phuzle.labs.messages.ui.model.SimOptionUi
 import com.phuzle.labs.messages.ui.model.TransactionUi
 import com.phuzle.labs.messages.ui.model.UpdateInfoUi
 import com.phuzle.labs.messages.ui.theme.ThemeMode
@@ -94,6 +96,9 @@ private data class Ephemeral(
      * there instead of falling back to the dashboard. */
     val composeOpenedFromDrafts: Boolean = false,
     val composeToSuggestions: List<ContactSuggestionUi> = emptyList(),
+    /** Refreshed on init and whenever we (re)gain the default-SMS-app role — see refreshAvailableSims. */
+    val availableSims: List<SimOptionUi> = emptyList(),
+    val composeSelectedSubscriptionId: Int? = null,
     val privateChatsUnlockedThisSession: Boolean = false,
     /** Raw "has the biometric gate succeeded this session" flag — false until [AppViewModel.unlockApp]
      * fires. Whether the app is actually *shown* locked also depends on settings.appLockEnabled
@@ -294,7 +299,18 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 ephemeral.update { it.copy(updateInfo = UpdateInfoUi(update.message)) }
             }
         }
+        refreshAvailableSims()
     }
+
+    /** Re-reads the device's active SIMs — a no-op (empty list) on single-SIM devices or without
+     * READ_PHONE_STATE. Called at startup and again once we (re)gain the default-SMS-app role,
+     * since that permission is requested in the same batch as contacts/notifications right after. */
+    private fun refreshAvailableSims() = viewModelScope.launch(Dispatchers.IO) {
+        val sims = container.activeSims().map { SimOptionUi(it.subscriptionId, it.label) }
+        ephemeral.update { it.copy(availableSims = sims) }
+    }
+
+    fun selectComposeSim(subscriptionId: Int) = ephemeral.update { it.copy(composeSelectedSubscriptionId = subscriptionId) }
 
     fun dismissUpdate() = ephemeral.update { it.copy(updateInfo = null) }
 
@@ -422,6 +438,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             composeRecipients = eph.composeRecipients,
             composeCustomScheduleMillis = eph.composeCustomScheduleMillis,
             composeToSuggestions = eph.composeToSuggestions,
+            availableSims = eph.availableSims,
+            composeSelectedSubscriptionId = eph.composeSelectedSubscriptionId,
             deletedThreads = threads.deleted.map(::toDeleted),
             archivedThreads = threads.archived.map(::toDeleted),
             privateThreads = threads.privateList.map(::toDeleted),
@@ -882,6 +900,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         val scheduledFor = eph.composeCustomScheduleMillis
         val scheduleLabel = scheduledFor?.let { formatScheduleTime(it) }
         val now = System.currentTimeMillis()
+        // Explicit picker choice wins; otherwise fall back to the system's default SMS SIM (a
+        // brand-new conversation has no prior message to infer a SIM from).
+        val subscriptionId = eph.composeSelectedSubscriptionId ?: SubscriptionHelper.defaultSmsSubscriptionId()
 
         data class Sent(val threadId: String, val messageId: Long, val number: String)
         val sent = mutableListOf<Sent>()
@@ -889,7 +910,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         for (recipient in recipients) {
             val (thread, message) = container.threadRepository.composeOutgoingThread(
                 to = recipient.number, body = body, scheduledFor = scheduledFor, scheduleLabel = scheduleLabel, nowMillis = now,
-                displayName = recipient.name, photoUri = recipient.photoUri,
+                displayName = recipient.name, photoUri = recipient.photoUri, subscriptionId = subscriptionId,
             )
             sent += Sent(thread.id, message.id, recipient.number)
             lastThreadId = thread.id
@@ -904,6 +925,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 activeTab = DashboardTab.Messages,
                 composeTo = "", composeBody = "", composeRecipients = emptyList(),
                 composeCustomScheduleMillis = null, composeDraftId = null, composeToSuggestions = emptyList(),
+                composeSelectedSubscriptionId = null,
                 olderMessages = emptyList(), hasMoreOlderMessages = true, isLoadingOlderMessages = false,
             )
         }
@@ -913,7 +935,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             // not just the local row — undo cancels this job before it ever calls SmsSender.
             val sendJob = viewModelScope.launch {
                 delay(UNDO_WINDOW_MS)
-                sent.forEach { runCatching { container.smsSender.send(it.number, body) } }
+                sent.forEach { runCatching { container.smsSender.send(it.number, body, subscriptionId) } }
             }
             offerUndo(if (sent.size == 1) "Message sent" else "${sent.size} messages sent") {
                 sendJob.cancel()
@@ -935,12 +957,18 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         if (signature.isNotEmpty()) text = "$text\n$signature"
 
         val thread = container.threadRepository.getThread(threadId) ?: return@launch
-        val message = container.threadRepository.appendOutgoingMessage(threadId, text, null, null, System.currentTimeMillis())
+        // Reply on whichever SIM this conversation has been happening on; only a thread with no
+        // incoming message yet (composed by us first) has none, in which case the system default
+        // SIM is exactly what "no preference" should mean.
+        val subscriptionId = thread.preferredSubscriptionId ?: SubscriptionHelper.defaultSmsSubscriptionId()
+        val message = container.threadRepository.appendOutgoingMessage(
+            threadId, text, null, null, System.currentTimeMillis(), subscriptionId,
+        )
         ephemeral.update { it.copy(threadInput = "") }
 
         val sendJob = viewModelScope.launch {
             delay(UNDO_WINDOW_MS)
-            runCatching { container.smsSender.send(thread.sender, text) }
+            runCatching { container.smsSender.send(thread.sender, text, subscriptionId) }
         }
         offerUndo("Message sent") {
             sendJob.cancel()
@@ -1093,7 +1121,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setDefaultSmsAppStatus(isDefault: Boolean) {
         ephemeral.update { it.copy(isDefaultSmsApp = isDefault) }
-        if (isDefault) importHistoryOnce()
+        if (isDefault) {
+            importHistoryOnce()
+            refreshAvailableSims()
+        }
     }
 
     /** setDefaultSmsAppStatus(true) fires from more than one place within milliseconds of each

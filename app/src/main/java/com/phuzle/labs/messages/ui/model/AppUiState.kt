@@ -4,6 +4,7 @@ import com.phuzle.labs.messages.data.prefs.AppSettings
 import com.phuzle.labs.messages.domain.model.Category
 import com.phuzle.labs.messages.ui.theme.ThemeMode
 
+data class SimOptionUi(val subscriptionId: Int, val label: String)
 data class OtpModalUi(val senderLabel: String, val code: String, val copied: Boolean)
 data class ActionSheetUi(val threadId: String, val sender: String, val markReadLabel: String, val privateLabel: String)
 data class UpdateInfoUi(val message: String)
@@ -41,6 +42,11 @@ data class AppUiState(
     val composeRecipients: List<ContactSuggestionUi> = emptyList(),
     val composeCustomScheduleMillis: Long? = null,
     val composeToSuggestions: List<ContactSuggestionUi> = emptyList(),
+    /** Non-empty only on multi-SIM devices with READ_PHONE_STATE granted — drives Compose's SIM
+     * picker (see ComposeScreen). Single-SIM devices never see this, matching how they never saw
+     * any SIM-related UI before this feature existed. */
+    val availableSims: List<SimOptionUi> = emptyList(),
+    val composeSelectedSubscriptionId: Int? = null,
     val drafts: List<DraftUi> = emptyList(),
     val undoMessage: String? = null,
 
