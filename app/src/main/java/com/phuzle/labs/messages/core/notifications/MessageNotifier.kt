@@ -157,9 +157,17 @@ class MessageNotifier(
             else -> settings.channelPromoEnabled
         }
 
+    /** [Intent.ACTION_MAIN] is deliberately not set here — it's unnecessary for an explicit-
+     * component intent and, combined with MainActivity's own MAIN/LAUNCHER filter, has caused
+     * exactly this kind of "notification tap reopens the app but drops the extras" behavior on
+     * some OEM launchers. [android.content.Intent.setData] with a per-thread URI is what actually
+     * matters here: extras are *not* part of a PendingIntent's identity for Android's matching
+     * purposes, so two thread-open intents that only differ by extra would otherwise collapse
+     * into "the same" PendingIntent and only the most recently posted thread's tap would resolve
+     * correctly — giving each one distinct request code *and* data keeps them genuinely distinct. */
     private fun openThreadIntent(threadId: String): PendingIntent {
         val intent = Intent(context, MainActivity::class.java)
-            .setAction(Intent.ACTION_MAIN)
+            .setData(android.net.Uri.parse("app://${context.packageName}/thread/$threadId"))
             .putExtra(MainActivity.EXTRA_OPEN_THREAD_ID, threadId)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         return PendingIntent.getActivity(

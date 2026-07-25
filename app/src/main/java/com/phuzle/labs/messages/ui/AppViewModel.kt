@@ -228,8 +228,17 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
      * message-body match regardless of either's absolute score (see the sort in [uiState]):
      * searching a saved contact's name should surface that person's thread first, not whatever
      * promotional blast happens to mention the same word in its body and was merely received more
-     * recently. */
-    private data class SearchRank(val nameQuality: Int, val bodyQuality: Int)
+     * recently. [bestBodySnippet]/[bodyMatchIndices] remember *which* message actually produced
+     * [bodyQuality] — a match can come from anywhere in the thread's history (see
+     * observeSearchCandidates), not just its current last-message preview, so the row can show
+     * that message instead of the preview; otherwise the match has nothing visible backing it. */
+    private data class SearchRank(
+        val nameQuality: Int,
+        val bodyQuality: Int,
+        val nameMatchIndices: Set<Int> = emptySet(),
+        val bestBodySnippet: String? = null,
+        val bodyMatchIndices: Set<Int> = emptySet(),
+    )
 
     /** Real search — fuzzy-matches (see FuzzyMatcher) against a thread's sender name *or any
      * message in its full history*, not just the cached last-message preview. Null means "no
@@ -248,9 +257,14 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                         val bodyMatch = row.body?.let { FuzzyMatcher.match(query, it) }
                         if (nameMatch == null && bodyMatch == null) continue
                         val existing = ranks[row.threadId] ?: SearchRank(0, 0)
+                        val betterName = (nameMatch?.quality ?: 0) > existing.nameQuality
+                        val betterBody = (bodyMatch?.quality ?: 0) > existing.bodyQuality
                         ranks[row.threadId] = SearchRank(
                             nameQuality = maxOf(existing.nameQuality, nameMatch?.quality ?: 0),
                             bodyQuality = maxOf(existing.bodyQuality, bodyMatch?.quality ?: 0),
+                            nameMatchIndices = if (betterName) nameMatch!!.matchedIndices else existing.nameMatchIndices,
+                            bestBodySnippet = if (betterBody) row.body else existing.bestBodySnippet,
+                            bodyMatchIndices = if (betterBody) bodyMatch!!.matchedIndices else existing.bodyMatchIndices,
                         )
                     }
                     ranks
@@ -311,22 +325,19 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                     .filter { ranks.containsKey(it.id) }
                     .sortedWith(compareByDescending<ThreadUi> { ranks.getValue(it.id).nameQuality }
                         .thenByDescending { ranks.getValue(it.id).bodyQuality })
+                    .map { t ->
+                        val rank = ranks.getValue(t.id)
+                        // A body match can come from any message in the thread's history, not
+                        // just its current last-message preview (see observeSearchCandidates) —
+                        // show the message that actually matched instead of the preview, or the
+                        // row displays unrelated text with no visible reason it matched at all.
+                        t.copy(
+                            displayNameMatch = rank.nameMatchIndices,
+                            preview = rank.bestBodySnippet ?: t.preview,
+                            previewMatch = rank.bodyMatchIndices,
+                        )
+                    }
                 state.copy(threads = ordered)
-            }
-        }
-        .combine(ephemeral.map { it.searchQuery.trim() }.distinctUntilChanged()) { state, query ->
-            // Bolding is purely cosmetic and only ever applies to the two fields actually shown in
-            // the row (displayName/preview) — a match found elsewhere in a thread's full history
-            // still includes the thread (see searchMatchingIds) but has nothing visible to bold.
-            if (query.isEmpty()) {
-                state
-            } else {
-                state.copy(threads = state.threads.map { t ->
-                    t.copy(
-                        displayNameMatch = FuzzyMatcher.match(query, t.displayName)?.matchedIndices ?: emptySet(),
-                        previewMatch = FuzzyMatcher.match(query, t.preview)?.matchedIndices ?: emptySet(),
-                    )
-                })
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppUiState())
@@ -1151,14 +1162,21 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     // region ---- OTP hot-swap ----
 
-    /** Called from Activity.onResume: shows the modal if an OTP arrived in the last 30 seconds. */
+    /** Called from Activity.onResume: shows the modal if an OTP arrived in the last 30 seconds.
+     * The modal is only ever meant to live for the rest of that 30-second window from when the
+     * OTP itself arrived (not 30 more seconds from whenever the user happens to open the app) —
+     * this schedules the matching auto-dismiss so the overlay doesn't just sit there forever if
+     * the user never taps Copy or Dismiss themselves. */
     fun checkOtpHotSwap() = viewModelScope.launch {
         val latest = container.threadRepository.latestIncomingOtpMessage() ?: return@launch
         val age = System.currentTimeMillis() - latest.timestamp
         if (age !in 0..30_000) return@launch
         val code = container.regexRules.extractCode(latest.body) ?: return@launch
         val thread = container.threadRepository.getThread(latest.threadId) ?: return@launch
-        ephemeral.update { it.copy(otpModal = OtpModalUi(thread.displayName, code, copied = false)) }
+        val expiresAt = latest.timestamp + 30_000
+        ephemeral.update { it.copy(otpModal = OtpModalUi(thread.displayName, code, copied = false, expiresAtMillis = expiresAt)) }
+        delay((expiresAt - System.currentTimeMillis()).coerceAtLeast(0))
+        ephemeral.update { if (it.otpModal?.expiresAtMillis == expiresAt) it.copy(otpModal = null) else it }
     }
 
     fun closeOtpModal() = ephemeral.update { it.copy(otpModal = null) }

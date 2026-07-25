@@ -3,6 +3,9 @@ package com.phuzle.labs.messages.ui.dashboard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +37,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.input.pointer.pointerInput
 import com.phuzle.labs.messages.domain.model.Category
 import com.phuzle.labs.messages.domain.model.FeatureFlags
 import kotlinx.coroutines.launch
@@ -482,7 +486,18 @@ private fun FeedbackBanner(onSendFeedback: () -> Unit, onDismiss: () -> Unit, mo
     Row(
         modifier
             .fillMaxWidth()
-            .clickable(onClick = onSendFeedback)
+            // This row sits directly above swipeable ThreadRows in the same list, so users land
+            // on it while swiping to archive/delete the row below or above it — a plain
+            // `clickable` here still fires on a horizontal drag (nothing claims the gesture the
+            // way ThreadRow's own swipe handling does), which used to launch the feedback email
+            // client on what was meant as a swipe. Only fire on an actual tap-in-place.
+            .pointerInput(onSendFeedback) {
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    val up = waitForUpOrCancellation()
+                    if (up != null && (up.position - down.position).getDistance() < viewConfiguration.touchSlop) onSendFeedback()
+                }
+            }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -5,7 +5,7 @@ import com.phuzle.labs.messages.domain.model.Category
 import com.phuzle.labs.messages.ui.theme.ThemeMode
 
 data class SimOptionUi(val subscriptionId: Int, val label: String)
-data class OtpModalUi(val senderLabel: String, val code: String, val copied: Boolean)
+data class OtpModalUi(val senderLabel: String, val code: String, val copied: Boolean, val expiresAtMillis: Long)
 data class ActionSheetUi(val threadId: String, val sender: String, val markReadLabel: String, val privateLabel: String)
 data class UpdateInfoUi(val message: String)
 

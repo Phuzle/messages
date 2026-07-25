@@ -10,9 +10,15 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -22,12 +28,29 @@ import com.phuzle.labs.messages.ui.model.OtpModalUi
 import com.phuzle.labs.messages.ui.theme.JetBrainsMonoFontFamily
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapeMedium
+import kotlinx.coroutines.delay
 
-/** The 30-second OTP hot-swap modal: pops up when the app resumes to a fresh OTP. */
+private const val HOT_SWAP_WINDOW_MS = 30_000L
+
+/** The 30-second OTP hot-swap modal: pops up when the app resumes to a fresh OTP. The countdown
+ * shown here is purely cosmetic — AppViewModel.checkOtpHotSwap is what actually clears otpModal
+ * once the window expires, this just mirrors that deadline so the overlay doesn't sit there with
+ * no indication it's about to (or already did) time out. */
 @Composable
 fun OtpModal(otp: OtpModalUi?, onCopy: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     if (otp == null) return
     val tokens = MessagesTheme.tokens
+
+    var remainingMs by remember(otp.expiresAtMillis) {
+        mutableLongStateOf((otp.expiresAtMillis - System.currentTimeMillis()).coerceAtLeast(0))
+    }
+    LaunchedEffect(otp.expiresAtMillis) {
+        while (remainingMs > 0) {
+            delay(250)
+            remainingMs = (otp.expiresAtMillis - System.currentTimeMillis()).coerceAtLeast(0)
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -71,6 +94,18 @@ fun OtpModal(otp: OtpModalUi?, onCopy: () -> Unit, onDismiss: () -> Unit, modifi
             TextButton(onClick = onDismiss) {
                 Text("Dismiss", color = tokens.modalText.copy(alpha = 0.55f), fontSize = 13.sp)
             }
+            LinearProgressIndicator(
+                progress = { (remainingMs.toFloat() / HOT_SWAP_WINDOW_MS).coerceIn(0f, 1f) },
+                color = tokens.accent,
+                trackColor = tokens.modalText.copy(alpha = 0.12f),
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            )
+            Text(
+                "Auto-dismisses in ${(remainingMs / 1000).toInt() + 1}s",
+                color = tokens.modalText.copy(alpha = 0.45f),
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 6.dp),
+            )
         }
     }
 }
