@@ -3,24 +3,40 @@
     "keywords": [
       "otp", "one-time password", "one time password", "verification code",
       "security code", "auth code", "authentication code", "passcode",
-      "2fa code", "login code", "access code", "do not share this code"
+      "2fa code", "login code", "access code", "do not share this code",
+      "otp is", "otp code", "share this otp", "is your otp", "valid for 10 min",
+      "your code is", "one time pin",
+      "ओटीपी", "वन टाइम पासवर्ड", "सत्यापन कोड", "प्रमाणीकरण कोड", "पासकोड",
+      "यह कोड किसी के साथ साझा न करें",
+      "ਓਟੀਪੀ", "ਵੈਰੀਫਿਕੇਸ਼ਨ ਕੋਡ", "ਪਾਸਕੋਡ", "ਸੁਰੱਖਿਆ ਕੋਡ"
     ],
     "codePattern": "\\b\\d{4,8}\\b"
   },
   "transaction": {
     "keywords": [
       "debited", "credited", "spent", "withdrawn", "deposited", "payment of",
-      "balance is", "available balance", "posted to your", "transaction of",
+      "balance is", "available balance", "avl bal", "posted to your", "transaction of",
       "charged", "purchase of", "has been credited", "has been debited",
-      "minimum due", "statement is ready"
+      "minimum due", "statement is ready", "debited from", "credited to",
+      "a/c", "acct", "account no", "upi", "neft", "imps", "rtgs", "txn",
+      "ref no", "reference number", "emi", "auto debit", "insufficient balance",
+      "डेबिट", "क्रेडिट", "जमा", "निकासी", "भुगतान", "खाते से", "खाते में",
+      "शेष राशि", "उपलब्ध शेष", "न्यूनतम देय", "जमा हुए", "डेबिट हुआ",
+      "क्रेडिट हुआ", "निकाले गए", "लेनदेन", "किश्त",
+      "ਡੈਬਿਟ", "ਕ੍ਰੈਡਿਟ", "ਭੁਗਤਾਨ", "ਬਕਾਇਆ", "ਖਾਤੇ ਵਿੱਚੋਂ", "ਖਾਤੇ ਵਿੱਚ",
+      "ਬਕਾਇਆ ਰਾਸ਼ੀ", "ਲੈਣ-ਦੇਣ", "ਕਢਵਾਏ ਗਏ"
     ],
-    "amountPattern": "[$₹€£]\\s?\\d[\\d,]*(\\.\\d{1,2})?"
+    "amountPattern": "(?:[$₹€£]|rs\\.?|inr)\\s?\\d[\\d,]*(?:\\.\\d{1,2})?|\\d[\\d,]*(?:\\.\\d{1,2})?\\s?(?:rupees?|रुपये|रुपया|रु\\.?|ਰੁਪਏ)",
+    "accountRefPattern": "(?i)(a/?c(?:\\.|count)?\\s*(?:no\\.?|number)?\\s*[x*]{2,}\\d{2,6}|(?:card|acc(?:t|ount)?)\\s*(?:no\\.?|number)?\\s*(?:ending|xx+)\\s*\\d{2,6}|\\bupi\\b|\\bneft\\b|\\bimps\\b|\\brtgs\\b|\\bref\\.?\\s*no\\.?\\s*[:.]?\\s*\\w+)"
   },
   "promotion": {
     "keywords": [
       "% off", "percent off", "sale", "discount", "offer", "coupon",
       "unsubscribe", "reply stop", "limited time", "free shipping", "deal",
-      "exclusive", "clearance", "promo code"
+      "exclusive", "clearance", "promo code",
+      "छूट", "ऑफर", "बिक्री", "मुफ्त", "सदस्यता समाप्त करें", "कूपन",
+      "सीमित समय", "विशेष छूट",
+      "ਛੋਟ", "ਸੇਲ", "ਆਫਰ", "ਮੁਫ਼ਤ", "ਕੂਪਨ", "ਸੀਮਤ ਸਮਾਂ"
     ]
   },
   "other": {
@@ -28,7 +44,10 @@
       "advisory", "alert", "notice", "reminder:", "has shipped", "out for delivery",
       "delivered", "appointment", "scheduled maintenance", "service outage",
       "weather warning", "evacuation", "school closing", "flight status",
-      "gate change", "tracking number"
+      "gate change", "tracking number",
+      "सूचना", "अलर्ट", "अनुस्मारक", "भेज दिया गया", "डिलीवरी के लिए निकल गया",
+      "डिलीवर हो गया", "अपॉइंटमेंट",
+      "ਸੂਚਨਾ", "ਅਲਰਟ", "ਯਾਦ ਦਿਹਾਨੀ", "ਡਿਲੀਵਰ ਹੋ ਗਿਆ"
     ]
   }
 }

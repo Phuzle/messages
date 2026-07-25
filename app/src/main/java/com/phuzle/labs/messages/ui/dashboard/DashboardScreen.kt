@@ -84,10 +84,16 @@ private const val BOTTOM_BAR_HEIGHT = 60
 @Composable
 fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
     val tokens = MessagesTheme.tokens
+    val context = androidx.compose.ui.platform.LocalContext.current
     val isMessages = state.activeTab == DashboardTab.Messages
     val statusBarInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val topContentPadding = (if (isMessages) 104.dp else 68.dp) + statusBarInset
+    // Closed-testing-only, and only worth showing on the tab people actually spend their time on
+    // — see AppViewModel.dismissFeedbackBanner for the "comes back tomorrow" behavior.
+    val showFeedbackBanner = isMessages &&
+        state.settings.feedbackBannerDismissedDay != com.phuzle.labs.messages.ui.format.currentLocalEpochDay()
+    val feedbackBannerHeight = 60.dp
+    val topContentPadding = (if (isMessages) 104.dp else 68.dp) + statusBarInset + (if (showFeedbackBanner) feedbackBannerHeight else 0.dp)
     val bottomContentPadding = (BOTTOM_BAR_HEIGHT + 26).dp + navBarInset
 
     Box(Modifier.fillMaxSize()) {
@@ -112,6 +118,16 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                 // top whenever that happens (see AppViewModel.confirmUndo).
                 LaunchedEffect(Unit) {
                     viewModel.scrollToTopEvents.collect { listState.animateScrollToItem(0) }
+                }
+                // Switching category chips or the unread-only filter swaps out state.threads
+                // entirely, but LazyColumn's key-based scroll anchoring has no idea the new list
+                // is conceptually a different view — it just keeps whatever scroll offset was
+                // already set, which can land you mid-list in the new filter (e.g. back on "All"
+                // after "Personal" scrolled you partway down, still showing wherever Personal's
+                // items happened to leave the offset). A filter change should always read from
+                // the top, like a fresh list.
+                LaunchedEffect(state.activeCategory, state.unreadOnly) {
+                    listState.scrollToItem(0)
                 }
                 LazyColumn(
                     state = listState,
@@ -172,6 +188,17 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                     }
                 }
             }
+        }
+
+        if (showFeedbackBanner) {
+            FeedbackBanner(
+                onSendFeedback = {
+                    com.phuzle.labs.messages.core.util.openSupportEmail(context, subject = "Messages closed-testing feedback")
+                },
+                onDismiss = viewModel::dismissFeedbackBanner,
+                modifier = Modifier.align(Alignment.TopCenter)
+                    .padding(top = topContentPadding - feedbackBannerHeight, start = 12.dp, end = 12.dp),
+            )
         }
 
         Column(Modifier.align(Alignment.TopCenter)) {
@@ -410,6 +437,31 @@ private fun AccountCard(account: AccountUi, onClick: () -> Unit, modifier: Modif
                 "${account.transactionCount} transaction${if (account.transactionCount == 1) "" else "s"}",
                 color = tokens.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp),
             )
+        }
+    }
+}
+
+/** Closed-testing-only nudge to send feedback — closable, but only for the rest of today (see
+ * AppViewModel.dismissFeedbackBanner); it comes back on its own the next day rather than being
+ * gone for good after one tap, since the build stays in closed testing regardless. */
+@Composable
+private fun FeedbackBanner(onSendFeedback: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    val tokens = MessagesTheme.tokens
+    Row(
+        modifier
+            .fillMaxWidth()
+            .background(tokens.accentSoft, ShapeMedium)
+            .border(1.dp, tokens.accent.copy(alpha = 0.35f), ShapeMedium)
+            .clickable(onClick = onSendFeedback)
+            .padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("You're testing an early build", color = tokens.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text("Tap to email us your feedback", color = tokens.textSecondary, fontSize = 11.5.sp, modifier = Modifier.padding(top = 1.dp))
+        }
+        Box(Modifier.size(32.dp).roundClickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Close, contentDescription = "Dismiss for today", tint = tokens.textSecondary, modifier = Modifier.size(16.dp))
         }
     }
 }

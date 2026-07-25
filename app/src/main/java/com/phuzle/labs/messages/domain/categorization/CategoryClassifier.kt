@@ -20,8 +20,16 @@ class CategoryClassifier(
             return Category.Otp
         }
 
+        // A keyword match still counts (works for the ~60% of messages that arrive in English),
+        // but it's OR'd with the structural account/UPI/reference-number signal — bank templates
+        // keep those in Latin script and English abbreviations even inside an otherwise Hindi or
+        // Punjabi message, so this catches real transactional SMS a keyword-only check would
+        // miss for anything sent in a language regex_rules.json doesn't have keywords for yet.
+        // The amount match stays mandatory either way, so this never turns "a/c" mentioned in
+        // passing into a false Transaction.
         val hasTransactionKeyword = rules.transactionKeywords.any { text.contains(it) }
-        if (hasTransactionKeyword && rules.amountPattern.containsMatchIn(body)) {
+        val hasAccountRefSignal = rules.accountRefPattern.containsMatchIn(body)
+        if ((hasTransactionKeyword || hasAccountRefSignal) && rules.amountPattern.containsMatchIn(body)) {
             return Category.Transactions
         }
 

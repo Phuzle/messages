@@ -2,19 +2,26 @@ package com.phuzle.labs.messages.ui.compose
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -30,6 +37,7 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +45,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,7 +63,6 @@ import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.model.ContactSuggestionUi
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapePill
-import com.phuzle.labs.messages.ui.theme.ShapeSmall
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
@@ -66,6 +76,18 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
     var pickedDateMillis by remember { mutableStateOf<Long?>(null) }
 
     val canSend = state.composeBody.isNotBlank() && (state.composeRecipients.isNotEmpty() || state.composeTo.isNotBlank())
+
+    // Autofocus "To" the moment this screen opens, same as tapping into it by hand would —
+    // composing a new message always starts with picking a recipient, so make that the very
+    // first thing the keyboard is ready for instead of an extra required tap.
+    val toFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) {
+        toFocusRequester.requestFocus()
+        keyboardController?.show()
+    }
+    val bodyFocusRequester = remember { FocusRequester() }
+    val bodyScrollState = rememberScrollState()
 
     Box(Modifier.fillMaxSize()) {
         Column(
@@ -86,35 +108,13 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
                     placeholder = "To: name or number",
                     fontSize = 15.sp,
                     modifier = Modifier.weight(1f),
+                    focusRequester = toFocusRequester,
                 )
                 if (state.composeTo.isNotBlank()) {
                     Box(
                         Modifier.size(30.dp).roundClickable(onClick = viewModel::addTypedComposeRecipient),
                         contentAlignment = Alignment.Center,
                     ) { Icon(Icons.Filled.Add, contentDescription = "Add recipient", tint = tokens.accent, modifier = Modifier.size(20.dp)) }
-                }
-            }
-            if (state.composeToSuggestions.isNotEmpty()) {
-                Column(Modifier.fillMaxWidth().background(tokens.surfaceAlt, ShapeSmall).padding(vertical = 2.dp)) {
-                    state.composeToSuggestions.forEach { contact ->
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable(onClick = { viewModel.selectComposeContact(contact) })
-                                .padding(horizontal = 12.dp, vertical = 9.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            AvatarBubble(
-                                category = com.phuzle.labs.messages.domain.model.Category.Personal, color = tokens.accent, isBusiness = false,
-                                size = 28.dp, photoUri = contact.photoUri,
-                            )
-                            Column(Modifier.weight(1f)) {
-                                Text(contact.name, color = tokens.textPrimary, fontSize = 13.5.sp, fontWeight = FontWeight.Medium)
-                                Text(contact.number, color = tokens.textTertiary, fontSize = 11.5.sp)
-                            }
-                        }
-                    }
                 }
             }
             if (state.availableSims.size > 1) {
@@ -140,14 +140,43 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
             Spacer(Modifier.height(10.dp))
             com.phuzle.labs.messages.ui.components.SettingsRowDivider()
             Spacer(Modifier.height(12.dp))
-            FlatTextField(
-                value = state.composeBody,
-                onValueChange = viewModel::onComposeBodyChange,
-                placeholder = "Type a message",
-                fontSize = 15.sp,
-                singleLine = false,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-            )
+            // Fills essentially the whole remaining screen (not just as tall as a couple of typed
+            // lines) so there's no large dead zone below the field that looks tappable but isn't —
+            // a tap anywhere in this area, even well below the cursor, focuses the field and opens
+            // the keyboard, same as tapping directly on the text would.
+            Box(
+                Modifier.weight(1f).fillMaxWidth()
+                    .pointerInput(Unit) { detectTapGestures(onTap = { bodyFocusRequester.requestFocus() }) },
+            ) {
+                FlatTextField(
+                    value = state.composeBody,
+                    onValueChange = viewModel::onComposeBodyChange,
+                    placeholder = "Type a message",
+                    fontSize = 15.sp,
+                    singleLine = false,
+                    fillHeight = true,
+                    scrollState = bodyScrollState,
+                    focusRequester = bodyFocusRequester,
+                    modifier = Modifier.fillMaxSize().padding(end = 8.dp),
+                )
+                if (bodyScrollState.maxValue > 0) {
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    BoxWithConstraints(Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(4.dp)) {
+                        val trackHeightPx = constraints.maxHeight.toFloat()
+                        val totalContentPx = trackHeightPx + bodyScrollState.maxValue
+                        val thumbHeightFraction = (trackHeightPx / totalContentPx).coerceIn(0.08f, 1f)
+                        val thumbOffsetFraction = if (bodyScrollState.maxValue == 0) 0f else bodyScrollState.value.toFloat() / bodyScrollState.maxValue
+                        val offsetDp = with(density) { (trackHeightPx * (1 - thumbHeightFraction) * thumbOffsetFraction).toDp() }
+                        Box(
+                            Modifier
+                                .fillMaxHeight(thumbHeightFraction)
+                                .align(Alignment.TopEnd)
+                                .padding(top = offsetDp)
+                                .background(tokens.border, ShapePill),
+                        )
+                    }
+                }
+            }
             if (state.settings.showCharCount) {
                 Text(
                     "${state.composeBody.length} characters", color = tokens.textTertiary, fontSize = 11.sp,
@@ -208,6 +237,43 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(Icons.Filled.Close, contentDescription = "Close", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
+                }
+            }
+        }
+
+        // A small inline dropdown made someone scroll to even see who they might be texting —
+        // this takes over essentially the whole screen instead, like a real contact picker, for
+        // as long as there's anything to show. Dismisses itself the instant the match list empties
+        // (text cleared, a contact picked, or nothing left matching what's typed).
+        if (state.composeToSuggestions.isNotEmpty()) {
+            Column(
+                Modifier.fillMaxSize().background(tokens.bg)
+                    .padding(top = topBarContentPadding(126.dp)),
+            ) {
+                Text(
+                    "Suggested contacts", color = tokens.textSecondary, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
+                )
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(state.composeToSuggestions, key = { it.number }) { contact ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable(onClick = { viewModel.selectComposeContact(contact) })
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        ) {
+                            AvatarBubble(
+                                category = com.phuzle.labs.messages.domain.model.Category.Personal, color = tokens.accent, isBusiness = false,
+                                size = 44.dp, photoUri = contact.photoUri,
+                            )
+                            Column(Modifier.weight(1f)) {
+                                Text(contact.name, color = tokens.textPrimary, fontSize = 15.5.sp, fontWeight = FontWeight.Medium)
+                                Text(contact.number, color = tokens.textTertiary, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
+                            }
+                        }
+                    }
                 }
             }
         }

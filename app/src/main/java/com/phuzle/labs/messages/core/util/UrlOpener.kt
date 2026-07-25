@@ -22,3 +22,15 @@ fun openUrl(context: Context, inAppBrowser: Boolean, url: String) {
     }.isSuccess
     if (!launched) Toast.makeText(context, "Couldn't open that link", Toast.LENGTH_SHORT).show()
 }
+
+const val SUPPORT_EMAIL = "support@phuzle.com"
+
+/** Same mailto action as the About screen's "Email support" row — shared so the closed-testing
+ * feedback banner (DashboardScreen) sends to the exact same address instead of drifting out of
+ * sync with its own copy. */
+fun openSupportEmail(context: Context, subject: String? = null) {
+    val uri = if (subject != null) Uri.parse("mailto:$SUPPORT_EMAIL?subject=${Uri.encode(subject)}") else Uri.parse("mailto:$SUPPORT_EMAIL")
+    val intent = Intent(Intent.ACTION_SENDTO, uri)
+    val launched = runCatching { context.startActivity(Intent.createChooser(intent, "Email support")) }.isSuccess
+    if (!launched) Toast.makeText(context, "No email app found", Toast.LENGTH_SHORT).show()
+}

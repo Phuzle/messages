@@ -3,6 +3,7 @@ package com.phuzle.labs.messages.ui.thread
 import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,17 +24,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -67,6 +72,14 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
     val listState = rememberLazyListState()
     val latestState = rememberUpdatedState(state)
     val context = androidx.compose.ui.platform.LocalContext.current
+    val threadSearchFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    LaunchedEffect(state.threadSearchActive) {
+        if (state.threadSearchActive) {
+            threadSearchFocusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
 
     // Bounded message buffer: scrolling near the top fetches one more page of history; scrolling
     // back down well clear of it releases those pages again so long threads don't sit fully in memory.
@@ -177,6 +190,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                         onValueChange = viewModel::onThreadSearchChange,
                         placeholder = "Search in conversation",
                         modifier = Modifier.weight(1f).padding(start = 4.dp),
+                        focusRequester = threadSearchFocusRequester,
                     )
                 } else {
                     Box(Modifier.size(36.dp).roundClickable(onClick = viewModel::goBack), contentAlignment = Alignment.Center) {
@@ -253,6 +267,28 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                     if (thread.isBlocked) "You've blocked this sender" else "This sender doesn't accept replies",
                     color = tokens.textTertiary, fontSize = 12.5.sp,
                 )
+            }
+        }
+
+        // Only worth surfacing once there's actually somewhere to jump to — canScrollForward means
+        // more (newer) content exists below the current viewport, i.e. we're not already at the
+        // latest message.
+        val showScrollToLatest by remember { derivedStateOf { listState.canScrollForward } }
+        val scrollToLatestScope = rememberCoroutineScope()
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showScrollToLatest,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = if (thread.isReplyable && !thread.isBlocked) 86.dp else 70.dp),
+            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(),
+            exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(),
+        ) {
+            Box(
+                Modifier.size(40.dp).background(tokens.surface, CircleShape).border(1.dp, tokens.border, CircleShape)
+                    .roundClickable(onClick = {
+                        scrollToLatestScope.launch { listState.animateScrollToItem((listEntries.size - 1).coerceAtLeast(0)) }
+                    }),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Scroll to latest", tint = tokens.textPrimary, modifier = Modifier.size(22.dp))
             }
         }
 

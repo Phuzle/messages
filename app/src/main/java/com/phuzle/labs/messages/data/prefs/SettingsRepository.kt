@@ -50,6 +50,8 @@ class SettingsRepository(private val context: Context) {
         val CLOUD_FALLBACK_ENABLED = booleanPreferencesKey("cloud_fallback_enabled")
         val SERVER_BASE_URL = stringPreferencesKey("server_base_url")
         val APPLIED_CLASSIFIER_VERSION = intPreferencesKey("applied_classifier_version")
+        val LAST_ACTIVE_CATEGORY = stringPreferencesKey("last_active_category")
+        val FEEDBACK_BANNER_DISMISSED_DAY = longPreferencesKey("feedback_banner_dismissed_day")
     }
 
     val settingsFlow: Flow<AppSettings> = context.settingsDataStore.data.map { prefs ->
@@ -86,6 +88,8 @@ class SettingsRepository(private val context: Context) {
             cloudFallbackEnabled = prefs[Keys.CLOUD_FALLBACK_ENABLED] ?: false,
             serverBaseUrl = prefs[Keys.SERVER_BASE_URL] ?: "http://10.0.2.2:8080/",
             appliedClassifierVersion = prefs[Keys.APPLIED_CLASSIFIER_VERSION] ?: 0,
+            lastActiveCategory = prefs[Keys.LAST_ACTIVE_CATEGORY] ?: "All",
+            feedbackBannerDismissedDay = prefs[Keys.FEEDBACK_BANNER_DISMISSED_DAY] ?: -1,
         )
     }
 
@@ -128,6 +132,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setCloudFallbackEnabled(enabled: Boolean) = edit { it[Keys.CLOUD_FALLBACK_ENABLED] = enabled }
     suspend fun setServerBaseUrl(url: String) = edit { it[Keys.SERVER_BASE_URL] = url }
     suspend fun setAppliedClassifierVersion(version: Int) = edit { it[Keys.APPLIED_CLASSIFIER_VERSION] = version }
+    suspend fun setLastActiveCategory(category: String) = edit { it[Keys.LAST_ACTIVE_CATEGORY] = category }
+    suspend fun setFeedbackBannerDismissedDay(day: Long) = edit { it[Keys.FEEDBACK_BANNER_DISMISSED_DAY] = day }
 
     private suspend fun edit(transform: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         context.settingsDataStore.edit(transform)

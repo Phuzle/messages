@@ -5,8 +5,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,13 +34,21 @@ fun SyncingScreen(
     modifier: Modifier = Modifier,
     title: String = "Syncing your messages",
     subtitle: String? = null,
+    /** Brief "done!" beat — see AppViewModel.importHistoryOnce — swaps the spinner for a
+     * checkmark instead of the screen just vanishing the instant sync actually finishes. */
+    success: Boolean = false,
 ) {
     val tokens = MessagesTheme.tokens
     Box(modifier.fillMaxSize().background(tokens.bg), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 40.dp)) {
             AppLogo(size = 60.dp)
 
-            if (total > 0) {
+            if (success) {
+                Box(
+                    Modifier.padding(top = 28.dp).size(40.dp).background(tokens.success, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Filled.Check, contentDescription = null, tint = tokens.accentText, modifier = Modifier.size(22.dp)) }
+            } else if (total > 0) {
                 LinearProgressIndicator(
                     progress = { (done.toFloat() / total).coerceIn(0f, 1f) },
                     color = tokens.accent,
@@ -47,14 +60,18 @@ fun SyncingScreen(
             }
 
             Text(
-                title,
+                if (success) "All synced!" else title,
                 color = tokens.textPrimary,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(top = 20.dp),
             )
             Text(
-                subtitle ?: if (total > 0) "Synced $done of $total messages" else "Preparing…",
+                if (success) {
+                    "Your messages are ready."
+                } else {
+                    subtitle ?: if (total > 0) "Synced $done of $total messages" else "Preparing…"
+                },
                 color = tokens.textTertiary,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(top = 6.dp),

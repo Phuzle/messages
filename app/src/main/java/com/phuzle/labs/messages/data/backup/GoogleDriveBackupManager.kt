@@ -37,10 +37,23 @@ data class DriveBackupFile(val id: String, val name: String, val createdTime: St
  *   2. An OAuth consent screen configured, with the signing-in Google account added as a test
  *      user (APIs & Services -> OAuth consent screen -> Test users) — drive.appdata is a
  *      sensitive scope that needs this while the app is unverified/in testing.
- * Neither of those steps can be done from code — they need interactive Google Cloud Console
- * access. Without them, sign-in itself still succeeds (basic profile/email scope only), but any
+ *   3. An Android OAuth 2.0 Client ID (APIs & Services -> Credentials -> Create Credentials ->
+ *      OAuth client ID -> Android) registered for *every* signing certificate this app is ever
+ *      actually installed with — package name com.phuzle.labs.messages plus that certificate's
+ *      SHA-1. A debug build and a Play-distributed release are signed with genuinely different
+ *      certificates (Play App Signing re-signs the uploaded build with a Google-held key, not
+ *      whatever local/CI keystore produced the AAB), so "it works from a debug build" proves
+ *      nothing about whether the Play release's certificate has ever been registered. Get that
+ *      exact SHA-1 from Play Console -> Setup -> App integrity -> App signing key certificate —
+ *      not from `keytool` on the local release keystore, which is the *upload* key and only
+ *      matches production if Play App Signing was opted out of. Missing this client is the
+ *      textbook cause of sign-in failing ONLY on Play-installed builds: it surfaces as
+ *      ApiException status 10 (DEVELOPER_ERROR) — see handleSignInResult's logging below.
+ * None of these three can be done from code — they need interactive Google Cloud Console access.
+ * Without (1) or (2), sign-in itself still succeeds (basic profile/email scope only), but any
  * Drive API call below fails with a 403 from Google, which surfaces as an ordinary toast the same
- * way any other network failure in this app does — not a crash, not a silent no-op.
+ * way any other network failure in this app does — not a crash, not a silent no-op. Without (3),
+ * sign-in fails outright before ever reaching this app's own code.
  */
 class GoogleDriveBackupManager(private val context: Context) {
     private val client = OkHttpClient.Builder()
@@ -71,9 +84,22 @@ class GoogleDriveBackupManager(private val context: Context) {
     /** Raw sign-in result — null only on actual cancel/failure. This does *not* mean Drive access
      * was granted; callers must check hasDriveScope(account) themselves before treating the user
      * as "connected" (see AppViewModel.handleDriveSignInResult, which used to skip this check
-     * entirely and silently proceed on basic-profile-only sign-in with no Drive consent at all). */
+     * entirely and silently proceed on basic-profile-only sign-in with no Drive consent at all).
+     *
+     * The failure branch is logged with the raw ApiException status code specifically because
+     * "sign-in doesn't work" reports from real devices are otherwise undiagnosable — status 10
+     * (DEVELOPER_ERROR) almost always means the OAuth client's registered SHA-1 doesn't match the
+     * certificate this build was actually signed with (Play App Signing re-signs release builds
+     * with its own key, distinct from the upload key, so the SHA-1 registered in the Google Cloud
+     * Console/Firebase project needs to be the *App signing certificate* from Play Console ->
+     * Setup -> App integrity, not the local debug/upload keystore's); status 12501 is a genuine
+     * user cancel; anything else warrants pulling logcat off the affected device. */
     fun handleSignInResult(data: Intent?): GoogleSignInAccount? = runCatching {
         GoogleSignIn.getSignedInAccountFromIntent(data).getResult(ApiException::class.java)
+    }.onFailure { e ->
+        val statusCode = (e as? ApiException)?.statusCode
+        val statusName = statusCode?.let { com.google.android.gms.common.api.CommonStatusCodes.getStatusCodeString(it) }
+        Log.w("GoogleDriveBackupManager", "Interactive sign-in failed: status=$statusCode ($statusName)", e)
     }.getOrNull()
 
     suspend fun signOut() = suspendCancellableCoroutine<Unit> { cont ->

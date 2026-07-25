@@ -81,4 +81,5 @@ data class AppUiState(
     val isImportingHistory: Boolean = false,
     val importDone: Int = 0,
     val importTotal: Int = 0,
+    val historySyncSuccess: Boolean = false,
 )

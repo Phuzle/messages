@@ -25,7 +25,11 @@ fun StartupFlowScreen(state: AppUiState, viewModel: AppViewModel) {
         // either way.
         !state.isDefaultSmsApp -> com.phuzle.labs.messages.ui.onboarding.SmsDisclosureScreen(onContinue = viewModel::requestBecomeDefaultSmsApp)
 
-        state.isImportingHistory -> SyncingScreen(done = state.importDone, total = state.importTotal)
+        state.isImportingHistory -> SyncingScreen(
+            done = state.importDone,
+            total = state.importTotal,
+            success = state.historySyncSuccess,
+        )
 
         // Silent sign-in couldn't tell either way (see AppViewModel.checkFirstLaunchDriveRestore)
         // — offer the real interactive sign-in instead of silently giving up, still skippable.

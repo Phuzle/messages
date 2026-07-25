@@ -15,8 +15,19 @@ data class ExtractedTransaction(
 
 object TransactionExtractor {
     private val merchantPattern = Regex("\\b(?:at|for) ([A-Z][\\w&'.\\- ]{1,40}?)(?=[,.]|\\s+(?:using|on|via|card|account|ending)\\b|$)")
-    private val last4Pattern = Regex("ending(?: in)? (\\d{4})", RegexOption.IGNORE_CASE)
-    private val creditKeywords = listOf("credited", "deposited", "refund", "refunded", "reversed")
+    // "XX1234"/"xxxx1234"/"****1234" is a language-independent masked-account format banks use
+    // regardless of the surrounding message's language, so it's checked alongside the English
+    // "ending 1234" phrasing rather than instead of it.
+    private val last4Pattern = Regex("(?:ending(?: in)?\\s+|[xX*]{2,})(\\d{4})\\b", RegexOption.IGNORE_CASE)
+    // English-only credit keywords meant every Hindi/Punjabi credit message (e.g. "...500 रुपये
+    // जमा हुए" — "500 rupees credited") fell through to the isCredit=false default, showing up as
+    // a debit — wrong sign, wrong color, wrong running balance. These are best-effort translations
+    // (not verified against real received SMS), worth revisiting if real messages show otherwise.
+    private val creditKeywords = listOf(
+        "credited", "deposited", "refund", "refunded", "reversed", "received",
+        "जमा", "क्रेडिट", "रिफंड", "वापस", "प्राप्त",
+        "ਜਮ੍ਹਾਂ", "ਕ੍ਰੈਡਿਟ", "ਰਿਫੰਡ", "ਵਾਪਸ",
+    )
 
     fun extract(body: String, amountPattern: Regex, fallbackMerchant: String): ExtractedTransaction? {
         val amountMatch = amountPattern.find(body) ?: return null

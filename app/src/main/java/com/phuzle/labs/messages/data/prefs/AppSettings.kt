@@ -46,4 +46,11 @@ data class AppSettings(
     /** See RegexRules.CURRENT_VERSION — 0 (never applied) makes a fresh install harmlessly run
      * the reclassification pass once against an empty/just-imported thread list. */
     val appliedClassifierVersion: Int = 0,
+    /** Which category chip (Category.name, or "All") the Messages tab was last showing — restored
+     * on next launch instead of always resetting to All, since picking a filter and closing the
+     * app used to silently discard it every time. */
+    val lastActiveCategory: String = "All",
+    /** Epoch-day (see AppViewModel) the feedback banner was last dismissed on — reappears once a
+     * new day starts, rather than being gone for good after one tap. */
+    val feedbackBannerDismissedDay: Long = -1,
 )

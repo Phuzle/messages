@@ -11,6 +11,12 @@ private val timeOfDay = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
 private val dayAndMonth = DateTimeFormatter.ofPattern("d MMM", Locale.US)
 private val dayMonthYear = DateTimeFormatter.ofPattern("d MMM ''yy", Locale.US)
 
+/** Local calendar day number — for anything that should reset once per day in the user's own
+ * timezone (e.g. the closed-testing feedback banner's "shows once per day" gate), not at UTC
+ * midnight which could flip mid-afternoon somewhere and be confusing. */
+fun currentLocalEpochDay(now: Long = System.currentTimeMillis()): Long =
+    Instant.ofEpochMilli(now).atZone(zone).toLocalDate().toEpochDay()
+
 /**
  * Thread-list style — unambiguous, not relative-count-based: today shows a clock time ("1:09 AM"),
  * yesterday says "Yesterday", anything else this year is a date ("21 Jul"), and anything from a

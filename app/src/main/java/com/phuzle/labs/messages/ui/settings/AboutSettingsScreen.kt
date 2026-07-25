@@ -1,7 +1,5 @@
 package com.phuzle.labs.messages.ui.settings
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,6 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.BuildConfig
+import com.phuzle.labs.messages.core.util.SUPPORT_EMAIL
+import com.phuzle.labs.messages.core.util.openSupportEmail
 import com.phuzle.labs.messages.ui.AppViewModel
 import com.phuzle.labs.messages.ui.components.SectionLabel
 import com.phuzle.labs.messages.ui.components.SettingsCard
@@ -31,7 +31,6 @@ import com.phuzle.labs.messages.ui.components.topBarContentPadding
 import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 
-private const val SUPPORT_EMAIL = "support@phuzle.com"
 private const val PRIVACY_POLICY_URL = "https://docs.phuzle.com/messages/privacy"
 private const val TERMS_URL = "https://docs.phuzle.com/messages/terms"
 
@@ -72,10 +71,7 @@ fun AboutSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .clickable {
-                            val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$SUPPORT_EMAIL"))
-                            context.startActivity(Intent.createChooser(intent, "Email support"))
-                        }
+                        .clickable { openSupportEmail(context) }
                         .padding(14.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,

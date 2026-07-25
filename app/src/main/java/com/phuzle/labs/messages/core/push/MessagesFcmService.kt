@@ -33,7 +33,7 @@ class MessagesFcmService : FirebaseMessagingService() {
         }
 
         val notification = NotificationCompat.Builder(this, NotificationChannelIds.SYSTEM)
-            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setSmallIcon(com.phuzle.labs.messages.R.drawable.ic_stat_message)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))

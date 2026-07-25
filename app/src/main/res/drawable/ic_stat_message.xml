@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status-bar small icon: same chat-bubble glyph as the launcher, but flattened to the
+     pure-white-on-transparent silhouette Android requires for notification icons (the system
+     ignores color and just uses this shape's alpha channel), at the standard 24dp viewport. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M20,2H4c-1.1,0,-2,0.9,-2,2v18l4,-4h14c1.1,0,2,-0.9,2,-2V4c0,-1.1,-0.9,-2,-2,-2z" />
+</vector>

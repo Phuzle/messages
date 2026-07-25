@@ -16,6 +16,7 @@ import com.phuzle.labs.messages.domain.model.Category
 import com.phuzle.labs.messages.domain.model.NotificationChannelIds
 import com.phuzle.labs.messages.domain.model.initialsFor
 import com.phuzle.labs.messages.domain.search.FuzzyMatcher
+import com.phuzle.labs.messages.ui.format.currentLocalEpochDay
 import com.phuzle.labs.messages.ui.format.formatCentsSigned
 import com.phuzle.labs.messages.ui.format.formatDueRelative
 import com.phuzle.labs.messages.ui.format.formatMessageTime
@@ -38,6 +39,7 @@ import com.phuzle.labs.messages.ui.model.OtpModalUi
 import com.phuzle.labs.messages.ui.model.PushedScreen
 import com.phuzle.labs.messages.ui.model.ReminderUi
 import com.phuzle.labs.messages.ui.model.SettingsSub
+import com.phuzle.labs.messages.ui.model.ThreadUi
 import com.phuzle.labs.messages.ui.model.SimOptionUi
 import com.phuzle.labs.messages.ui.model.TransactionUi
 import com.phuzle.labs.messages.ui.model.UpdateInfoUi
@@ -110,6 +112,11 @@ private data class Ephemeral(
     val isImportingHistory: Boolean = false,
     val importDone: Int = 0,
     val importTotal: Int = 0,
+    /** Brief "done!" beat shown (still under isImportingHistory) once the first-run history
+     * import actually finishes, before StartupFlowScreen moves on to the next step — see
+     * importHistoryOnce. Without this the progress screen just vanished the instant sync
+     * finished, with nothing telling the user it actually succeeded. */
+    val historySyncSuccess: Boolean = false,
     val threadOverflowMenuOpen: Boolean = false,
     val threadSearchActive: Boolean = false,
     val threadSearchQuery: String = "",
@@ -216,10 +223,18 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         ThreadsSnapshot(lists[0], lists[1], lists[2], lists[3], lists[4], blocked, counts.associate { it.threadId to it.count })
     }
 
+    /** Best match quality found for a thread across all its candidate rows — [nameQuality] is
+     * kept in its own band from [bodyQuality] so a contact-name match always outranks a
+     * message-body match regardless of either's absolute score (see the sort in [uiState]):
+     * searching a saved contact's name should surface that person's thread first, not whatever
+     * promotional blast happens to mention the same word in its body and was merely received more
+     * recently. */
+    private data class SearchRank(val nameQuality: Int, val bodyQuality: Int)
+
     /** Real search — fuzzy-matches (see FuzzyMatcher) against a thread's sender name *or any
      * message in its full history*, not just the cached last-message preview. Null means "no
      * active search, don't filter". */
-    private val searchMatchingIds: Flow<Set<String>?> = ephemeral
+    private val searchRanking: Flow<Map<String, SearchRank>?> = ephemeral
         .map { it.searchQuery.trim() }
         .distinctUntilChanged()
         .flatMapLatest { query ->
@@ -227,11 +242,18 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 flowOf(null)
             } else {
                 container.threadRepository.observeSearchCandidates().map { rows ->
-                    rows.mapNotNull { row ->
+                    val ranks = mutableMapOf<String, SearchRank>()
+                    for (row in rows) {
                         val nameMatch = FuzzyMatcher.match(query, row.displayName)
                         val bodyMatch = row.body?.let { FuzzyMatcher.match(query, it) }
-                        row.threadId.takeIf { nameMatch != null || bodyMatch != null }
-                    }.toSet()
+                        if (nameMatch == null && bodyMatch == null) continue
+                        val existing = ranks[row.threadId] ?: SearchRank(0, 0)
+                        ranks[row.threadId] = SearchRank(
+                            nameQuality = maxOf(existing.nameQuality, nameMatch?.quality ?: 0),
+                            bodyQuality = maxOf(existing.bodyQuality, bodyMatch?.quality ?: 0),
+                        )
+                    }
+                    ranks
                 }
             }
         }
@@ -277,8 +299,20 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             )
         }
         .combine(undoState) { state, undo -> state.copy(undoMessage = undo?.message) }
-        .combine(searchMatchingIds) { state, matches ->
-            if (matches == null) state else state.copy(threads = state.threads.filter { matches.contains(it.id) })
+        .combine(searchRanking) { state, ranks ->
+            if (ranks == null) {
+                state
+            } else {
+                // Name matches sort as a whole tier above body-only matches (a contact-name hit
+                // always wins, whatever its fuzzy score, over a promo blast that merely mentions
+                // the same word), then within a tier by match quality, then stable on the
+                // existing recency order for ties.
+                val ordered = state.threads
+                    .filter { ranks.containsKey(it.id) }
+                    .sortedWith(compareByDescending<ThreadUi> { ranks.getValue(it.id).nameQuality }
+                        .thenByDescending { ranks.getValue(it.id).bodyQuality })
+                state.copy(threads = ordered)
+            }
         }
         .combine(ephemeral.map { it.searchQuery.trim() }.distinctUntilChanged()) { state, query ->
             // Bolding is purely cosmetic and only ever applies to the two fields actually shown in
@@ -303,6 +337,14 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             if (update != null) {
                 ephemeral.update { it.copy(updateInfo = UpdateInfoUi(update.message)) }
             }
+        }
+        // Restores whichever category chip (Personal, Transactions, ...) was active when the app
+        // was last closed — picking a filter and reopening the app used to always land back on
+        // All, silently discarding it.
+        viewModelScope.launch {
+            val stored = container.settingsRepository.settingsFlow.first().lastActiveCategory
+            val restored = Category.entries.firstOrNull { it.name == stored } ?: Category.All
+            if (restored != Category.All) ephemeral.update { it.copy(activeCategory = restored) }
         }
         refreshAvailableSims()
     }
@@ -464,6 +506,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             isImportingHistory = eph.isImportingHistory,
             importDone = eph.importDone,
             importTotal = eph.importTotal,
+            historySyncSuccess = eph.historySyncSuccess,
         )
     }
 
@@ -692,7 +735,17 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun setCategory(category: Category) = ephemeral.update { it.copy(activeCategory = category) }
+    fun setCategory(category: Category) {
+        ephemeral.update { it.copy(activeCategory = category) }
+        viewModelScope.launch { container.settingsRepository.setLastActiveCategory(category.name) }
+    }
+
+    /** Hides the closed-testing feedback banner for the rest of today (see
+     * currentLocalEpochDay) — it comes back on its own tomorrow rather than being gone for good
+     * after one tap, since this build being in closed testing doesn't stop being true. */
+    fun dismissFeedbackBanner() = viewModelScope.launch {
+        container.settingsRepository.setFeedbackBannerDismissedDay(currentLocalEpochDay())
+    }
     fun onSearchChange(query: String) = ephemeral.update { it.copy(searchQuery = query) }
 
     // endregion
@@ -1170,19 +1223,24 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         historyImportMutex.withLock {
             val alreadyImported = container.settingsRepository.settingsFlow.first().historyImported
             if (!alreadyImported) {
-                ephemeral.update { it.copy(isImportingHistory = true, importDone = 0, importTotal = 0) }
+                ephemeral.update { it.copy(isImportingHistory = true, importDone = 0, importTotal = 0, historySyncSuccess = false) }
                 try {
                     container.smsHistoryImporter.importAll { done, total ->
                         ephemeral.update { it.copy(importDone = done, importTotal = total) }
                     }
                     container.settingsRepository.setHistoryImported(true)
+                    // A brief "done!" beat instead of jumping straight to whatever's next — the
+                    // progress screen otherwise just vanishes the instant sync finishes, with
+                    // nothing telling the user it actually succeeded.
+                    ephemeral.update { it.copy(historySyncSuccess = true) }
+                    delay(900)
                 } catch (e: Exception) {
                     // Deliberately not rethrown: historyImported stays false so this retries next
                     // launch, but a transient failure here (e.g. a Room I/O hiccup) must never
                     // crash the app outright and strand the user on the syncing screen forever.
                     toast("Couldn't finish importing your existing messages — will retry next time you open the app")
                 } finally {
-                    ephemeral.update { it.copy(isImportingHistory = false) }
+                    ephemeral.update { it.copy(isImportingHistory = false, historySyncSuccess = false) }
                 }
             }
         }
@@ -1552,12 +1610,21 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun reclassifyThreadsIfNeeded() = viewModelScope.launch {
         val settings = container.settingsRepository.settingsFlow.first()
         if (settings.appliedClassifierVersion >= com.phuzle.labs.messages.domain.categorization.RegexRules.CURRENT_VERSION) return@launch
-        val succeeded = runCatching {
+        val result = runCatching {
             container.threadRepository.reclassifyAllThreads { sender, body -> container.classifier.classify(sender, body) }
-        }.isSuccess
+            // A thread whose category just flipped to Transactions under the new rules (e.g. a
+            // language/pattern the classifier didn't recognize before) never had its messages run
+            // through TransactionExtractor at receive time, so it'd otherwise sit in the Passbook
+            // tab's underlying data as a thread with no transactions at all. Reusing the same
+            // backfill pass extraction logic here (see backfillTransactionsForTransactionThreads)
+            // catches those retroactively — recordTransaction's dedup makes re-processing an
+            // already-recorded message a safe no-op, so this is fine to run on every version bump,
+            // not just once per install.
+            backfillTransactionsForTransactionThreads()
+        }
         // Only recorded on success — a failed pass (e.g. a transient DB error) should retry on the
         // next launch rather than being silently skipped forever.
-        if (succeeded) container.settingsRepository.setAppliedClassifierVersion(com.phuzle.labs.messages.domain.categorization.RegexRules.CURRENT_VERSION)
+        if (result.isSuccess) container.settingsRepository.setAppliedClassifierVersion(com.phuzle.labs.messages.domain.categorization.RegexRules.CURRENT_VERSION)
     }
 
     /** Called once at startup (see MainActivity). One-time correction for installs that ran
@@ -1570,22 +1637,24 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun backfillPassbookIfNeeded() = viewModelScope.launch {
         val settings = container.settingsRepository.settingsFlow.first()
         if (settings.passbookBackfilled) return@launch
-        val succeeded = runCatching {
-            container.threadRepository.transactionCandidateMessages().forEach { (thread, message) ->
-                com.phuzle.labs.messages.domain.categorization.TransactionExtractor
-                    .extract(message.body, container.regexRules.amountPattern, fallbackMerchant = thread.displayName)
-                    ?.let { tx ->
-                        container.passbookRepository.recordTransaction(
-                            merchant = tx.merchant,
-                            accountLast4 = tx.accountLast4,
-                            amountCents = tx.amountCents,
-                            isCredit = tx.isCredit,
-                            timestampMillis = message.timestamp,
-                        )
-                    }
-            }
-        }.isSuccess
+        val succeeded = runCatching { backfillTransactionsForTransactionThreads() }.isSuccess
         if (succeeded) container.settingsRepository.setPassbookBackfilled(true)
+    }
+
+    private suspend fun backfillTransactionsForTransactionThreads() {
+        container.threadRepository.transactionCandidateMessages().forEach { (thread, message) ->
+            com.phuzle.labs.messages.domain.categorization.TransactionExtractor
+                .extract(message.body, container.regexRules.amountPattern, fallbackMerchant = thread.displayName)
+                ?.let { tx ->
+                    container.passbookRepository.recordTransaction(
+                        merchant = tx.merchant,
+                        accountLast4 = tx.accountLast4,
+                        amountCents = tx.amountCents,
+                        isCredit = tx.isCredit,
+                        timestampMillis = message.timestamp,
+                    )
+                }
+        }
     }
 
     /** Called once at startup (see MainActivity/AppRoot). Only ever prompts once per install

@@ -49,7 +49,7 @@ class MessageNotifier(
         val me = Person.Builder().setName("You").build()
         val style = NotificationCompat.MessagingStyle(me).addMessage(replyText, System.currentTimeMillis(), me)
         val notification = NotificationCompat.Builder(context, Category.Personal.channelId)
-            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setSmallIcon(com.phuzle.labs.messages.R.drawable.ic_stat_message)
             .setStyle(style)
             .setContentIntent(openThreadIntent(threadId))
             .setAutoCancel(true)
@@ -64,7 +64,7 @@ class MessageNotifier(
         withActions: Boolean,
     ): NotificationCompat.Builder {
         val builder = NotificationCompat.Builder(context, Category.Otp.channelId)
-            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setSmallIcon(com.phuzle.labs.messages.R.drawable.ic_stat_message)
             .setContentTitle(thread.displayName)
             .setContentText(message.body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message.body))
@@ -93,7 +93,7 @@ class MessageNotifier(
             .addMessage(message.body, message.timestamp, sender)
 
         val builder = NotificationCompat.Builder(context, Category.Personal.channelId)
-            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setSmallIcon(com.phuzle.labs.messages.R.drawable.ic_stat_message)
             .setStyle(style)
             .setContentIntent(openThreadIntent(thread.id))
             .setAutoCancel(true)
@@ -122,7 +122,7 @@ class MessageNotifier(
         category: Category,
     ): NotificationCompat.Builder =
         NotificationCompat.Builder(context, category.channelId)
-            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setSmallIcon(com.phuzle.labs.messages.R.drawable.ic_stat_message)
             .setContentTitle(thread.displayName)
             .setContentText(message.body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message.body))
@@ -141,7 +141,7 @@ class MessageNotifier(
             else -> {
                 builder.setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
                 val publicVersion = NotificationCompat.Builder(context, channelId)
-                    .setSmallIcon(android.R.drawable.ic_dialog_email)
+                    .setSmallIcon(com.phuzle.labs.messages.R.drawable.ic_stat_message)
                     .setContentTitle(thread.displayName)
                     .build()
                 builder.setPublicVersion(publicVersion)

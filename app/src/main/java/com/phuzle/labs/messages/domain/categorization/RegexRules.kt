@@ -12,6 +12,12 @@ data class RegexRules(
     val otpCodePattern: Regex,
     val transactionKeywords: List<String>,
     val amountPattern: Regex,
+    /** Structural, language-independent signal for Transactions — bank sender IDs and message
+     * templates keep account/UPI/reference numbers in Latin script and English abbreviations
+     * (a/c, UPI, NEFT, ref no...) even when the surrounding message is in Hindi, Punjabi, or any
+     * other language, so this catches real transactional SMS that an amount + English-keyword
+     * match alone would miss (see CategoryClassifier). */
+    val accountRefPattern: Regex,
     val promotionKeywords: List<String>,
     val otherKeywords: List<String>,
 ) {
@@ -27,7 +33,7 @@ data class RegexRules(
          * whatever category they were assigned on first arrival forever, since nothing else ever
          * re-evaluates it — shipping smarter rules would silently do nothing for senders the app
          * already knows about without this. */
-        const val CURRENT_VERSION = 1
+        const val CURRENT_VERSION = 4
 
         fun loadFrom(context: Context): RegexRules {
             val json = context.assets.open("regex_rules.json").bufferedReader().use { it.readText() }
@@ -40,7 +46,8 @@ data class RegexRules(
                 otpKeywords = otp.getJSONArray("keywords").toStringList(),
                 otpCodePattern = Regex(otp.getString("codePattern")),
                 transactionKeywords = transaction.getJSONArray("keywords").toStringList(),
-                amountPattern = Regex(transaction.getString("amountPattern")),
+                amountPattern = Regex(transaction.getString("amountPattern"), RegexOption.IGNORE_CASE),
+                accountRefPattern = Regex(transaction.getString("accountRefPattern"), RegexOption.IGNORE_CASE),
                 promotionKeywords = promotion.getJSONArray("keywords").toStringList(),
                 otherKeywords = other.getJSONArray("keywords").toStringList(),
             )
