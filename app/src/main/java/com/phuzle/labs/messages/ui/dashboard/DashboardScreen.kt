@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MarkEmailRead
@@ -60,6 +61,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -87,29 +89,46 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
     val tokens = MessagesTheme.tokens
     val context = androidx.compose.ui.platform.LocalContext.current
     val isMessages = state.activeTab == DashboardTab.Messages
-    val statusBarInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    // Closed-testing-only, and only worth showing on the tab people actually spend their time on
-    // — see AppViewModel.dismissFeedbackBanner for the "comes back tomorrow" behavior.
+    // Closed-testing-only — see AppViewModel.dismissFeedbackBanner for the "comes back tomorrow"
+    // behavior. A real first item in the list below (scrolls with everything else, shown for
+    // every category filter), not a fixed overlay — so unlike the header, it needs no special
+    // handling here at all.
     val showFeedbackBanner = isMessages &&
         state.settings.feedbackBannerDismissedDay != com.phuzle.labs.messages.ui.format.currentLocalEpochDay()
-    val feedbackBannerHeight = 60.dp
-    val topContentPadding = (if (isMessages) 104.dp else 68.dp) + statusBarInset + (if (showFeedbackBanner) feedbackBannerHeight else 0.dp)
+    // Measured from the actual rendered header (top bar + category chips) instead of a hand-typed
+    // estimate — a mismatched guess here (this used to be a flat 104.dp/68.dp constant) is exactly
+    // what let list content render partially behind the header instead of just below it, most
+    // visibly for a thread restored via undo animating straight to the wrong spot.
+    val density = LocalDensity.current
+    var headerHeightPx by remember { mutableIntStateOf(0) }
+    val topContentPadding = with(density) { headerHeightPx.toDp() }
     val bottomContentPadding = (if (FeatureFlags.PASSBOOK_AND_REMINDERS_ENABLED) BOTTOM_BAR_HEIGHT + 26 else 26).dp + navBarInset
 
     Box(Modifier.fillMaxSize()) {
         when (state.activeTab) {
             DashboardTab.Messages -> if (state.threads.isEmpty()) {
-                EmptyState(
-                    icon = Icons.AutoMirrored.Filled.Chat,
-                    title = if (state.searchQuery.isNotBlank() || state.activeCategory != Category.All || state.unreadOnly) "No matching messages" else "No messages yet",
-                    detail = if (state.searchQuery.isNotBlank() || state.activeCategory != Category.All || state.unreadOnly) {
-                        "Try a different search, category, or filter."
-                    } else {
-                        "Incoming texts will show up here automatically."
-                    },
-                    modifier = Modifier.padding(top = topContentPadding, bottom = bottomContentPadding),
-                )
+                Column(Modifier.fillMaxSize().padding(top = topContentPadding, bottom = bottomContentPadding)) {
+                    if (showFeedbackBanner) {
+                        FeedbackBanner(
+                            onSendFeedback = {
+                                com.phuzle.labs.messages.core.util.openSupportEmail(context, subject = "Messages closed-testing feedback")
+                            },
+                            onDismiss = viewModel::dismissFeedbackBanner,
+                            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp),
+                        )
+                    }
+                    EmptyState(
+                        icon = Icons.AutoMirrored.Filled.Chat,
+                        title = if (state.searchQuery.isNotBlank() || state.activeCategory != Category.All || state.unreadOnly) "No matching messages" else "No messages yet",
+                        detail = if (state.searchQuery.isNotBlank() || state.activeCategory != Category.All || state.unreadOnly) {
+                            "Try a different search, category, or filter."
+                        } else {
+                            "Incoming texts will show up here automatically."
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             } else {
                 val listState = rememberLazyListState()
                 // Undoing an archive/delete brings a thread back near the top of a recency-sorted
@@ -135,6 +154,20 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(top = topContentPadding, bottom = bottomContentPadding),
                 ) {
+                    // The first real item in the list, not a fixed overlay — scrolls with
+                    // everything else and shows for every category filter (not just All), unless
+                    // dismissed for the day.
+                    if (showFeedbackBanner) {
+                        item(key = "feedback-banner", contentType = "feedback-banner") {
+                            FeedbackBanner(
+                                onSendFeedback = {
+                                    com.phuzle.labs.messages.core.util.openSupportEmail(context, subject = "Messages closed-testing feedback")
+                                },
+                                onDismiss = viewModel::dismissFeedbackBanner,
+                                modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 4.dp),
+                            )
+                        }
+                    }
                     items(state.threads, key = { it.id }) { thread ->
                         ThreadRow(
                             thread = thread,
@@ -191,18 +224,9 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
             }
         }
 
-        if (showFeedbackBanner) {
-            FeedbackBanner(
-                onSendFeedback = {
-                    com.phuzle.labs.messages.core.util.openSupportEmail(context, subject = "Messages closed-testing feedback")
-                },
-                onDismiss = viewModel::dismissFeedbackBanner,
-                modifier = Modifier.align(Alignment.TopCenter)
-                    .padding(top = topContentPadding - feedbackBannerHeight, start = 12.dp, end = 12.dp),
-            )
-        }
-
-        Column(Modifier.align(Alignment.TopCenter)) {
+        Column(
+            Modifier.align(Alignment.TopCenter).onGloballyPositioned { headerHeightPx = it.size.height },
+        ) {
             GlassBar(height = 52.dp, inset = BarInset.Top) {
                 if (state.multiSelectThreadIds.isNotEmpty()) {
                     var showBulkArchiveConfirm by remember { mutableStateOf(false) }
@@ -452,19 +476,20 @@ private fun AccountCard(account: AccountUi, onClick: () -> Unit, modifier: Modif
  * gone for good after one tap, since the build stays in closed testing regardless. */
 @Composable
 private fun FeedbackBanner(onSendFeedback: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    // Same flat-row shape as ThreadRow/AccountCard — no card background, no border, no rounding
+    // (see DESIGN.md) — just a tinted background standing in for the card look this used to have.
     val tokens = MessagesTheme.tokens
     Row(
         modifier
             .fillMaxWidth()
-            .background(tokens.accentSoft, ShapeMedium)
-            .border(1.dp, tokens.accent.copy(alpha = 0.35f), ShapeMedium)
             .clickable(onClick = onSendFeedback)
-            .padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text("You're testing an early build", color = tokens.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            Text("Tap to email us your feedback", color = tokens.textSecondary, fontSize = 11.5.sp, modifier = Modifier.padding(top = 1.dp))
+        com.phuzle.labs.messages.ui.components.IconBadge(icon = Icons.Filled.Campaign, size = 40.dp)
+        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+            Text("You're testing an early build", color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text("Tap to email us your feedback", color = tokens.textSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
         Box(Modifier.size(32.dp).roundClickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Close, contentDescription = "Dismiss for today", tint = tokens.textSecondary, modifier = Modifier.size(16.dp))
