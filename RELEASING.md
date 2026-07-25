@@ -20,29 +20,38 @@ doc is just the naming convention so tags/titles stay consistent across releases
 ## What happens automatically
 
 On publishing a release (or via the workflow's manual `workflow_dispatch` re-run for an existing
-tag), CI runs two independent jobs — a failure in one never blocks the other:
+tag), CI runs a single `release` job — one checkout, one JDK setup, one Gradle invocation that
+builds both the GitHub-release APKs and the Play Store AAB together (they share the same compiled
+Kotlin/resources, just packaged two ways), instead of the two independent jobs this used to be.
+The GitHub-release APKs are attached before the Play Store upload runs, so a Play-side failure (an
+external service) never loses assets already built and attached — only that last step needs a
+rerun.
 
-**`build-and-attach`** (GitHub release asset):
 1. Checks out the exact tag.
 2. Derives `versionName` from the tag (strips the leading `v` — so tag `v1.2.0-beta.1` becomes
    app `versionName` `1.2.0-beta.1`).
 3. Derives `versionCode` from the CI run number (monotonically increasing for the life of this
    workflow file — never needs manual bumping, never collides).
-4. Builds and signs `assembleRelease` using the `RELEASE_KEYSTORE_BASE64` /
-   `RELEASE_KEYSTORE_PASSWORD` / `RELEASE_KEY_ALIAS` / `RELEASE_KEY_PASSWORD` repo secrets.
-5. Attaches `Messages-<tag>.apk` to the release.
-
-**`publish-play-store`** (Play Console):
-1. Same tag/version derivation as above.
-2. Picks the Play Console track from the tag's suffix:
+4. Picks the Play Console track from the tag's suffix:
    - `-alpha*` → **internal testing**
    - `-beta*` or `-rc*` → **closed testing**
    - no suffix (a plain `vX.Y.Z`) → **open testing**
    - **Production is never selected automatically** — promoting a build there is a manual step
      in the Play Console, given the review stakes of a public release.
-3. Builds and signs `bundleRelease` (an `.aab`, which Play Console requires — separate from the
-   `.apk` built above for the GitHub release asset).
-4. Uploads it via [`r0adkll/upload-google-play`](https://github.com/r0adkll/upload-google-play)
+5. Builds and signs `assembleRelease` + `bundleRelease` in one Gradle invocation, using the
+   `RELEASE_KEYSTORE_BASE64` / `RELEASE_KEYSTORE_PASSWORD` / `RELEASE_KEY_ALIAS` /
+   `RELEASE_KEY_PASSWORD` repo secrets. `assembleRelease` produces five APKs — four per-ABI
+   (`arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`) plus a universal one (see `splits.abi` in
+   `app/build.gradle.kts`); this app has no native/NDK code, so the per-ABI ones are all
+   functionally identical to the universal build, just split for the naming convention below —
+   Play Store gets the AAB instead, which handles per-device delivery on its own.
+6. Attaches all five to the release as:
+   - `messages-arm64-v8a-v<version>.apk`
+   - `messages-armeabi-v7a-v<version>.apk`
+   - `messages-x86-v<version>.apk`
+   - `messages-x86_64-v<version>.apk`
+   - `messages-v<version>.apk` (universal)
+7. Uploads the AAB via [`r0adkll/upload-google-play`](https://github.com/r0adkll/upload-google-play)
    using the `PLAY_SERVICE_ACCOUNT_JSON` secret, with the release notes taken from the GitHub
    release body (truncated to Play's 500-character-per-locale limit).
 
@@ -51,14 +60,14 @@ convention above and draft the release on GitHub.
 
 ## Required secrets
 
-| Secret | Used by | Notes |
-|---|---|---|
-| `RELEASE_KEYSTORE_BASE64` | both jobs | `base64 -i messages-release.keystore \| gh secret set RELEASE_KEYSTORE_BASE64` |
-| `RELEASE_KEYSTORE_PASSWORD` | both jobs | |
-| `RELEASE_KEY_ALIAS` | both jobs | |
-| `RELEASE_KEY_PASSWORD` | both jobs | |
-| `GOOGLE_SERVICES_JSON_BASE64` | both jobs | `base64 -i app/google-services.json \| gh secret set GOOGLE_SERVICES_JSON_BASE64` |
-| `PLAY_SERVICE_ACCOUNT_JSON` | `publish-play-store` only | The Google Cloud service-account JSON key (plain text, not base64) with **Release manager** access to this app in Play Console — see the Play Store rollout plan for setup steps. |
+| Secret | Notes |
+|---|---|
+| `RELEASE_KEYSTORE_BASE64` | `base64 -i messages-release.keystore \| gh secret set RELEASE_KEYSTORE_BASE64` |
+| `RELEASE_KEYSTORE_PASSWORD` | |
+| `RELEASE_KEY_ALIAS` | |
+| `RELEASE_KEY_PASSWORD` | |
+| `GOOGLE_SERVICES_JSON_BASE64` | `base64 -i app/google-services.json \| gh secret set GOOGLE_SERVICES_JSON_BASE64` |
+| `PLAY_SERVICE_ACCOUNT_JSON` | The Google Cloud service-account JSON key (plain text, not base64) with **Release manager** access to this app in Play Console — see the Play Store rollout plan for setup steps. |
 
 ## Play Store rollout plan
 

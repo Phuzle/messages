@@ -59,6 +59,20 @@ android {
         jvmTarget = "17"
     }
 
+    // Per-ABI release APKs for direct-download (GitHub Release) distribution, alongside a
+    // universal one — this app has no native/NDK code, so these are all functionally identical
+    // and nearly the same size as each other; the split exists for the release naming convention
+    // release.yml expects, not because it shrinks anything. Play Store gets the AAB (bundleRelease)
+    // instead, which handles per-device delivery on its own — this config has no effect on that.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            isUniversalApk = true
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
