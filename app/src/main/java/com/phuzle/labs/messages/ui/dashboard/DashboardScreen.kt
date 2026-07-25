@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import com.phuzle.labs.messages.domain.model.Category
+import com.phuzle.labs.messages.domain.model.FeatureFlags
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -94,7 +95,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
         state.settings.feedbackBannerDismissedDay != com.phuzle.labs.messages.ui.format.currentLocalEpochDay()
     val feedbackBannerHeight = 60.dp
     val topContentPadding = (if (isMessages) 104.dp else 68.dp) + statusBarInset + (if (showFeedbackBanner) feedbackBannerHeight else 0.dp)
-    val bottomContentPadding = (BOTTOM_BAR_HEIGHT + 26).dp + navBarInset
+    val bottomContentPadding = (if (FeatureFlags.PASSBOOK_AND_REMINDERS_ENABLED) BOTTOM_BAR_HEIGHT + 26 else 26).dp + navBarInset
 
     Box(Modifier.fillMaxSize()) {
         when (state.activeTab) {
@@ -327,46 +328,51 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
             }
         }
 
-        GlassBar(
-            modifier = Modifier.align(Alignment.BottomCenter),
-            height = BOTTOM_BAR_HEIGHT.dp,
-            inset = BarInset.Bottom,
-        ) {
-            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                BottomTabButton(
-                    label = "Messages",
-                    icon = Icons.AutoMirrored.Filled.Chat,
-                    iconOutlined = Icons.AutoMirrored.Outlined.ChatOutlined,
-                    active = isMessages,
-                    hasUnreadDot = state.hasUnread,
-                    onClick = viewModel::openMessagesTab,
-                    modifier = Modifier.weight(1f),
-                )
-                BottomTabButton(
-                    label = "Passbook",
-                    icon = Icons.Filled.AccountBalanceWallet,
-                    iconOutlined = Icons.Outlined.AccountBalanceWalletOutlined,
-                    active = state.activeTab == DashboardTab.Passbook,
-                    hasUnreadDot = false,
-                    onClick = viewModel::openPassbookTab,
-                    modifier = Modifier.weight(1f),
-                )
-                BottomTabButton(
-                    label = "Reminders",
-                    icon = Icons.Filled.Notifications,
-                    iconOutlined = Icons.Outlined.NotificationsOutlined,
-                    active = state.activeTab == DashboardTab.Reminders,
-                    hasUnreadDot = false,
-                    onClick = viewModel::openRemindersTab,
-                    modifier = Modifier.weight(1f),
-                )
+        if (FeatureFlags.PASSBOOK_AND_REMINDERS_ENABLED) {
+            GlassBar(
+                modifier = Modifier.align(Alignment.BottomCenter),
+                height = BOTTOM_BAR_HEIGHT.dp,
+                inset = BarInset.Bottom,
+            ) {
+                Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                    BottomTabButton(
+                        label = "Messages",
+                        icon = Icons.AutoMirrored.Filled.Chat,
+                        iconOutlined = Icons.AutoMirrored.Outlined.ChatOutlined,
+                        active = isMessages,
+                        hasUnreadDot = state.hasUnread,
+                        onClick = viewModel::openMessagesTab,
+                        modifier = Modifier.weight(1f),
+                    )
+                    BottomTabButton(
+                        label = "Passbook",
+                        icon = Icons.Filled.AccountBalanceWallet,
+                        iconOutlined = Icons.Outlined.AccountBalanceWalletOutlined,
+                        active = state.activeTab == DashboardTab.Passbook,
+                        hasUnreadDot = false,
+                        onClick = viewModel::openPassbookTab,
+                        modifier = Modifier.weight(1f),
+                    )
+                    BottomTabButton(
+                        label = "Reminders",
+                        icon = Icons.Filled.Notifications,
+                        iconOutlined = Icons.Outlined.NotificationsOutlined,
+                        active = state.activeTab == DashboardTab.Reminders,
+                        hasUnreadDot = false,
+                        onClick = viewModel::openRemindersTab,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
 
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 16.dp, bottom = (BOTTOM_BAR_HEIGHT + 16).dp + navBarInset)
+                .padding(
+                    end = 16.dp,
+                    bottom = (if (FeatureFlags.PASSBOOK_AND_REMINDERS_ENABLED) BOTTOM_BAR_HEIGHT + 16 else 16).dp + navBarInset,
+                )
                 .size(56.dp)
                 .background(tokens.accent, CircleShape)
                 .roundClickable(onClick = viewModel::openCompose),

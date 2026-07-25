@@ -64,9 +64,13 @@ android {
     // and nearly the same size as each other; the split exists for the release naming convention
     // release.yml expects, not because it shrinks anything. Play Store gets the AAB (bundleRelease)
     // instead, which handles per-device delivery on its own — this config has no effect on that.
+    // Scoped to release builds only (via the invoked task names) — the `splits` block otherwise
+    // applies to every build type including debug, which turned local `assembleDebug`/installs
+    // into five APKs instead of the single app-debug.apk every install script here expects.
+    val isBuildingRelease = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
     splits {
         abi {
-            isEnable = true
+            isEnable = isBuildingRelease
             reset()
             include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
             isUniversalApk = true

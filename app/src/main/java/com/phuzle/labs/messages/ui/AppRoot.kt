@@ -129,12 +129,16 @@ fun AppRoot(viewModel: AppViewModel) {
             NavDrawer(
                 visible = state.showDrawer,
                 onDismiss = viewModel::closeDrawer,
-                items = listOf(
+                items = listOfNotNull(
                     DrawerItem("Inbox", DrawerIconType.Inbox, viewModel::openMessagesTab),
                     DrawerItem("Archived", DrawerIconType.Archived, viewModel::openArchivedScreen),
                     DrawerItem("Drafts", DrawerIconType.Drafts, viewModel::openDraftsScreen),
-                    DrawerItem("Passbook", DrawerIconType.Passbook, viewModel::openPassbookTab),
-                    DrawerItem("Reminders", DrawerIconType.Reminders, viewModel::openRemindersTab),
+                    if (com.phuzle.labs.messages.domain.model.FeatureFlags.PASSBOOK_AND_REMINDERS_ENABLED) {
+                        DrawerItem("Passbook", DrawerIconType.Passbook, viewModel::openPassbookTab)
+                    } else null,
+                    if (com.phuzle.labs.messages.domain.model.FeatureFlags.PASSBOOK_AND_REMINDERS_ENABLED) {
+                        DrawerItem("Reminders", DrawerIconType.Reminders, viewModel::openRemindersTab)
+                    } else null,
                     DrawerItem("Settings", DrawerIconType.Settings, viewModel::openSettings),
                     DrawerItem("Recycle Bin", DrawerIconType.RecycleBin, viewModel::openRecycleBin),
                 ),
@@ -152,7 +156,7 @@ fun AppRoot(viewModel: AppViewModel) {
                                 type = "text/plain"
                                 putExtra(
                                     Intent.EXTRA_TEXT,
-                                    "Messages — a smart SMS app with automatic categorization, OTP quick-copy, and a built-in passbook.\n\n$playStoreUrl",
+                                    "Messages — a smart SMS app with automatic categorization and instant OTP quick-copy.\n\n$playStoreUrl",
                                 )
                             }
                             context.startActivity(Intent.createChooser(sendIntent, "Share Messages"))

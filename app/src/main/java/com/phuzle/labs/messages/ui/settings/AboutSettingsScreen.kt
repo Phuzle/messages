@@ -57,7 +57,7 @@ fun AboutSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
             Text("Messages", color = tokens.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
             Text("Version ${BuildConfig.VERSION_NAME}", color = tokens.textTertiary, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
             Text(
-                "A smart SMS client that automatically sorts messages, surfaces one-time codes instantly, and keeps a running passbook of your accounts.",
+                "A smart SMS client that automatically sorts messages and surfaces one-time codes instantly.",
                 color = tokens.textSecondary,
                 fontSize = 13.sp,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
