@@ -74,6 +74,20 @@ jobs:
             echo "name=open" >> "$GITHUB_OUTPUT"
           fi
 
+      # Internal track releases can be set to 'completed' immediately (no review gate).
+      # Closed and open tracks must use 'draft' while the app is still in draft state
+      # on the Play Console; promote them manually once the app is fully published.
+      - name: Determine Play Store release status
+        id: release_status
+        env:
+          TRACK: ${{ steps.track.outputs.name }}
+        run: |
+          if [[ "$TRACK" == "internal" ]]; then
+            echo "name=completed" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=draft" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Decode release keystore
         run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > "${{ runner.temp }}/release.keystore"
 
@@ -135,5 +149,5 @@ jobs:
           packageName: com.phuzle.labs.messages
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
           track: ${{ steps.track.outputs.name }}
-          status: completed
+          status: ${{ steps.release_status.outputs.name }}
           whatsNewDirectory: distribution/whatsnew
