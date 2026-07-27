@@ -69,9 +69,11 @@ jobs:
           if [[ "$TAG_NAME" == *-alpha* ]]; then
             echo "name=internal" >> "$GITHUB_OUTPUT"
           elif [[ "$TAG_NAME" == *-beta* || "$TAG_NAME" == *-rc* ]]; then
-            echo "name=closed" >> "$GITHUB_OUTPUT"
+            # 'alpha' is the API name for the Closed Testing track
+            echo "name=alpha" >> "$GITHUB_OUTPUT"
           else
-            echo "name=open" >> "$GITHUB_OUTPUT"
+            # 'beta' is the API name for the Open Testing track
+            echo "name=beta" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Decode release keystore
