@@ -153,3 +153,5 @@ jobs:
           track: ${{ steps.track.outputs.name }}
           status: ${{ steps.release_status.outputs.name }}
           whatsNewDirectory: distribution/whatsnew
+          # R8 mapping file for Play Console crash deobfuscation (generated when isMinifyEnabled=true)
+          mappingFile: app/build/outputs/mapping/release/mapping.txt

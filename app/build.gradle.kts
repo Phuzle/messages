@@ -45,9 +45,17 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 shrinks and obfuscates; the mapping file is auto-uploaded to Firebase Crashlytics
+            // by the Crashlytics Gradle plugin and to Play Console via the CI workflow.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
+            // Embed native debug symbols from dependency .so files (e.g. OkHttp, Firebase) so
+            // that Play Console can symbolicate native crashes and ANRs.
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
         }
     }
 
