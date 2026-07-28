@@ -63,9 +63,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
 
     // Per-ABI release APKs for direct-download (GitHub Release) distribution, alongside a
     // universal one — this app has no native/NDK code, so these are all functionally identical
@@ -94,6 +91,14 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+}
+
+// Kotlin compiler options — replaces the removed kotlinOptions DSL (deprecated in Kotlin 2.1,
+// removed in Kotlin 2.3). Setting jvmTarget here applies to all compilations in this module.
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 
