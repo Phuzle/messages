@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -91,7 +92,7 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
 
     Box(Modifier.fillMaxSize()) {
         Column(
-            Modifier.fillMaxSize().navigationBarsPadding()
+            Modifier.fillMaxSize().navigationBarsPadding().imePadding()
                 .padding(top = topBarContentPadding(70.dp), start = 16.dp, end = 16.dp, bottom = 16.dp),
         ) {
             if (state.composeRecipients.isNotEmpty()) {
@@ -225,26 +226,14 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
             }
         }
 
-        GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 56.dp, inset = BarInset.Top) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text("New message", color = tokens.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                Box(
-                    Modifier.size(36.dp).roundClickable(onClick = viewModel::closeCompose),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
-                }
-            }
-        }
-
         // A small inline dropdown made someone scroll to even see who they might be texting —
         // this takes over essentially the whole screen instead, like a real contact picker, for
         // as long as there's anything to show. Dismisses itself the instant the match list empties
-        // (text cleared, a contact picked, or nothing left matching what's typed).
+        // (text cleared, a contact picked, or nothing left matching what's typed). Rendered
+        // *before* GlassBar below so the top bar's Close button stays on top of it and reachable —
+        // this used to be added after GlassBar in the Box, so its opaque background painted over
+        // the bar and trapped the user with no way out except picking a suggestion or clearing
+        // the field by hand.
         if (state.composeToSuggestions.isNotEmpty()) {
             Column(
                 Modifier.fillMaxSize().background(tokens.bg)
@@ -274,6 +263,22 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
                             }
                         }
                     }
+                }
+            }
+        }
+
+        GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 56.dp, inset = BarInset.Top) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("New message", color = tokens.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Box(
+                    Modifier.size(36.dp).roundClickable(onClick = viewModel::closeCompose),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
                 }
             }
         }

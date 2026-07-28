@@ -89,6 +89,7 @@ class ThreadRepository(
                 displayName = displayName,
                 photoUri = photoUri,
                 lastMessagePreview = body,
+                lastMessageOutgoing = false,
                 lastMessageTime = timestampMillis,
                 unread = true,
                 // A reply from a previously-deleted/archived sender surfaces back in the inbox.
@@ -175,7 +176,7 @@ class ThreadRepository(
         )
         val id = messageDao.insert(message)
         val preview = if (scheduledFor != null) "Scheduled for $scheduleLabel" else body
-        threadDao.touchLastMessage(threadId, preview, nowMillis)
+        threadDao.touchLastMessage(threadId, preview, nowMillis, outgoing = true)
         if (subscriptionId != null) threadDao.setPreferredSubscriptionId(threadId, subscriptionId)
         return message.copy(id = id)
     }
@@ -232,7 +233,10 @@ class ThreadRepository(
 
     private suspend fun refreshLastMessage(threadId: String) {
         val latest = messageDao.latestForThread(threadId)
-        threadDao.touchLastMessage(threadId, latest?.body ?: "No messages", latest?.timestamp ?: System.currentTimeMillis())
+        threadDao.touchLastMessage(
+            threadId, latest?.body ?: "No messages", latest?.timestamp ?: System.currentTimeMillis(),
+            outgoing = latest?.outgoing ?: false,
+        )
     }
 
     suspend fun latestIncomingOtpMessage(): MessageEntity? = messageDao.latestIncomingOtpMessage()

@@ -13,12 +13,18 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
@@ -59,13 +65,31 @@ fun FlatTextField(
         else -> Modifier.fillMaxWidth().heightIn(max = maxHeight).verticalScroll(resolvedScrollState)
     }
     if (focusRequester != null) fieldModifier = fieldModifier.focusRequester(focusRequester)
+
+    // Cursor position is tracked here, locally, rather than driven straight off [value] — every
+    // caller hoists [value] through a StateFlow (dashboard search in particular recombines
+    // against a DB query on every keystroke), and that round trip lands back on this composable
+    // with real latency. The plain-String BasicTextField overload can't tell "this is my own
+    // keystroke echoed back" apart from "an external value change" once that happens, and resets
+    // the cursor to the start. Keeping selection in local state that's only overwritten when the
+    // text itself actually changes for a reason other than our own typing (a draft loading, the
+    // search field being cleared by its X button, an emoji picker insert, ...) fixes that for
+    // every field that goes through here — search, compose, reply bar, signature.
+    var fieldValue by remember { mutableStateOf(TextFieldValue(value)) }
+    if (fieldValue.text != value) {
+        fieldValue = TextFieldValue(value, selection = TextRange(value.length))
+    }
+
     Box(modifier = modifier.then(background)) {
         if (value.isEmpty()) {
             Text(placeholder, color = tokens.textTertiary, fontSize = fontSize)
         }
         BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
+            value = fieldValue,
+            onValueChange = { new ->
+                fieldValue = new
+                if (new.text != value) onValueChange(new.text)
+            },
             textStyle = textStyle,
             singleLine = singleLine,
             keyboardOptions = KeyboardOptions(imeAction = if (singleLine) ImeAction.Default else ImeAction.None),

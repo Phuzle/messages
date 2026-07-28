@@ -35,6 +35,8 @@ val ACCENT_OPTIONS = listOf(
     AccentOption("#3E6DF2", Color(0xFF3E6DF2), Color(0xFF7DA1FF)),
     AccentOption("#1FAA7A", Color(0xFF1FAA7A), Color(0xFF4FD3A0)),
     AccentOption("#E0503C", Color(0xFFE0503C), Color(0xFFFF8A76)),
+    AccentOption("#7C3AED", Color(0xFF7C3AED), Color(0xFFB794F6)),
+    AccentOption("#DB2777", Color(0xFFDB2777), Color(0xFFF783AC)),
     AccentOption("#0F172A", Color(0xFF0F172A), Color(0xFFF1F5F9)),
 )
 

@@ -171,7 +171,18 @@ fun ThreadRow(
                     horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        highlightedText(thread.preview, thread.previewMatch),
+                        // "You: " is plain, unbolded prefix text stitched in front of the
+                        // (possibly search-highlighted) preview — never baked into thread.preview
+                        // itself, which would shift previewMatch's character indices and bold the
+                        // wrong letters.
+                        if (thread.previewIsOutgoing) {
+                            androidx.compose.ui.text.buildAnnotatedString {
+                                append("You: ")
+                                append(highlightedText(thread.preview, thread.previewMatch))
+                            }
+                        } else {
+                            highlightedText(thread.preview, thread.previewMatch)
+                        },
                         color = tokens.textSecondary,
                         fontSize = 13.sp,
                         maxLines = 1,

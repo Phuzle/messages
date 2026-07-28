@@ -33,7 +33,7 @@ data class RegexRules(
          * whatever category they were assigned on first arrival forever, since nothing else ever
          * re-evaluates it — shipping smarter rules would silently do nothing for senders the app
          * already knows about without this. */
-        const val CURRENT_VERSION = 4
+        const val CURRENT_VERSION = 5
 
         fun loadFrom(context: Context): RegexRules {
             val json = context.assets.open("regex_rules.json").bufferedReader().use { it.readText() }
@@ -44,7 +44,13 @@ data class RegexRules(
             val other = root.getJSONObject("other")
             return RegexRules(
                 otpKeywords = otp.getJSONArray("keywords").toStringList(),
-                otpCodePattern = Regex(otp.getString("codePattern")),
+                // Also matches alphanumeric codes (not just pure-digit ones) — some senders send
+                // e.g. "AB12CD" rather than a plain number — so long as there's at least one
+                // digit in the token, ruling out ordinary words being mistaken for a code.
+                // IGNORE_CASE is redundant given the pattern already covers both cases, but kept
+                // for the same reason every other pattern here has it: nothing about "is this
+                // text a code" should ever depend on how it was capitalized.
+                otpCodePattern = Regex(otp.getString("codePattern"), RegexOption.IGNORE_CASE),
                 transactionKeywords = transaction.getJSONArray("keywords").toStringList(),
                 amountPattern = Regex(transaction.getString("amountPattern"), RegexOption.IGNORE_CASE),
                 accountRefPattern = Regex(transaction.getString("accountRefPattern"), RegexOption.IGNORE_CASE),

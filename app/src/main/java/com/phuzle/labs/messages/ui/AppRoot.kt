@@ -55,7 +55,7 @@ fun AppRoot(viewModel: AppViewModel) {
     MessagesTheme(themeMode = state.themeMode, accentHex = state.settings.accentHex) {
         val tokens = MessagesTheme.tokens
 
-        BackHandler(enabled = state.undoMessage != null || state.updateInfo != null || state.driveRestoreAvailable || state.driveSignInNeededForRestore || state.actionSheet != null || state.overflowMenuOpen || state.showDrawer || state.multiSelectThreadIds.isNotEmpty() || state.threadSearchActive || state.pushedScreen != null || state.searchQuery.isNotEmpty()) {
+        BackHandler(enabled = state.undoMessage != null || state.updateInfo != null || state.driveRestoreAvailable || state.driveSignInNeededForRestore || state.actionSheet != null || state.overflowMenuOpen || state.showDrawer || state.multiSelectThreadIds.isNotEmpty() || state.threadSearchActive || state.composeToSuggestions.isNotEmpty() || state.pushedScreen != null || state.searchQuery.isNotEmpty()) {
             when {
                 state.undoMessage != null -> viewModel.dismissUndo()
                 state.updateInfo != null -> viewModel.dismissUpdate()
@@ -68,6 +68,9 @@ fun AppRoot(viewModel: AppViewModel) {
                 // Checked before pushedScreen since thread search lives inside the (pushed)
                 // Thread screen — back should close search there first, not pop the thread.
                 state.threadSearchActive -> viewModel.closeThreadSearch()
+                // The full-screen "Suggested contacts" picker on Compose (see ComposeScreen)
+                // otherwise only goes away by picking a suggestion or clearing "To" by hand.
+                state.composeToSuggestions.isNotEmpty() -> viewModel.dismissComposeToSuggestions()
                 state.pushedScreen != null -> viewModel.goBack()
                 // Dashboard search has no pushedScreen of its own (it's inline on the root
                 // screen), so it needs its own fallback — otherwise back exits the app straight

@@ -128,7 +128,7 @@ class SmsHistoryImporter(
             // end up unread, matching what the system SMS provider itself considered true.
             val stillUnread = existing.unread || isUnread
             if (date >= existing.lastMessageTime) {
-                val updated = existing.copy(lastMessagePreview = body, lastMessageTime = date, unread = stillUnread)
+                val updated = existing.copy(lastMessagePreview = body, lastMessageOutgoing = outgoing, lastMessageTime = date, unread = stillUnread)
                 // @Update, not upsert()/INSERT-OR-REPLACE: REPLACE deletes-then-reinserts the
                 // conflicting row, which cascades onDelete=CASCADE and wipes every message
                 // already imported for this thread. Plain UPDATE touches only this row.
@@ -154,6 +154,7 @@ class SmsHistoryImporter(
             avatarColor = AvatarPalette.forSeed(address),
             photoUri = photoUri,
             lastMessagePreview = body,
+            lastMessageOutgoing = outgoing,
             lastMessageTime = date,
             unread = isUnread,
         )

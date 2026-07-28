@@ -66,8 +66,8 @@ interface ThreadDao {
     @Query("UPDATE threads SET deletedAt = :deletedAt WHERE id = :id")
     suspend fun setDeletedAt(id: String, deletedAt: Long?)
 
-    @Query("UPDATE threads SET lastMessagePreview = :preview, lastMessageTime = :time WHERE id = :id")
-    suspend fun touchLastMessage(id: String, preview: String, time: Long)
+    @Query("UPDATE threads SET lastMessagePreview = :preview, lastMessageTime = :time, lastMessageOutgoing = :outgoing WHERE id = :id")
+    suspend fun touchLastMessage(id: String, preview: String, time: Long, outgoing: Boolean)
 
     @Query("UPDATE threads SET unread = 0 WHERE deletedAt IS NULL")
     suspend fun markAllRead()
@@ -97,7 +97,7 @@ interface ThreadDao {
      * AppViewModel's searchMatchingIds), not on every recomposition. */
     @Query(
         """
-        SELECT t.id AS threadId, t.displayName AS displayName, m.body AS body
+        SELECT t.id AS threadId, t.displayName AS displayName, m.body AS body, COALESCE(m.outgoing, 0) AS outgoing
         FROM threads t
         LEFT JOIN messages m ON m.threadId = t.id
         WHERE t.deletedAt IS NULL AND t.archived = 0 AND t.isPrivate = 0
@@ -106,4 +106,4 @@ interface ThreadDao {
     fun observeSearchCandidates(): Flow<List<SearchCandidateRow>>
 }
 
-data class SearchCandidateRow(val threadId: String, val displayName: String, val body: String?)
+data class SearchCandidateRow(val threadId: String, val displayName: String, val body: String?, val outgoing: Boolean = false)

@@ -17,6 +17,10 @@ data class ThreadEntity(
     /** Saved-contact avatar (content:// URI), resolved at thread creation time; null if unknown/unsaved. */
     val photoUri: String? = null,
     val lastMessagePreview: String,
+    /** Whether [lastMessagePreview] was sent by us rather than received — the dashboard prefixes
+     * the preview with "You: " when true, the same way every other SMS/messaging app marks its
+     * own last message in a conversation list. */
+    val lastMessageOutgoing: Boolean = false,
     val lastMessageTime: Long,
     val unread: Boolean,
     val archived: Boolean = false,

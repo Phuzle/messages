@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -32,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -108,9 +110,13 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
     // not at the top of whatever's currently loaded. Messages arrive asynchronously (a Flow, not
     // available the instant this composable enters), so this fires once real content shows up
     // for this thread rather than immediately on thread.id changing. Guarded by
-    // scrolledToBottomFor so it only happens on the initial open, never again when an older page
-    // loads in from scrolling up, or a new message quietly extends the list while already reading.
+    // scrolledToBottomFor so it only happens once per thread open, not on every later message.
     var scrolledToBottomFor by remember { mutableStateOf<String?>(null) }
+    // Separately, after that initial landing, a *new* message extending the list should pull the
+    // view down to it too — but only when the reader was already at (or basically at) the
+    // bottom. Someone scrolled up rereading older history shouldn't get yanked down to the
+    // newest message the instant one arrives; this mirrors how any other chat app behaves.
+    var lastKnownEntryCount by remember { mutableIntStateOf(0) }
 
     val canSend = state.threadInput.isNotBlank()
     val listEntries = remember(state.currentThreadMessages, state.threadSearchQuery) {
@@ -127,13 +133,23 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
     }
 
     LaunchedEffect(thread.id, listEntries.size) {
-        if (listEntries.isNotEmpty() && scrolledToBottomFor != thread.id) {
+        if (listEntries.isEmpty()) return@LaunchedEffect
+        if (scrolledToBottomFor != thread.id) {
             listState.scrollToItem(listEntries.size - 1)
             scrolledToBottomFor = thread.id
+        } else if (state.threadSearchQuery.isBlank() && listEntries.size > lastKnownEntryCount) {
+            // Not a search-driven count change (see listEntries above) — a genuinely new message.
+            // LazyColumn doesn't reflow existing items when the list grows, so whatever was the
+            // last *visible* index right now still reflects where the reader was relative to the
+            // list's *old* end, before this item was appended.
+            val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val wasAtBottom = lastVisibleIndex >= lastKnownEntryCount - 2
+            if (wasAtBottom) listState.animateScrollToItem(listEntries.size - 1)
         }
+        lastKnownEntryCount = listEntries.size
     }
 
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().imePadding()) {
         LazyColumn(
             state = listState,
             // The top inset lives here, on the LazyColumn's own bounds, rather than in
@@ -387,7 +403,13 @@ private fun MessageBubble(
                     modifier = Modifier.padding(top = 6.dp),
                 )
             }
-            Text(message.timeLabel, color = fg.copy(alpha = 0.65f), fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+            // Right-aligned regardless of which side the bubble itself is on — the timestamp
+            // reads as metadata about the message, not body text, so it doesn't follow the
+            // Column's natural (left) reading order the way the message text and entity chips do.
+            Text(
+                message.timeLabel, color = fg.copy(alpha = 0.65f), fontSize = 10.sp,
+                modifier = Modifier.align(Alignment.End).padding(top = 4.dp),
+            )
         }
     }
 }

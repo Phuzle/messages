@@ -51,6 +51,9 @@ data class ThreadUi(
     val photoUri: String? = null,
     val initials: String,
     val preview: String,
+    /** True when [preview] was sent by us — the row prefixes it with "You: ", same as every other
+     * SMS app does for a conversation's own last message. */
+    val previewIsOutgoing: Boolean = false,
     val timeLabel: String,
     val unread: Boolean,
     /** Real per-message unread count when known; falls back to 1 when [unread] is true but no

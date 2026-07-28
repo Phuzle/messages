@@ -1,13 +1,17 @@
 package com.phuzle.labs.messages.ui.theme
 
+import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 
 val LocalThemeTokens = compositionLocalOf {
     buildTheme(dark = false, accentHex = ACCENT_OPTIONS[0].hex)
@@ -46,6 +50,21 @@ fun MessagesTheme(
             outline = tokens.border,
             error = tokens.danger,
         )
+    }
+
+    // Status/nav bar icons are drawn by the OS, not this Compose tree, and default to light
+    // (made for a dark backdrop) — with our own bars now transparent/edge-to-edge, the Light and
+    // Sepia themes left them invisible against a light background. Kept in sync with whichever
+    // theme actually resolved (System/Light/Dark/Midnight/Sepia all collapse to this one `dark`
+    // flag), not just the raw system setting.
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as Activity).window
+            val controller = WindowCompat.getInsetsController(window, view)
+            controller.isAppearanceLightStatusBars = !dark
+            controller.isAppearanceLightNavigationBars = !dark
+        }
     }
 
     CompositionLocalProvider(LocalThemeTokens provides tokens, LocalIsDarkTheme provides dark) {

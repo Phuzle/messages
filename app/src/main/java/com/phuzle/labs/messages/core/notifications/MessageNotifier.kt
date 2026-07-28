@@ -43,6 +43,14 @@ class MessageNotifier(
         manager.notify(notificationId, builder.build())
     }
 
+    /** Clears a thread's notification once it's been read in-app — opening the thread (or a new
+     * message arriving while it's already open) marks it read, but "read" and "notification gone"
+     * used to be two unrelated things: the notification lingered in the tray with autoCancel only
+     * clearing it on an explicit tap, not on reading the conversation by any other route. */
+    fun cancelForThread(threadId: String) {
+        manager.cancel(threadId.hashCode())
+    }
+
     /** Rebuilds the thread's notification to show the reply we just sent, per RemoteInput convention. */
     fun confirmReplySent(threadId: String, sender: String, replyText: String) {
         val notificationId = threadId.hashCode()
@@ -88,7 +96,16 @@ class MessageNotifier(
         message: MessageEntity,
         withActions: Boolean,
     ): NotificationCompat.Builder {
-        val sender = Person.Builder().setName(thread.displayName).build()
+        // thread.photoUri (the same one AvatarBubble renders in-app) never made it onto the
+        // Person backing this notification, so MessagingStyle always fell back to its default
+        // initial-on-color placeholder regardless of whether the contact had a real photo.
+        val senderBuilder = Person.Builder().setName(thread.displayName)
+        thread.photoUri?.let { uri ->
+            runCatching { androidx.core.graphics.drawable.IconCompat.createWithContentUri(uri) }
+                .getOrNull()
+                ?.let { senderBuilder.setIcon(it) }
+        }
+        val sender = senderBuilder.build()
         val style = NotificationCompat.MessagingStyle(Person.Builder().setName("You").build())
             .addMessage(message.body, message.timestamp, sender)
 
