@@ -20,12 +20,12 @@ val hasReleaseSigning = !releaseKeystorePath.isNullOrBlank()
 
 android {
     namespace = "com.phuzle.labs.messages"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.phuzle.labs.messages"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = releaseVersionCode
         versionName = releaseVersionName
 
