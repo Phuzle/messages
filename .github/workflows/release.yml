@@ -100,11 +100,11 @@ jobs:
         run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 --decode > app/google-services.json
 
       # One Gradle invocation builds both: assembleRelease (per-ABI + universal APKs, see
-      # app/build.gradle.kts's splits.abi — this app has no native code, so these are all
-      # functionally identical, just named per the GitHub-release convention below) and
-      # bundleRelease (the AAB Play Store requires). Compiling once and packaging twice this way
-      # is both simpler and cheaper than the old two-job split, which recompiled from scratch in
-      # each job.
+      # app/build.gradle.kts's splits.abi) and bundleRelease (the AAB Play Store requires).
+      # Compiling once and packaging twice is simpler and cheaper than the old two-job split.
+      # Note: the release build type has debugSymbolLevel = SYMBOL_TABLE, so AGP extracts and
+      # embeds native debug symbols from dependency .so files (OkHttp, Firebase, etc.) into
+      # the AAB — Play Console uses these to symbolicate native crashes and ANRs.
       - name: Build signed release APKs and AAB
         env:
           RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
@@ -150,7 +150,7 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.phuzle.labs.messages
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
-          track: ${{ steps.track.outputs.name }}
+          tracks: ${{ steps.track.outputs.name }}
           status: ${{ steps.release_status.outputs.name }}
           whatsNewDirectory: distribution/whatsnew
           # R8 mapping file for Play Console crash deobfuscation (generated when isMinifyEnabled=true)
