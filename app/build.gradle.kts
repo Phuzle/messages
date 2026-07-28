@@ -72,10 +72,10 @@ android {
     // Scoped to release builds only (via the invoked task names) — the `splits` block otherwise
     // applies to every build type including debug, which turned local `assembleDebug`/installs
     // into five APKs instead of the single app-debug.apk every install script here expects.
-    val isBuildingRelease = gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
+    val isBuildingReleaseApk = gradle.startParameter.taskNames.any { it.contains("assembleRelease", ignoreCase = true) }
     splits {
         abi {
-            isEnable = isBuildingRelease
+            isEnable = isBuildingReleaseApk
             reset()
             include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
             isUniversalApk = true

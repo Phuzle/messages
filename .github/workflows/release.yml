@@ -100,8 +100,10 @@ jobs:
         run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 --decode > app/google-services.json
 
       # One Gradle invocation builds both: assembleRelease (per-ABI + universal APKs, see
-      # app/build.gradle.kts's splits.abi) and bundleRelease (the AAB Play Store requires).
-      # Compiling once and packaging twice is simpler and cheaper than the old two-job split.
+      # app/build.gradle.kts's splits.abi). Note that we run them sequentially rather than concurrently
+      # (`assembleRelease` then `bundleRelease`) because AGP 8.9+ has a bug where `shrinkResources = true`
+      # causes `buildReleasePreBundle` to crash with "Sequence contains more than one matching element"
+      # if both tasks are requested in the same invocation while ABI splits are enabled.
       # Note: the release build type has debugSymbolLevel = SYMBOL_TABLE, so AGP extracts and
       # embeds native debug symbols from dependency .so files (OkHttp, Firebase, etc.) into
       # the AAB — Play Console uses these to symbolicate native crashes and ANRs.
@@ -113,7 +115,11 @@ jobs:
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease bundleRelease \
+          ./gradlew assembleRelease \
+            -PreleaseVersionCode=${{ steps.version.outputs.code }} \
+            -PreleaseVersionName=${{ steps.version.outputs.name }}
+          
+          ./gradlew bundleRelease \
             -PreleaseVersionCode=${{ steps.version.outputs.code }} \
             -PreleaseVersionName=${{ steps.version.outputs.name }} \
             --no-daemon
