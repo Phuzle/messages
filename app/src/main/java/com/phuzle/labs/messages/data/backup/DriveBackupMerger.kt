@@ -99,7 +99,7 @@ class DriveBackupMerger(private val context: Context, private val database: AppD
                             sent = messages.getInt(messages.getColumnIndexOrThrow("sent")) != 0,
                         )
                         messageDao.insert(merged)
-                        if (newestMergedMessage == null || timestamp > newestMergedMessage!!.timestamp) newestMergedMessage = merged
+                        if (newestMergedMessage == null || timestamp > newestMergedMessage.timestamp) newestMergedMessage = merged
                     }
                 }
                 // If the merge brought in a message newer than the local thread's cached preview,
@@ -107,7 +107,7 @@ class DriveBackupMerger(private val context: Context, private val database: AppD
                 val current = threadDao.findBySender(sender)
                 val newest = newestMergedMessage
                 if (current != null && newest != null && newest.timestamp > current.lastMessageTime) {
-                    threadDao.touchLastMessage(current.id, newest.body, newest.timestamp)
+                    threadDao.touchLastMessage(current.id, newest.body, newest.timestamp, outgoing = newest.outgoing)
                 }
             }
         }

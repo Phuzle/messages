@@ -29,7 +29,7 @@ const val DATABASE_FILE_NAME = "messages.db"
         ReminderEntity::class,
         DraftEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -89,6 +89,18 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Lets the dashboard prefix a thread's preview with "You: " when its last message was
+         * sent by us (see ThreadEntity.lastMessageOutgoing). DEFAULT 0 for every pre-existing row
+         * is a deliberate, harmless simplification, not a real "we know this was incoming": we
+         * don't retroactively know which side sent each thread's current preview, and defaulting
+         * to "not outgoing" just means existing threads show unprefixed until their next message
+         * updates it either way — never a wrong-but-confident "You:" on someone else's message. */
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE threads ADD COLUMN lastMessageOutgoing INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -96,7 +108,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DATABASE_FILE_NAME,
                 )
-                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                     // Deliberately no fallbackToDestructiveMigration(): with real, irreplaceable
                     // user messages in this table, a future version bump that's missing its
                     // Migration must crash loudly (forcing us to write one before shipping) rather
@@ -105,7 +117,7 @@ abstract class AppDatabase : RoomDatabase() {
                     // sideloading an older build over a newer one, a dev-only scenario) are the one
                     // case still allowed to reset, since older code has no way to understand a
                     // newer schema anyway.
-                    .fallbackToDestructiveMigrationOnDowngrade()
+                    .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
                     .build()
                     .also { instance = it }
             }

@@ -238,6 +238,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         val nameMatchIndices: Set<Int> = emptySet(),
         val bestBodySnippet: String? = null,
         val bodyMatchIndices: Set<Int> = emptySet(),
+        /** Whether [bestBodySnippet] was sent by us — the swapped-in snippet needs its own "You:"
+         * prefix decision, since it isn't necessarily the thread's actual last message anymore. */
+        val bestBodyOutgoing: Boolean = false,
     )
 
     /** Real search — fuzzy-matches (see FuzzyMatcher) against a thread's sender name *or any
@@ -265,6 +268,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                             nameMatchIndices = if (betterName) nameMatch!!.matchedIndices else existing.nameMatchIndices,
                             bestBodySnippet = if (betterBody) row.body else existing.bestBodySnippet,
                             bodyMatchIndices = if (betterBody) bodyMatch!!.matchedIndices else existing.bodyMatchIndices,
+                            bestBodyOutgoing = if (betterBody) row.outgoing else existing.bestBodyOutgoing,
                         )
                     }
                     ranks
@@ -335,6 +339,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                             displayNameMatch = rank.nameMatchIndices,
                             preview = rank.bestBodySnippet ?: t.preview,
                             previewMatch = rank.bodyMatchIndices,
+                            // Only swap in the matched message's own "You:" state when the
+                            // preview itself was swapped — otherwise this would incorrectly
+                            // override a name-only match's untouched (and already correct)
+                            // last-message preview with whatever bestBodyOutgoing defaults to.
+                            previewIsOutgoing = if (rank.bestBodySnippet != null) rank.bestBodyOutgoing else t.previewIsOutgoing,
                         )
                     }
                 state.copy(threads = ordered)
@@ -358,6 +367,26 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             if (restored != Category.All) ephemeral.update { it.copy(activeCategory = restored) }
         }
         refreshAvailableSims()
+
+        // A message arriving *while its thread is already open* used to still leave the thread
+        // marked unread on the dashboard once the user backed out — openThreadById only marks
+        // read at the moment of opening, and recordIncomingMessage unconditionally sets
+        // unread=true on every new message with no notion of "the user is already looking at
+        // this". Whenever the currently-open thread flips back to unread — genuinely being read
+        // in real time, not just opened once — immediately re-mark it read and clear its
+        // notification, the same as first opening it does.
+        viewModelScope.launch {
+            ephemeral.map { it.activeThreadId }.distinctUntilChanged()
+                .flatMapLatest { id ->
+                    if (id == null) flowOf(null) else threadsSnapshot.map { snapshot -> snapshot.allActive.find { it.id == id } }
+                }
+                .collect { thread ->
+                    if (thread != null && thread.unread) {
+                        container.threadRepository.toggleRead(thread.id, true)
+                        container.messageNotifier.cancelForThread(thread.id)
+                    }
+                }
+        }
     }
 
     /** Re-reads the device's active SIMs — a no-op (empty list) on single-SIM devices or without
@@ -540,6 +569,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         photoUri = photoUri,
         initials = initialsFor(displayName),
         preview = lastMessagePreview,
+        previewIsOutgoing = lastMessageOutgoing,
         timeLabel = formatThreadListTime(lastMessageTime),
         unread = unread,
         unreadCount = if (realUnreadCount > 0) realUnreadCount else if (unread) 1 else 0,
@@ -772,10 +802,12 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
         // Opening the conversation is itself "reading" it — previously only the explicit
         // action-sheet "Mark as read" toggled this, so the unread dot stuck around after simply
-        // viewing the thread.
+        // viewing the thread. Its notification (if any) is stale the moment that happens too —
+        // autoCancel only clears it on an actual tap, not on being read some other way.
         viewModelScope.launch {
             val thread = container.threadRepository.getThread(id) ?: return@launch
             if (thread.unread) container.threadRepository.toggleRead(id, true)
+            container.messageNotifier.cancelForThread(id)
         }
     }
 
@@ -927,6 +959,12 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             ephemeral.update { it.copy(composeToSuggestions = matches) }
         }
     }
+
+    /** Closes the full-screen "Suggested contacts" picker without picking anyone or losing what
+     * was typed — the picker otherwise only ever goes away by selecting a suggestion or clearing
+     * the "To" field yourself (see ComposeScreen), which left no way back to the message body if
+     * none of the suggestions were who you meant to text. Wired to the system back button. */
+    fun dismissComposeToSuggestions() = ephemeral.update { it.copy(composeToSuggestions = emptyList()) }
 
     /** Adds a contact-search hit as a recipient chip; a number typed with no match can also be added this way. */
     fun selectComposeContact(contact: ContactSuggestionUi) = ephemeral.update {
@@ -1717,6 +1755,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     /** Shared tail end of both the silent path above and the interactive path below — resolves an
      * already-signed-in [account] to either "found a backup, offer to restore" or "nothing there,
      * don't ask again this install". */
+    // TODO: migrate GoogleSignInAccount → Credential Manager (Google Identity Services) once the
+    //  full sign-in flow in GoogleDriveBackupManager is updated.
+    @Suppress("DEPRECATION")
     private suspend fun checkDriveBackupsAndOffer(account: com.google.android.gms.auth.api.signin.GoogleSignInAccount) {
         val token = container.driveBackupManager.accessToken(account)
         if (token == null) {
