@@ -26,10 +26,22 @@ class MainActivity : FragmentActivity() {
 
     private var keepSplashScreenOn = true
 
-    private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
+    /** True from the moment the contacts/notifications dialogs are launched until their result
+     * comes back. See [requestRuntimePermissions] for why the first-run import must not start
+     * during that window, and why [onResume] has to respect this too. */
+    private var awaitingRuntimePermissions = false
+
+    private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        awaitingRuntimePermissions = false
+        // Only *now* is it safe to let the first-run history import run.
+        viewModel.setDefaultSmsAppStatus(DefaultSmsAppHelper.isDefaultSmsApp(this), startWork = true)
+    }
 
     private val roleRequestLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        viewModel.setDefaultSmsAppStatus(DefaultSmsAppHelper.isDefaultSmsApp(this))
+        // startWork = false: record that we hold the role (so the UI can leave the disclosure
+        // screen and show a loader) without kicking off the import yet — that waits for the
+        // permission dialogs below.
+        viewModel.setDefaultSmsAppStatus(DefaultSmsAppHelper.isDefaultSmsApp(this), startWork = false)
         // Contacts/notifications aren't part of the SMS role's own permission bundle, so they
         // still need their own runtime request — done here, after the role result comes back,
         // rather than launched back-to-back with it: firing two ActivityResultLauncher.launch()
@@ -63,6 +75,13 @@ class MainActivity : FragmentActivity() {
         }
 
         handleIntent(intent)
+        // Seeded before the first composition, not left to the onResume below: Ephemeral defaults
+        // isDefaultSmsApp to true (the common case for an established install), so on a *fresh*
+        // install the very first frame would otherwise render StartupFlowScreen's generic
+        // "Setting up Messages" fallback for a beat before flipping to the disclosure screen the
+        // user actually needs to see. startWork = false because onResume runs moments later and
+        // does the real work-triggering call.
+        viewModel.setDefaultSmsAppStatus(DefaultSmsAppHelper.isDefaultSmsApp(this), startWork = false)
         setContent { AppRoot(viewModel) }
 
         // Permission/role prompts only fire from a user tap on AppRoot's gate screen (shown
@@ -96,7 +115,13 @@ class MainActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
-        viewModel.setDefaultSmsAppStatus(DefaultSmsAppHelper.isDefaultSmsApp(this))
+        // Skipped while the runtime-permission dialogs are still up: those dialogs pause/resume
+        // this activity, and ActivityResult callbacks are dispatched around onStart — so without
+        // this guard the onResume that fires *between* the role grant and the permission result
+        // would start the import anyway, defeating the whole deferral in requestRuntimePermissions.
+        if (!awaitingRuntimePermissions) {
+            viewModel.setDefaultSmsAppStatus(DefaultSmsAppHelper.isDefaultSmsApp(this), startWork = true)
+        }
         viewModel.checkOtpHotSwap()
     }
 
@@ -115,12 +140,26 @@ class MainActivity : FragmentActivity() {
 
     /** SMS/RECEIVE/SEND permissions come bundled with the role grant above and don't need (and,
      * launched right alongside the role request, wouldn't reliably show) their own prompt — only
-     * contacts and notifications are independent of that role and need asking here. */
+     * contacts and notifications are independent of that role and need asking here.
+     *
+     * [awaitingRuntimePermissions] is what keeps the first-run history import from starting while
+     * these dialogs are on screen, which used to happen and broke the fresh-install experience two
+     * ways at once. Cosmetically, the import's whole full-screen progress UI (SyncingScreen) played
+     * out *behind* the system dialogs, so the user never saw the "Syncing your messages" step at
+     * all — it looked like the app skipped straight from the permission prompts to whatever came
+     * next. Substantively, and much worse: SmsHistoryImporter resolves each new sender through
+     * ContactLookup, so running it before READ_CONTACTS is granted meant every imported thread got
+     * the bare phone number as its display name with no avatar photo, *and* the classifier's
+     * isKnownContact() check came back false for everyone — so real messages from real contacts
+     * were filed as Others instead of Personal. Nothing re-resolves names or re-classifies after
+     * the fact, so both outcomes were permanent for every thread that already existed at install
+     * time, i.e. the entire inbox on any real phone. */
     private fun requestRuntimePermissions() {
         val permissions = mutableListOf(Manifest.permission.READ_CONTACTS)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions += Manifest.permission.POST_NOTIFICATIONS
         }
+        awaitingRuntimePermissions = true
         permissionLauncher.launch(permissions.toTypedArray())
     }
 

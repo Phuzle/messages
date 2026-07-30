@@ -1,4 +1,5 @@
 package com.phuzle.labs.messages.ui.recyclebin
+import com.phuzle.labs.messages.ui.components.bottomBarContentPadding
 import com.phuzle.labs.messages.ui.components.topBarContentPadding
 
 import androidx.compose.foundation.layout.PaddingValues
@@ -43,7 +44,8 @@ fun RecycleBinScreen(state: AppUiState, viewModel: AppViewModel) {
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = topBarContentPadding(68.dp), bottom = 24.dp),
+                // See ArchivedScreen — a flat bottom padding rests the last row under the nav bar.
+                contentPadding = PaddingValues(top = topBarContentPadding(68.dp), bottom = bottomBarContentPadding(24.dp)),
             ) {
                 item {
                     ListCountHeader(

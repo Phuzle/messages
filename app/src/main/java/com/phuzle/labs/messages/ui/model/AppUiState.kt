@@ -74,6 +74,10 @@ data class AppUiState(
     val driveSignInNeededForRestore: Boolean = false,
     /** See AppViewModel's field of the same name — the actual restore-and-merge is in flight. */
     val driveRestoreInProgress: Boolean = false,
+    /** See AppViewModel's field of the same name — the startup "is there a Drive backup?" round
+     * trip is in flight, so StartupFlowScreen can name that step instead of showing its generic
+     * gap-filler loader through what can be several seconds of network work. */
+    val driveCheckInProgress: Boolean = false,
     val messageActionTarget: MessageActionTargetUi? = null,
     val multiSelectThreadIds: Set<String> = emptySet(),
 

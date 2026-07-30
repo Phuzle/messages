@@ -59,6 +59,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -129,6 +130,11 @@ private data class Ephemeral(
     /** True for the whole span of the startup-triggered restore-and-merge (see confirmDriveRestore)
      * — keeps StartupFlowScreen showing a loader instead of revealing the dashboard mid-merge. */
     val driveRestoreInProgress: Boolean = false,
+    /** True while checkFirstLaunchDriveRestore's sign-in + backup-listing round trip is in flight.
+     * Purely so StartupFlowScreen can name that step honestly ("Checking Google Drive") instead of
+     * falling through to its generic "Setting up Messages" gap-filler — this is a real network
+     * call that can take seconds, not one of the sub-frame gaps that fallback exists for. */
+    val driveCheckInProgress: Boolean = false,
     /** Fetched once when Thread Info opens (see openThreadInfo) — not worth a continuous reactive
      * flow just for a "first contact" date that never changes after the fact. */
     val threadInfoFirstContactAt: Long? = null,
@@ -542,6 +548,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             driveRestoreAvailable = eph.driveRestoreAvailable,
             driveSignInNeededForRestore = eph.driveSignInNeededForRestore,
             driveRestoreInProgress = eph.driveRestoreInProgress,
+            driveCheckInProgress = eph.driveCheckInProgress,
             messageActionTarget = eph.messageActionTarget,
             isImportingHistory = eph.isImportingHistory,
             importDone = eph.importDone,
@@ -1227,9 +1234,16 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         ephemeral.update { it.copy(otpModal = null) }
     }
 
-    fun setDefaultSmsAppStatus(isDefault: Boolean) {
+    /** [startWork] = false records the role state *without* starting the first-run history import,
+     * SIM refresh, or provider reconciliation. MainActivity passes false in exactly two places —
+     * the pre-composition seed in onCreate, and the moment the role is granted but the
+     * contacts/notifications dialogs haven't been answered yet — so the import doesn't run against
+     * an ungranted READ_CONTACTS (see MainActivity.requestRuntimePermissions for what that broke).
+     * The UI still moves off the disclosure screen immediately either way, since it keys off
+     * isDefaultSmsApp alone. */
+    fun setDefaultSmsAppStatus(isDefault: Boolean, startWork: Boolean = true) {
         ephemeral.update { it.copy(isDefaultSmsApp = isDefault) }
-        if (isDefault) {
+        if (isDefault && startWork) {
             importHistoryOnce()
             refreshAvailableSims()
             reconcileWithSystemProvider()
@@ -1722,7 +1736,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
      * phone with actual texting history, that backfill alone makes chatCount > 0 before this line
      * ever executes, so the Drive check silently never fired, on every device, every time. The
      * "don't surprise an established inbox" concern is instead handled by the dialog itself always
-     * offering Skip (see DriveRestoreDialog) and by DriveBackupMerger always merging, never
+     * offering Skip (see DriveRestorePromptScreen) and by DriveBackupMerger always merging, never
      * overwriting — so showing this is safe regardless of what's already local.
      *
      * Attempts a *silent* sign-in (no UI) first — when it works, Google Play Services can resolve
@@ -1742,14 +1756,44 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         // calls this again on every onResume, not just the first, so this avoids redundant sign-in/
         // Drive API calls for as long as either gate sits there waiting on a tap.
         if (ephemeral.value.driveRestoreAvailable || ephemeral.value.driveSignInNeededForRestore) return@launch
+        // Same reason, for the in-flight case: this is the only startup step that makes network
+        // calls, so it's also the only one slow enough for a second onResume to land mid-flight and
+        // start a duplicate sign-in + backup listing.
+        if (ephemeral.value.driveCheckInProgress) return@launch
         val settings = container.settingsRepository.settingsFlow.first()
         if (settings.driveRestorePromptShown) return@launch
-        val account = container.driveBackupManager.silentSignIn()
-        if (account?.email == null) {
-            ephemeral.update { it.copy(driveSignInNeededForRestore = true) }
-            return@launch
+
+        ephemeral.update { it.copy(driveCheckInProgress = true) }
+        try {
+            // Bounded, and treated as "couldn't tell" on expiry rather than retried forever. Both
+            // halves of this check can hang indefinitely on their own: silentSignIn wraps a Play
+            // Services Task in suspendCancellableCoroutine, and on a device with absent or broken
+            // Play Services neither the success nor the failure listener is ever called, so the
+            // coroutine simply never resumes. Since StartupFlowScreen is a hard gate over the whole
+            // app, "never resumes" meant the user sat on a loader forever with no way to reach
+            // their messages — a permanently bricked launch, not a slow one.
+            val account = withTimeoutOrNull(DRIVE_STARTUP_CHECK_TIMEOUT_MS) {
+                container.driveBackupManager.silentSignIn()
+            }
+            if (account?.email == null) {
+                ephemeral.update { it.copy(driveSignInNeededForRestore = true) }
+                return@launch
+            }
+            withTimeoutOrNull(DRIVE_STARTUP_CHECK_TIMEOUT_MS) { checkDriveBackupsAndOffer(account) }
+                // Timed out mid-listing: fall back to the interactive step rather than leaving
+                // every flag false, which would drop the user onto the generic loader again.
+                ?: ephemeral.update { it.copy(driveSignInNeededForRestore = true) }
+        } catch (e: Exception) {
+            // Anything unexpected from Play Services or the Drive API (the individual manager
+            // methods runCatching internally, but constructing the sign-in client itself can throw
+            // on a device without Play Services) must not strand the user on the startup loader.
+            // Mark the step decided and move on — Settings' "Connect to Google Drive" is still
+            // there if they want to restore later.
+            container.settingsRepository.setDriveRestorePromptShown(true)
+            ephemeral.update { it.copy(driveSignInNeededForRestore = false, driveRestoreAvailable = false) }
+        } finally {
+            ephemeral.update { it.copy(driveCheckInProgress = false) }
         }
-        checkDriveBackupsAndOffer(account)
     }
 
     /** Shared tail end of both the silent path above and the interactive path below — resolves an
@@ -1801,6 +1845,13 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     // endregion
+
+    private companion object {
+        /** Per-leg budget for the startup Drive check. Generous enough for a cold Play Services
+         * sign-in plus one Drive listing on a slow connection, but bounded — this check gates the
+         * entire app behind a loader, so "slow" has to be allowed and "never" must not be. */
+        const val DRIVE_STARTUP_CHECK_TIMEOUT_MS = 15_000L
+    }
 }
 
 class AppViewModelFactory(private val container: AppContainer) : ViewModelProvider.Factory {

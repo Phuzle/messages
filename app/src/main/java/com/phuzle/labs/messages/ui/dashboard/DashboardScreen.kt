@@ -88,6 +88,11 @@ import com.phuzle.labs.messages.ui.theme.ShapeSmall
 
 private const val BOTTOM_BAR_HEIGHT = 60
 
+/** Compose-FAB geometry, shared by the FAB itself (near the bottom of this file) and by the list
+ * padding that has to scroll clear of it — see [bottomContentPadding]'s use of these. */
+private const val FAB_SIZE = 56
+private const val FAB_MARGIN = 16
+
 @Composable
 fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
     val tokens = MessagesTheme.tokens
@@ -107,7 +112,13 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
     val density = LocalDensity.current
     var headerHeightPx by remember { mutableIntStateOf(0) }
     val topContentPadding = with(density) { headerHeightPx.toDp() }
-    val bottomContentPadding = (if (FeatureFlags.PASSBOOK_AND_REMINDERS_ENABLED) BOTTOM_BAR_HEIGHT + 26 else 26).dp + navBarInset
+    // Has to clear the compose FAB as well as the nav bar and the optional bottom bar. The FAB is a
+    // fixed overlay in the same Box as these lists, so leaving its height out of here (this used to
+    // be a flat 26.dp of breathing room) meant the final row of every list could never be scrolled
+    // out from under it — the last thread's timestamp and unread badge sat permanently behind the
+    // FAB with no scroll position that would reveal them.
+    val bottomContentPadding = (if (FeatureFlags.PASSBOOK_AND_REMINDERS_ENABLED) BOTTOM_BAR_HEIGHT else 0).dp +
+        (FAB_MARGIN + FAB_SIZE + 16).dp + navBarInset
 
     Box(Modifier.fillMaxSize()) {
         when (state.activeTab) {
@@ -398,10 +409,10 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(
-                    end = 16.dp,
-                    bottom = (if (FeatureFlags.PASSBOOK_AND_REMINDERS_ENABLED) BOTTOM_BAR_HEIGHT + 16 else 16).dp + navBarInset,
+                    end = FAB_MARGIN.dp,
+                    bottom = (if (FeatureFlags.PASSBOOK_AND_REMINDERS_ENABLED) BOTTOM_BAR_HEIGHT + FAB_MARGIN else FAB_MARGIN).dp + navBarInset,
                 )
-                .size(56.dp)
+                .size(FAB_SIZE.dp)
                 .background(tokens.accent, CircleShape)
                 .roundClickable(onClick = viewModel::openCompose),
             contentAlignment = Alignment.Center,

@@ -35,6 +35,7 @@ import com.phuzle.labs.messages.ui.components.BackBarScaffold
 import com.phuzle.labs.messages.ui.components.EmptyState
 import com.phuzle.labs.messages.ui.components.ListCountHeader
 import com.phuzle.labs.messages.ui.components.roundClickable
+import com.phuzle.labs.messages.ui.components.bottomBarContentPadding
 import com.phuzle.labs.messages.ui.components.topBarContentPadding
 import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.model.DraftUi
@@ -55,7 +56,8 @@ fun DraftsScreen(state: AppUiState, viewModel: AppViewModel) {
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = topBarContentPadding(68.dp), bottom = 24.dp),
+                // See ArchivedScreen — a flat bottom padding rests the last row under the nav bar.
+                contentPadding = PaddingValues(top = topBarContentPadding(68.dp), bottom = bottomBarContentPadding(24.dp)),
             ) {
                 item {
                     ListCountHeader(

@@ -38,10 +38,9 @@ fun StartupFlowScreen(state: AppUiState, viewModel: AppViewModel) {
             onSkip = viewModel::skipDriveSignInForRestore,
         )
 
-        state.driveRestoreAvailable -> DriveRestoreDialog(
-            visible = true,
+        state.driveRestoreAvailable -> DriveRestorePromptScreen(
             onRestore = viewModel::confirmDriveRestore,
-            onDismiss = viewModel::dismissDriveRestorePrompt,
+            onSkip = viewModel::dismissDriveRestorePrompt,
         )
 
         // The actual download+merge is in flight (user tapped Restore & Merge) — stay on the
@@ -51,6 +50,18 @@ fun StartupFlowScreen(state: AppUiState, viewModel: AppViewModel) {
             total = 0,
             title = "Restoring your backup",
             subtitle = "Merging in messages from Google Drive…",
+        )
+
+        // Checked last of the Drive steps, since the three above are its possible outcomes and
+        // should win the moment one of them resolves. Named explicitly rather than left to the
+        // generic fallback below: this leg makes real network calls (Play Services sign-in, then a
+        // Drive listing) and can legitimately run for seconds, which is far too long to sit under
+        // an unexplained "Just a moment…".
+        state.driveCheckInProgress -> SyncingScreen(
+            done = 0,
+            total = 0,
+            title = "Checking Google Drive",
+            subtitle = "Looking for a backup to restore…",
         )
 
         // Every condition above is false but settings.driveRestorePromptShown hasn't caught up

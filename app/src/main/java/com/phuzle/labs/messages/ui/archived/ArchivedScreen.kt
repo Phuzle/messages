@@ -1,4 +1,5 @@
 package com.phuzle.labs.messages.ui.archived
+import com.phuzle.labs.messages.ui.components.bottomBarContentPadding
 import com.phuzle.labs.messages.ui.components.topBarContentPadding
 
 import androidx.compose.foundation.layout.PaddingValues
@@ -31,7 +32,9 @@ fun ArchivedScreen(state: AppUiState, viewModel: AppViewModel) {
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = topBarContentPadding(68.dp), bottom = 24.dp),
+                // bottomBarContentPadding, not a flat 24.dp: on a gesture-nav device the last row
+                // otherwise scrolls to a resting position underneath the navigation bar.
+                contentPadding = PaddingValues(top = topBarContentPadding(68.dp), bottom = bottomBarContentPadding(24.dp)),
             ) {
                 item {
                     ListCountHeader(

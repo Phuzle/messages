@@ -1,4 +1,5 @@
 package com.phuzle.labs.messages.ui.privatechats
+import com.phuzle.labs.messages.ui.components.bottomBarContentPadding
 import com.phuzle.labs.messages.ui.components.topBarContentPadding
 
 import androidx.compose.foundation.background
@@ -41,7 +42,8 @@ fun PrivateChatsScreen(state: AppUiState, viewModel: AppViewModel) {
         if (state.privateChatsUnlockedThisSession) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
+                // See ArchivedScreen — a flat bottom padding rests the last row under the nav bar.
+                contentPadding = PaddingValues(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp, bottom = bottomBarContentPadding(24.dp)),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (state.privateThreads.isEmpty()) {
