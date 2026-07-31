@@ -29,6 +29,7 @@ import com.phuzle.labs.messages.ui.components.EmptyState
 import com.phuzle.labs.messages.ui.components.ListCountHeader
 import com.phuzle.labs.messages.ui.components.bottomBarContentPadding
 import com.phuzle.labs.messages.ui.components.topBarContentPadding
+import com.phuzle.labs.messages.ui.components.withLongPressHaptic
 import com.phuzle.labs.messages.ui.model.ScheduledMessageUi
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 
@@ -80,7 +81,7 @@ private fun ScheduledMessageRow(message: ScheduledMessageUi, onClick: () -> Unit
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongPress)
+            .combinedClickable(onClick = onClick, onLongClick = withLongPressHaptic(onLongPress))
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),

@@ -125,6 +125,10 @@ data class DeletedThreadUi(
     val preview: String,
 )
 
+/** Recycle Bin's "Deleted OTP codes" — individually soft-deleted messages (see
+ * MessageEntity.deletedAt), distinct from [DeletedThreadUi]'s whole-conversation deletes. */
+data class DeletedOtpMessageUi(val id: Long, val senderName: String, val body: String, val timeLabel: String)
+
 data class BlockedNumberUi(val number: String)
 
 data class PillOptionUi(val key: String, val label: String, val active: Boolean)

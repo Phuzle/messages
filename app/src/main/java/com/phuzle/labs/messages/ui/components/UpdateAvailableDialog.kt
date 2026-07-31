@@ -25,7 +25,9 @@ import com.phuzle.labs.messages.ui.model.UpdateInfoUi
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapeMedium
 
-/** Nudges users toward the Play Store listing when Remote Config reports a newer version code. */
+/** Shown once Play's own In-App Update flow finishes downloading a flexible update in the
+ * background (see UpdateChecker) — Play never restarts the app on its own for that flow, so this
+ * is the one prompt this app still owns in the update process. */
 @Composable
 fun UpdateAvailableDialog(update: UpdateInfoUi?, onUpdate: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     if (update == null) return
@@ -45,7 +47,7 @@ fun UpdateAvailableDialog(update: UpdateInfoUi?, onUpdate: () -> Unit, onDismiss
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Icon(Icons.Filled.SystemUpdate, contentDescription = null, tint = tokens.accent, modifier = Modifier.padding(bottom = 12.dp))
-            Text("Update Available", color = tokens.modalText, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Text("Update Ready", color = tokens.modalText, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             Text(
                 update.message,
                 color = tokens.modalText.copy(alpha = 0.7f),
@@ -59,7 +61,7 @@ fun UpdateAvailableDialog(update: UpdateInfoUi?, onUpdate: () -> Unit, onDismiss
                 shape = ShapeMedium,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Update Now", fontWeight = FontWeight.Bold, fontSize = 14.5.sp)
+                Text("Restart Now", fontWeight = FontWeight.Bold, fontSize = 14.5.sp)
             }
             TextButton(onClick = onDismiss) {
                 Text("Later", color = tokens.modalText.copy(alpha = 0.55f), fontSize = 13.sp)

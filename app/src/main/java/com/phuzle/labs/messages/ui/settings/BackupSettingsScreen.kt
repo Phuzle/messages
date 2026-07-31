@@ -16,8 +16,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Today
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -61,8 +66,8 @@ fun BackupSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                     color = tokens.textTertiary, fontSize = 11.5.sp, modifier = Modifier.padding(top = 2.dp),
                 )
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PillButton("Daily", settings.backupFrequency == "daily", { viewModel.setBackupFrequency("daily") }, modifier = Modifier.weight(1f))
-                    PillButton("Weekly", settings.backupFrequency == "weekly", { viewModel.setBackupFrequency("weekly") }, modifier = Modifier.weight(1f))
+                    PillButton("Daily", settings.backupFrequency == "daily", { viewModel.setBackupFrequency("daily") }, modifier = Modifier.weight(1f), icon = Icons.Filled.Today)
+                    PillButton("Weekly", settings.backupFrequency == "weekly", { viewModel.setBackupFrequency("weekly") }, modifier = Modifier.weight(1f), icon = Icons.Filled.DateRange)
                 }
             }
 
@@ -114,6 +119,7 @@ fun BackupSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            Icon(Icons.Filled.Wifi, contentDescription = null, tint = tokens.textSecondary, modifier = Modifier.size(20.dp).padding(end = 12.dp))
                             Column {
                                 Text("Wi-Fi only", color = tokens.textPrimary, fontSize = 13.sp)
                                 Text("Disabling this will use mobile data", color = tokens.textTertiary, fontSize = 11.5.sp, modifier = Modifier.padding(top = 2.dp))

@@ -52,6 +52,9 @@ data class AppUiState(
     val undoMessage: String? = null,
 
     val deletedThreads: List<DeletedThreadUi> = emptyList(),
+    /** Individually soft-deleted messages (currently just evicted OTP codes) shown in their own
+     * Recycle Bin section, separate from whole deleted conversations — see DeletedOtpMessageUi. */
+    val deletedOtpMessages: List<DeletedOtpMessageUi> = emptyList(),
     val archivedThreads: List<DeletedThreadUi> = emptyList(),
     val privateThreads: List<DeletedThreadUi> = emptyList(),
     val privateChatsUnlockedThisSession: Boolean = false,

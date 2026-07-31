@@ -20,12 +20,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.phuzle.labs.messages.domain.model.Category
 import com.phuzle.labs.messages.domain.model.NotificationChannelIds
 import com.phuzle.labs.messages.ui.AppViewModel
 import com.phuzle.labs.messages.ui.components.SectionLabel
 import com.phuzle.labs.messages.ui.components.SettingsCard
 import com.phuzle.labs.messages.ui.components.SettingsRowDivider
 import com.phuzle.labs.messages.ui.components.SettingsToggleRow
+import com.phuzle.labs.messages.ui.components.iconForCategory
 import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 
@@ -92,11 +94,18 @@ fun NotificationsSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                         NotificationChannelIds.TRANSACTIONS -> settings.channelTransactEnabled
                         else -> settings.channelPromoEnabled
                     }
+                    val category = when (channel.id) {
+                        NotificationChannelIds.PERSONAL -> Category.Personal
+                        NotificationChannelIds.OTP -> Category.Otp
+                        NotificationChannelIds.TRANSACTIONS -> Category.Transactions
+                        else -> Category.Promotions
+                    }
                     SettingsToggleRow(
                         title = channel.name,
                         checked = enabled,
                         onToggle = { viewModel.toggleChannel(channel.id) },
                         subtitle = "${channel.importance} · ${channel.behavior}",
+                        leadingIcon = iconForCategory(category),
                     )
                 }
             }

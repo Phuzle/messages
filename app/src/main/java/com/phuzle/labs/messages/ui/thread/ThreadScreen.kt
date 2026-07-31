@@ -25,11 +25,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -62,6 +68,7 @@ import com.phuzle.labs.messages.ui.components.OverflowMenu
 import com.phuzle.labs.messages.ui.components.highlightedText
 import com.phuzle.labs.messages.ui.components.roundClickable
 import com.phuzle.labs.messages.ui.components.topBarContentPadding
+import com.phuzle.labs.messages.ui.components.withLongPressHaptic
 import com.phuzle.labs.messages.domain.search.FuzzyMatcher
 import com.phuzle.labs.messages.ui.format.formatDateSeparator
 import com.phuzle.labs.messages.ui.format.isDifferentDay
@@ -247,11 +254,15 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
             visible = state.threadOverflowMenuOpen,
             onDismiss = viewModel::closeThreadOverflowMenu,
             items = listOf(
-                MenuItem("Search in conversation", onClick = viewModel::openThreadSearch),
-                MenuItem("View contact info") { viewModel.closeThreadOverflowMenu(); viewModel.openThreadInfo() },
-                MenuItem(if (thread.isBlocked) "Unblock" else "Block") { viewModel.closeThreadOverflowMenu(); viewModel.toggleBlockCurrent() },
-                MenuItem("Archive", onClick = viewModel::archiveCurrentThread),
-                MenuItem("Delete conversation", danger = true, onClick = viewModel::deleteCurrentThread),
+                MenuItem("Search in conversation", icon = Icons.Filled.Search, onClick = viewModel::openThreadSearch),
+                MenuItem("View contact info", icon = Icons.Filled.Info, onClick = { viewModel.closeThreadOverflowMenu(); viewModel.openThreadInfo() }),
+                MenuItem(
+                    if (thread.isBlocked) "Unblock" else "Block",
+                    icon = if (thread.isBlocked) Icons.Filled.LockOpen else Icons.Filled.Block,
+                    onClick = { viewModel.closeThreadOverflowMenu(); viewModel.toggleBlockCurrent() },
+                ),
+                MenuItem("Archive", icon = Icons.Filled.Archive, onClick = viewModel::archiveCurrentThread),
+                MenuItem("Delete conversation", icon = Icons.Filled.Delete, danger = true, onClick = viewModel::deleteCurrentThread),
             ),
         )
 
@@ -434,7 +445,7 @@ private fun MessageBubble(
             modifier = Modifier
                 .widthIn(max = 280.dp)
                 .background(bg, RoundedCornerShape(16.dp))
-                .combinedClickable(onClick = {}, onLongClick = onLongPress)
+                .combinedClickable(onClick = {}, onLongClick = withLongPressHaptic(onLongPress))
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
             Text(highlightedText(message.text, matchedIndices), color = fg, fontSize = 14.sp, lineHeight = 19.sp)

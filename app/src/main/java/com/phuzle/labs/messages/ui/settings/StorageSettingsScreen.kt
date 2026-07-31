@@ -12,6 +12,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -57,9 +61,10 @@ fun StorageSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
 
         Column(Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium).padding(14.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Timer, contentDescription = null, tint = tokens.textSecondary, modifier = Modifier.size(20.dp).padding(end = 12.dp))
                 Column(Modifier.weight(1f)) {
                     Text("24-hour OTP eviction", color = tokens.textPrimary, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
-                    Text("Permanently purge OTP codes after 24h", color = tokens.textTertiary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+                    Text("Move OTP codes to the recycle bin after 24h", color = tokens.textTertiary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
                 }
                 LabeledSwitch(checked = state.settings.otpEvictionEnabled, onCheckedChange = { viewModel.toggleOtpEviction() })
             }

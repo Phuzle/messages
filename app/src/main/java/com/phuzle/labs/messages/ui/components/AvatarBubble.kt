@@ -62,7 +62,9 @@ fun AvatarBubble(
     }
 }
 
-private fun iconForCategory(category: Category): ImageVector = when (category) {
+/** Same category glyph AvatarBubble uses, reused wherever else a category needs a quick visual
+ * (e.g. NotificationsSettingsScreen's channel list). */
+fun iconForCategory(category: Category): ImageVector = when (category) {
     Category.Otp -> Icons.Filled.Lock
     Category.Transactions -> Icons.Filled.AccountBalanceWallet
     Category.Promotions -> Icons.Filled.Sell

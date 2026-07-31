@@ -32,6 +32,7 @@ import com.phuzle.labs.messages.ui.model.CategoryChipUi
 import com.phuzle.labs.messages.ui.model.ContactSuggestionUi
 import com.phuzle.labs.messages.ui.model.CurrentThreadUi
 import com.phuzle.labs.messages.ui.model.DashboardTab
+import com.phuzle.labs.messages.ui.model.DeletedOtpMessageUi
 import com.phuzle.labs.messages.ui.model.DeletedThreadUi
 import com.phuzle.labs.messages.ui.model.DraftUi
 import com.phuzle.labs.messages.ui.model.MessageActionTargetUi
@@ -48,7 +49,6 @@ import com.phuzle.labs.messages.ui.model.SimOptionUi
 import com.phuzle.labs.messages.ui.model.TransactionUi
 import com.phuzle.labs.messages.ui.model.UpdateInfoUi
 import com.phuzle.labs.messages.ui.theme.ThemeMode
-import com.phuzle.labs.messages.BuildConfig
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -120,6 +120,10 @@ private data class Ephemeral(
     val availableSims: List<SimOptionUi> = emptyList(),
     val composeSelectedSubscriptionId: Int? = null,
     val privateChatsUnlockedThisSession: Boolean = false,
+    /** Set when a thread is opened from inside the (already-unlocked) Private Chats list, so
+     * [AppViewModel.goBack] returns there instead of falling all the way past it to the dashboard
+     * — same idea as [composeOpenedFromDrafts]. */
+    val threadOpenedFromPrivateChats: Boolean = false,
     /** Raw "has the biometric gate succeeded this session" flag — false until [AppViewModel.unlockApp]
      * fires. Whether the app is actually *shown* locked also depends on settings.appLockEnabled
      * (see the uiState combine below), which Ephemeral doesn't know about. */
@@ -352,6 +356,13 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             )
         }
         .combine(undoState) { state, undo -> state.copy(undoMessage = undo?.message) }
+        .combine(container.threadRepository.observeDeletedOtpMessages()) { state, deletedOtp ->
+            state.copy(
+                deletedOtpMessages = deletedOtp.map {
+                    DeletedOtpMessageUi(id = it.id, senderName = it.senderName, body = it.body, timeLabel = formatThreadListTime(it.timestamp))
+                },
+            )
+        }
         .combine(searchRanking) { state, ranks ->
             if (ranks == null) {
                 state
@@ -388,12 +399,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     init {
         observeScheduledMessages()
-        viewModelScope.launch {
-            val update = container.updateChecker.checkForUpdate(BuildConfig.VERSION_CODE.toLong())
-            if (update != null) {
-                ephemeral.update { it.copy(updateInfo = UpdateInfoUi(update.message)) }
-            }
-        }
+        // The actual Play Core check/download-prompt flow needs an Activity (for the update
+        // flow's ActivityResultLauncher) and lives in MainActivity — this ViewModel only owns
+        // what happens once a flexible update has finished downloading in the background, via
+        // showUpdateReadyToInstall below.
         // Restores whichever category chip (Personal, Transactions, ...) was active when the app
         // was last closed — picking a filter and reopening the app used to always land back on
         // All, silently discarding it.
@@ -436,6 +445,19 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun selectComposeSim(subscriptionId: Int) = ephemeral.update { it.copy(composeSelectedSubscriptionId = subscriptionId) }
 
     fun dismissUpdate() = ephemeral.update { it.copy(updateInfo = null) }
+
+    /** MainActivity calls this once Play Core's InstallStateUpdatedListener (or its own startup
+     * check) reports a flexible update has finished downloading — see UpdateChecker. */
+    fun showUpdateReadyToInstall() = ephemeral.update {
+        it.copy(updateInfo = UpdateInfoUi("A new version of Messages has finished downloading. Restart now to finish installing it."))
+    }
+
+    /** The dialog's "Restart Now" — hands off to UpdateChecker.completeUpdate(), which installs
+     * the already-downloaded update and restarts the app; there is nothing further to do here. */
+    fun completeInAppUpdate() {
+        dismissUpdate()
+        container.updateChecker.completeUpdate()
+    }
 
     // region ---- derived state ----
 
@@ -810,11 +832,16 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         when {
             eph.pushedScreen == PushedScreen.Compose -> closeCompose()
             eph.pushedScreen == PushedScreen.ThreadInfo -> ephemeral.update { it.copy(pushedScreen = PushedScreen.Thread) }
+            // A thread opened from the (already-unlocked) Private Chats list should pop back
+            // there, not all the way past it to the dashboard — see threadOpenedFromPrivateChats.
+            eph.pushedScreen == PushedScreen.Thread && eph.threadOpenedFromPrivateChats -> ephemeral.update {
+                it.copy(pushedScreen = PushedScreen.PrivateChats, activeThreadId = null, threadOpenedFromPrivateChats = false)
+            }
             eph.pushedScreen == PushedScreen.Settings && eph.settingsSub != null -> ephemeral.update { it.copy(settingsSub = null) }
             eph.returnToSettingsSub != null -> ephemeral.update {
                 it.copy(pushedScreen = PushedScreen.Settings, settingsSub = it.returnToSettingsSub, returnToSettingsSub = null)
             }
-            else -> ephemeral.update { it.copy(pushedScreen = null, activeThreadId = null, settingsSub = null) }
+            else -> ephemeral.update { it.copy(pushedScreen = null, activeThreadId = null, settingsSub = null, threadOpenedFromPrivateChats = false) }
         }
     }
 
@@ -840,6 +867,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             it.copy(
                 pushedScreen = PushedScreen.Thread, activeThreadId = id, threadInput = "",
                 olderMessages = emptyList(), hasMoreOlderMessages = true, isLoadingOlderMessages = false,
+                threadOpenedFromPrivateChats = it.pushedScreen == PushedScreen.PrivateChats,
             )
         }
         // Opening the conversation is itself "reading" it — previously only the explicit
@@ -973,19 +1001,34 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun restoreAllDeleted() = viewModelScope.launch {
-        val ids = uiState.value.deletedThreads.map { it.id }
-        if (ids.isEmpty()) return@launch
+        val threadIds = uiState.value.deletedThreads.map { it.id }
+        val messageIds = uiState.value.deletedOtpMessages.map { it.id }
+        if (threadIds.isEmpty() && messageIds.isEmpty()) return@launch
         val now = System.currentTimeMillis()
-        ids.forEach { container.threadRepository.restore(it) }
-        offerUndo("${ids.size} ${if (ids.size == 1) "chat" else "chats"} restored") { ids.forEach { container.threadRepository.softDelete(it, now) } }
+        threadIds.forEach { container.threadRepository.restore(it) }
+        messageIds.forEach { container.threadRepository.restoreDeletedMessage(it) }
+        val count = threadIds.size + messageIds.size
+        offerUndo("$count ${if (count == 1) "item" else "items"} restored") {
+            threadIds.forEach { container.threadRepository.softDelete(it, now) }
+            messageIds.forEach { container.threadRepository.softDeleteMessage(it, now) }
+        }
     }
 
     /** Permanent — not reversible via undo, so callers should confirm with the user first. */
     fun emptyRecycleBin() = viewModelScope.launch {
-        val ids = uiState.value.deletedThreads.map { it.id }
-        if (ids.isEmpty()) return@launch
-        ids.forEach { container.threadRepository.hardDelete(it) }
+        val threadIds = uiState.value.deletedThreads.map { it.id }
+        val messageIds = uiState.value.deletedOtpMessages.map { it.id }
+        if (threadIds.isEmpty() && messageIds.isEmpty()) return@launch
+        threadIds.forEach { container.threadRepository.hardDelete(it) }
+        if (messageIds.isNotEmpty()) container.threadRepository.purgeSoftDeletedMessagesBefore(System.currentTimeMillis())
         toast("Recycle bin emptied")
+    }
+
+    /** Restores a single evicted OTP message out of the recycle bin (see MessageEntity.deletedAt) —
+     * single-item, so a plain undo bar is the right pattern here, same as [deleteScheduledMessage]. */
+    fun restoreDeletedOtpMessage(id: Long) = viewModelScope.launch {
+        container.threadRepository.restoreDeletedMessage(id)
+        toast("Message restored")
     }
 
     fun deleteAllDrafts() = viewModelScope.launch {

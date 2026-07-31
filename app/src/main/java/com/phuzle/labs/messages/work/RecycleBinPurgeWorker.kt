@@ -6,11 +6,15 @@ import androidx.work.WorkerParameters
 import com.phuzle.labs.messages.appContainer
 import java.util.concurrent.TimeUnit
 
-/** Storage settings: "Deleted threads are purged automatically after 30 days." */
+/** Storage settings: "Deleted threads are purged automatically after 30 days." Also finishes off
+ * individually soft-deleted messages (currently just evicted OTP codes — see
+ * MessageDao.purgeOtpMessagesBefore) past the same 30-day window. */
 class RecycleBinPurgeWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val cutoff = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(30)
-        applicationContext.appContainer.threadRepository.purgeDeletedBefore(cutoff)
+        val repo = applicationContext.appContainer.threadRepository
+        repo.purgeDeletedBefore(cutoff)
+        repo.purgeSoftDeletedMessagesBefore(cutoff)
         return Result.success()
     }
 

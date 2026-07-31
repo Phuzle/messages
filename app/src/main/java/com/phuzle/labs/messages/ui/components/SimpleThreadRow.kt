@@ -7,11 +7,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -27,6 +30,7 @@ fun SimpleThreadRow(
     item: DeletedThreadUi,
     modifier: Modifier = Modifier,
     actionLabel: String? = null,
+    actionIcon: ImageVector? = null,
     onAction: (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
 ) {
@@ -45,16 +49,24 @@ fun SimpleThreadRow(
             Text(item.preview, color = tokens.textTertiary, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (actionLabel != null && onAction != null) {
-            Text(
-                actionLabel,
-                color = tokens.accent,
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.Bold,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .border(1.dp, tokens.border, RoundedCornerShape(8.dp))
                     .clickable(onClick = onAction)
                     .padding(horizontal = 12.dp, vertical = 7.dp),
-            )
+            ) {
+                if (actionIcon != null) {
+                    Icon(actionIcon, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(14.dp))
+                }
+                Text(
+                    actionLabel,
+                    color = tokens.accent,
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = if (actionIcon != null) Modifier.padding(start = 5.dp) else Modifier,
+                )
+            }
         }
     }
 }

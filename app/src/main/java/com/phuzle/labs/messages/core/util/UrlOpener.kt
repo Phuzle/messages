@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.browser.customtabs.CustomTabsIntent
+import com.phuzle.labs.messages.BuildConfig
 
 /** Opens [url] via Chrome Custom Tabs when the user has [inAppBrowser] on, otherwise a plain
  * ACTION_VIEW to whatever browser they've set as default. Shared by anywhere in the app that
@@ -23,7 +24,16 @@ fun openUrl(context: Context, inAppBrowser: Boolean, url: String) {
     if (!launched) Toast.makeText(context, "Couldn't open that link", Toast.LENGTH_SHORT).show()
 }
 
-const val SUPPORT_EMAIL = "support@phuzle.com"
+private const val PRODUCTION_SUPPORT_EMAIL = "support@phuzle.com"
+
+// Testers Google Group — same one release.yml's tag-suffix routes to internal/closed testing
+// (see RELEASING.md). A plain "vX.Y.Z" tag/versionName means production; any "-alpha"/"-beta"/
+// "-rc" suffix means this build only ever reaches testers, so route feedback to their group
+// instead of the production support inbox.
+private const val TESTERS_SUPPORT_EMAIL = "testers-messages-phuzle-labs@googlegroups.com"
+
+val SUPPORT_EMAIL: String
+    get() = if (BuildConfig.VERSION_NAME.contains('-')) TESTERS_SUPPORT_EMAIL else PRODUCTION_SUPPORT_EMAIL
 
 /** Same mailto action as the About screen's "Email support" row — shared so the closed-testing
  * feedback banner (DashboardScreen) sends to the exact same address instead of drifting out of

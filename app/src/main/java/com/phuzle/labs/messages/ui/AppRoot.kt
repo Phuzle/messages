@@ -9,6 +9,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.FilterAlt
+import androidx.compose.material.icons.filled.FilterAltOff
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -30,7 +35,6 @@ import com.phuzle.labs.messages.ui.components.OtpModal
 import com.phuzle.labs.messages.ui.components.OverflowMenu
 import com.phuzle.labs.messages.ui.components.UndoBar
 import com.phuzle.labs.messages.ui.components.UpdateAvailableDialog
-import android.net.Uri
 import com.phuzle.labs.messages.ui.dashboard.DashboardScreen
 import com.phuzle.labs.messages.ui.drafts.DraftsScreen
 import com.phuzle.labs.messages.ui.model.PushedScreen
@@ -156,6 +160,7 @@ fun AppRoot(viewModel: AppViewModel) {
                         DrawerItem("Reminders", DrawerIconType.Reminders, viewModel::openRemindersTab)
                     } else null,
                     DrawerItem("Scheduled Messages", DrawerIconType.ScheduledMessages, viewModel::openScheduledMessagesScreen),
+                    DrawerItem("Private Chats", DrawerIconType.PrivateChats, viewModel::openPrivateChatsScreen),
                     DrawerItem("Settings", DrawerIconType.Settings, viewModel::openSettings),
                     DrawerItem("Recycle Bin", DrawerIconType.RecycleBin, viewModel::openRecycleBin),
                 ),
@@ -186,9 +191,13 @@ fun AppRoot(viewModel: AppViewModel) {
                 visible = state.overflowMenuOpen,
                 onDismiss = viewModel::closeOverflowMenu,
                 items = listOf(
-                    MenuItem("Mark all as read", onClick = viewModel::requestMarkAllAsRead),
-                    MenuItem(if (state.unreadOnly) "Show all messages" else "Show unread only", onClick = viewModel::toggleUnreadOnly),
-                    MenuItem("Settings", onClick = viewModel::openSettings),
+                    MenuItem("Mark all as read", icon = Icons.Filled.DoneAll, onClick = viewModel::requestMarkAllAsRead),
+                    MenuItem(
+                        if (state.unreadOnly) "Show all messages" else "Show unread only",
+                        icon = if (state.unreadOnly) Icons.Filled.FilterAltOff else Icons.Filled.FilterAlt,
+                        onClick = viewModel::toggleUnreadOnly,
+                    ),
+                    MenuItem("Settings", icon = Icons.Filled.Settings, onClick = viewModel::openSettings),
                 ),
             )
 
@@ -247,13 +256,7 @@ fun AppRoot(viewModel: AppViewModel) {
 
             UpdateAvailableDialog(
                 update = state.updateInfo,
-                onUpdate = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${context.packageName}")).apply {
-                        setPackage("com.android.vending")
-                    }
-                    context.startActivity(intent)
-                    viewModel.dismissUpdate()
-                },
+                onUpdate = viewModel::completeInAppUpdate,
                 onDismiss = viewModel::dismissUpdate,
             )
 

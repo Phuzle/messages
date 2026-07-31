@@ -43,6 +43,7 @@ import com.phuzle.labs.messages.ui.components.GlassBar
 import com.phuzle.labs.messages.ui.components.SettingsRowDivider
 import com.phuzle.labs.messages.ui.components.roundClickable
 import com.phuzle.labs.messages.ui.components.topBarContentPadding
+import com.phuzle.labs.messages.ui.components.withLongPressHaptic
 import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapeMedium
@@ -173,7 +174,7 @@ private fun InfoRow(label: String, value: String, onLongClick: (() -> Unit)? = n
     val tokens = MessagesTheme.tokens
     Row(
         modifier = Modifier.fillMaxWidth()
-            .let { if (onLongClick != null) it.combinedClickable(onClick = {}, onLongClick = onLongClick) else it }
+            .let { if (onLongClick != null) it.combinedClickable(onClick = {}, onLongClick = withLongPressHaptic(onLongClick)) else it }
             .padding(13.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {

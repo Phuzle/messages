@@ -10,6 +10,7 @@ import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
+import com.google.android.play.core.install.InstallStateUpdatedListener
 import com.phuzle.labs.messages.core.sms.DefaultSmsAppHelper
 import com.phuzle.labs.messages.ui.AppRoot
 import com.phuzle.labs.messages.ui.AppViewModel
@@ -62,6 +63,13 @@ class MainActivity : FragmentActivity() {
         viewModel.handleRestoreFromFileResult(uri)
     }
 
+    // Result is ignored deliberately: whether the user accepted or dismissed Play's own "download
+    // this update?" sheet, there's nothing more for this app to do until the download actually
+    // finishes — that's what installStateListener below is for.
+    private val updateFlowLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {}
+
+    private var installStateListener: InstallStateUpdatedListener? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -106,6 +114,17 @@ class MainActivity : FragmentActivity() {
         // the intended startup sequence (disclosure -> sync -> drive restore offer -> dashboard).
         viewModel.reclassifyThreadsIfNeeded()
         viewModel.backfillPassbookIfNeeded()
+
+        // Registered before the startup check below so a flexible update that finishes
+        // downloading later in this session (not just one already done from a prior session) also
+        // surfaces the restart prompt.
+        installStateListener = appContainer.updateChecker.registerListener(viewModel::showUpdateReadyToInstall)
+        appContainer.updateChecker.checkForUpdate(updateFlowLauncher, viewModel::showUpdateReadyToInstall)
+    }
+
+    override fun onDestroy() {
+        installStateListener?.let { appContainer.updateChecker.unregisterListener(it) }
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {

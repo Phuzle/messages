@@ -17,6 +17,7 @@ okhttp = "4.12.0"
 googleServices = "4.5.0"
 playServicesAuth = "21.3.0"
 browser = "1.8.0"
+playAppUpdate = "2.1.0"
 firebaseCrashlyticsPlugin = "3.0.7"
 firebaseBom = "34.16.0"
 
@@ -48,6 +49,7 @@ retrofit-converter-gson = { group = "com.squareup.retrofit2", name = "converter-
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "playServicesAuth" }
 androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
+play-app-update = { group = "com.google.android.play", name = "app-update", version.ref = "playAppUpdate" }
 
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }

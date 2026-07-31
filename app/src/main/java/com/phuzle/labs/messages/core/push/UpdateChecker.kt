@@ -1,44 +1,59 @@
 package com.phuzle.labs.messages.core.push
 
-import com.google.firebase.remoteconfig.FirebaseRemoteConfig
-import com.google.firebase.remoteconfig.remoteConfigSettings
-import kotlin.coroutines.resume
-import kotlinx.coroutines.suspendCancellableCoroutine
-
-data class UpdateInfo(val message: String)
+import android.content.Context
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.IntentSenderRequest
+import com.google.android.play.core.appupdate.AppUpdateManager
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.appupdate.AppUpdateOptions
+import com.google.android.play.core.install.InstallStateUpdatedListener
+import com.google.android.play.core.install.model.AppUpdateType
+import com.google.android.play.core.install.model.InstallStatus
+import com.google.android.play.core.install.model.UpdateAvailability
 
 /**
- * Drives the "update available" prompt off Firebase Remote Config rather than the Play Store's
- * own in-app-update API: the app isn't actually live on the Store yet (placeholder listing), so
- * there's no published version for Play to compare against. Once it ships for real, this can stay
- * as a lightweight nudge alongside (or instead of) `com.google.android.play:app-update`.
- *
- * Console-side setup: add a `latest_version_code` (Number) and optional `update_message` (String)
- * parameter in Remote Config, publish, and every install with an older [android.content.pm.PackageInfo.longVersionCode]
- * will see the dialog next time it opens.
+ * Drives the "update available" prompt off the Play Store's own In-App Update API (the flexible
+ * flow), now that Messages is actually live in closed testing. Play itself shows the "download
+ * this update?" system UI ([checkForUpdate]'s [AppUpdateManager.startUpdateFlowForResult] call) —
+ * this class only has to notice when a flexible update *finishes* downloading in the background,
+ * since Play never restarts the app on its own for that flow. See [AppViewModel]'s updateInfo/
+ * [com.phuzle.labs.messages.ui.components.UpdateAvailableDialog] for the "restart to finish
+ * installing" prompt this feeds.
  */
-class UpdateChecker {
-    private val remoteConfig: FirebaseRemoteConfig by lazy {
-        FirebaseRemoteConfig.getInstance().apply {
-            setConfigSettingsAsync(remoteConfigSettings { minimumFetchIntervalInSeconds = 3600 })
-            setDefaultsAsync(
-                mapOf(
-                    "latest_version_code" to 0L,
-                    "update_message" to "A new version of Messages is available on the Play Store.",
-                ),
-            )
+class UpdateChecker(context: Context) {
+    private val manager: AppUpdateManager by lazy { AppUpdateManagerFactory.create(context.applicationContext) }
+
+    /** Called once per Activity creation. Starts Play's own download-confirmation UI via
+     * [launcher] when a flexible update is newly available, or calls [onReadyToInstall]
+     * immediately if one had already finished downloading before this check ran (e.g. the app was
+     * killed mid-flow last time). */
+    fun checkForUpdate(launcher: ActivityResultLauncher<IntentSenderRequest>, onReadyToInstall: () -> Unit) {
+        manager.appUpdateInfo.addOnSuccessListener { info ->
+            when {
+                info.installStatus() == InstallStatus.DOWNLOADED -> onReadyToInstall()
+                info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
+                    info.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE) -> {
+                    manager.startUpdateFlowForResult(info, launcher, AppUpdateOptions.newBuilder(AppUpdateType.FLEXIBLE).build())
+                }
+            }
         }
     }
 
-    suspend fun checkForUpdate(currentVersionCode: Long): UpdateInfo? {
-        val fetched = suspendCancellableCoroutine { cont ->
-            remoteConfig.fetchAndActivate()
-                .addOnCompleteListener { result -> cont.resume(result.isSuccessful) }
+    /** Fires [onReadyToInstall] the moment Play finishes downloading a flexible update in the
+     * background. Register once (e.g. Activity.onCreate) and [unregisterListener] in onDestroy —
+     * an unregistered listener leaks the Activity it was created with. */
+    fun registerListener(onReadyToInstall: () -> Unit): InstallStateUpdatedListener {
+        val listener = InstallStateUpdatedListener { state ->
+            if (state.installStatus() == InstallStatus.DOWNLOADED) onReadyToInstall()
         }
-        if (!fetched) return null
+        manager.registerListener(listener)
+        return listener
+    }
 
-        val latest = remoteConfig.getLong("latest_version_code")
-        if (latest <= currentVersionCode) return null
-        return UpdateInfo(remoteConfig.getString("update_message"))
+    fun unregisterListener(listener: InstallStateUpdatedListener) = manager.unregisterListener(listener)
+
+    /** The dialog's "Restart Now" — installs the already-downloaded update, which restarts the app. */
+    fun completeUpdate() {
+        manager.completeUpdate()
     }
 }

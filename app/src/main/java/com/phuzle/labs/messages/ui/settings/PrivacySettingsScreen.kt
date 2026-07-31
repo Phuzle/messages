@@ -12,31 +12,57 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.widget.Toast
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Dialpad
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import com.phuzle.labs.messages.ui.AppViewModel
+import com.phuzle.labs.messages.ui.components.BiometricGate
 import com.phuzle.labs.messages.ui.components.PillButton
 import com.phuzle.labs.messages.ui.components.SectionLabel
 import com.phuzle.labs.messages.ui.components.SettingsCard
 import com.phuzle.labs.messages.ui.components.SettingsRowDivider
+import com.phuzle.labs.messages.ui.components.withLongPressHaptic
 import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapeMedium
 
-private val APP_LOCK_METHODS = listOf("fingerprint" to "Fingerprint", "face" to "Face Unlock", "pin" to "PIN")
+private val APP_LOCK_METHODS = listOf(
+    Triple("fingerprint", "Fingerprint", Icons.Filled.Fingerprint),
+    Triple("face", "Face Unlock", Icons.Filled.Face),
+    Triple("pin", "PIN", Icons.Filled.Dialpad),
+)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PrivacySettingsScreen(state: AppUiState, viewModel: AppViewModel) {
     val tokens = MessagesTheme.tokens
     val settings = state.settings
+    val context = LocalContext.current
+    // Turning app lock OFF needs one more proof it's really the owner (a phone that's just been
+    // picked up unlocked shouldn't be able to disable the lock in two taps) — turning it ON never
+    // did and doesn't need to, there's nothing to protect yet.
+    var confirmDisable by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
@@ -46,16 +72,27 @@ fun PrivacySettingsScreen(state: AppUiState, viewModel: AppViewModel) {
             SectionLabel("App lock", Modifier.padding(bottom = 8.dp))
             Column(Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium).padding(14.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.Lock,
+                        contentDescription = null,
+                        tint = tokens.textSecondary,
+                        modifier = Modifier.size(20.dp).padding(end = 12.dp),
+                    )
                     Text("Require authentication to open app", color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    com.phuzle.labs.messages.ui.components.LabeledSwitch(checked = settings.appLockEnabled, onCheckedChange = { viewModel.toggleAppLock() })
+                    com.phuzle.labs.messages.ui.components.LabeledSwitch(
+                        checked = settings.appLockEnabled,
+                        onCheckedChange = { turningOn ->
+                            if (turningOn) viewModel.toggleAppLock() else confirmDisable = true
+                        },
+                    )
                 }
                 if (settings.appLockEnabled) {
                     Row(
                         Modifier.fillMaxWidth().padding(top = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        APP_LOCK_METHODS.forEach { (key, label) ->
-                            PillButton(label = label, active = settings.appLockMethod == key, onClick = { viewModel.setAppLockMethod(key) }, modifier = Modifier.weight(1f))
+                        APP_LOCK_METHODS.forEach { (key, label, icon) ->
+                            PillButton(label = label, active = settings.appLockMethod == key, onClick = { viewModel.setAppLockMethod(key) }, modifier = Modifier.weight(1f), icon = icon)
                         }
                     }
                 }
@@ -88,22 +125,45 @@ fun PrivacySettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                         if (index > 0) SettingsRowDivider()
                         Row(
                             Modifier.fillMaxWidth()
-                                .combinedClickable(onClick = {}, onLongClick = { viewModel.copyNumber(blocked.number) })
+                                .combinedClickable(onClick = {}, onLongClick = withLongPressHaptic { viewModel.copyNumber(blocked.number) })
                                 .padding(13.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(blocked.number, color = tokens.textPrimary, fontSize = 14.sp)
-                            Text(
-                                "Unblock", color = tokens.accent, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold,
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .border(1.dp, tokens.border, androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
                                     .clickable { viewModel.unblockNumber(blocked.number) }
                                     .padding(horizontal = 12.dp, vertical = 6.dp),
-                            )
+                            ) {
+                                Icon(Icons.Filled.LockOpen, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(14.dp))
+                                Text("Unblock", color = tokens.accent, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 5.dp))
+                            }
                         }
                     }
                 }
+            }
+        }
+    }
+
+    if (confirmDisable) {
+        // No visible UI of our own — the system BiometricPrompt is the only thing that appears,
+        // floating over this same settings screen. Cancel/fail just aborts back to "still on"
+        // since we never touched the setting; only success calls toggleAppLock.
+        BiometricGate(
+            key = "disable_app_lock",
+            title = "Confirm it's you",
+            subtitle = "Authenticate to turn off app lock",
+            onUnlocked = {
+                viewModel.toggleAppLock()
+                confirmDisable = false
+            },
+        ) {
+            LaunchedEffect(Unit) {
+                confirmDisable = false
+                Toast.makeText(context, "App lock wasn't changed", Toast.LENGTH_SHORT).show()
             }
         }
     }

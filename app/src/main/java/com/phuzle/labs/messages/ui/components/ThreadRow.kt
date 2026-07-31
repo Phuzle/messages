@@ -125,7 +125,7 @@ fun ThreadRow(
                 .background(if (selected) tokens.accentSoft else tokens.bg)
                 .combinedClickable(
                     onClick = if (selectionMode) onToggleSelect else onOpen,
-                    onLongClick = if (selectionMode) null else onLongPress,
+                    onLongClick = if (selectionMode) null else withLongPressHaptic(onLongPress),
                 )
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -133,7 +133,7 @@ fun ThreadRow(
             Box(
                 modifier = Modifier.combinedClickable(
                     onClick = if (selectionMode) onToggleSelect else onAvatarClick,
-                    onLongClick = if (selectionMode) null else onAvatarLongPress,
+                    onLongClick = if (selectionMode) null else withLongPressHaptic(onAvatarLongPress),
                 ),
             ) {
                 if (selectionMode) {
@@ -171,13 +171,15 @@ fun ThreadRow(
                     horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        // "You: " is plain, unbolded prefix text stitched in front of the
-                        // (possibly search-highlighted) preview — never baked into thread.preview
-                        // itself, which would shift previewMatch's character indices and bold the
-                        // wrong letters.
+                        // "You" is bolded, stitched in front of the (possibly search-highlighted)
+                        // preview — never baked into thread.preview itself, which would shift
+                        // previewMatch's character indices and bold the wrong letters.
                         if (thread.previewIsOutgoing) {
                             androidx.compose.ui.text.buildAnnotatedString {
-                                append("You: ")
+                                pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold))
+                                append("You")
+                                pop()
+                                append(": ")
                                 append(highlightedText(thread.preview, thread.previewMatch))
                             }
                         } else {

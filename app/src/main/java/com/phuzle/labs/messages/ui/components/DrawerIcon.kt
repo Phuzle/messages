@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Drafts
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
@@ -19,7 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 
-enum class DrawerIconType { Inbox, Archived, Drafts, Passbook, Reminders, ScheduledMessages, Settings, RecycleBin, AboutUs, Share }
+enum class DrawerIconType { Inbox, Archived, Drafts, Passbook, Reminders, ScheduledMessages, PrivateChats, Settings, RecycleBin, AboutUs, Share }
 
 private fun DrawerIconType.imageVector(): ImageVector = when (this) {
     DrawerIconType.Inbox -> Icons.Filled.Inbox
@@ -28,6 +29,7 @@ private fun DrawerIconType.imageVector(): ImageVector = when (this) {
     DrawerIconType.Passbook -> Icons.Filled.AccountBalanceWallet
     DrawerIconType.Reminders -> Icons.Filled.Notifications
     DrawerIconType.ScheduledMessages -> Icons.Filled.Schedule
+    DrawerIconType.PrivateChats -> Icons.Filled.Lock
     DrawerIconType.Settings -> Icons.Filled.Settings
     DrawerIconType.RecycleBin -> Icons.Filled.Delete
     DrawerIconType.AboutUs -> Icons.Filled.Info

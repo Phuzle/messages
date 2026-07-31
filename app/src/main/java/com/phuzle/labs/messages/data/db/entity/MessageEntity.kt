@@ -45,4 +45,8 @@ data class MessageEntity(
      * app was default in between — both directions the app previously never synced at all. Null
      * only if that provider write failed, in which case there is nothing to sync against. */
     val systemSmsId: Long? = null,
+    /** null while active; set to the deletion instant once soft-deleted (currently only the OTP
+     * eviction sweep does this — see MessageDao.purgeOtpMessagesBefore), purged for real after 30
+     * days by RecycleBinPurgeWorker, same cutoff as ThreadEntity.deletedAt. */
+    val deletedAt: Long? = null,
 )

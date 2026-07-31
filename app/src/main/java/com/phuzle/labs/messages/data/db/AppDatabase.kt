@@ -29,7 +29,7 @@ const val DATABASE_FILE_NAME = "messages.db"
         ReminderEntity::class,
         DraftEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -112,6 +112,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** OTP eviction (see MessageDao.purgeOtpMessagesBefore) used to hard-delete expired OTP
+         * messages outright; it now soft-deletes them into the recycle bin like everything else
+         * destructive in this app (see MessageEntity.deletedAt), so a code purged early by a false-
+         * positive 24h cutoff isn't gone forever. NULL for every pre-existing row is correct: none
+         * of them have ever been soft-deleted. */
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE messages ADD COLUMN deletedAt INTEGER DEFAULT NULL")
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -119,7 +130,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     DATABASE_FILE_NAME,
                 )
-                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                     // Deliberately no fallbackToDestructiveMigration(): with real, irreplaceable
                     // user messages in this table, a future version bump that's missing its
                     // Migration must crash loudly (forcing us to write one before shipping) rather

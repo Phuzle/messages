@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -77,6 +78,7 @@ fun SettingsToggleRow(
     onToggle: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    leadingIcon: ImageVector? = null,
 ) {
     Row(
         modifier = modifier
@@ -84,6 +86,9 @@ fun SettingsToggleRow(
             .padding(horizontal = 14.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (leadingIcon != null) {
+            Icon(leadingIcon, contentDescription = null, tint = MessagesTheme.tokens.textSecondary, modifier = Modifier.size(20.dp).padding(end = 12.dp))
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(title, color = MessagesTheme.tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             if (subtitle != null) {

@@ -5,10 +5,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -21,9 +24,11 @@ fun ListCountHeader(
     noun: String,
     modifier: Modifier = Modifier,
     actionLabel: String? = null,
+    actionIcon: ImageVector? = null,
     actionDanger: Boolean = false,
     onAction: (() -> Unit)? = null,
     secondaryActionLabel: String? = null,
+    secondaryActionIcon: ImageVector? = null,
     secondaryActionDanger: Boolean = false,
     onSecondaryAction: (() -> Unit)? = null,
 ) {
@@ -34,25 +39,29 @@ fun ListCountHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text("$count $noun", color = tokens.textSecondary, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
             if (actionLabel != null && onAction != null) {
-                Text(
-                    actionLabel,
-                    color = if (actionDanger) tokens.danger else tokens.accent,
-                    fontSize = 12.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable(onClick = onAction),
-                )
+                HeaderAction(actionLabel, actionIcon, if (actionDanger) tokens.danger else tokens.accent, onAction)
             }
             if (secondaryActionLabel != null && onSecondaryAction != null) {
-                Text(
-                    secondaryActionLabel,
-                    color = if (secondaryActionDanger) tokens.danger else tokens.accent,
-                    fontSize = 12.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable(onClick = onSecondaryAction),
-                )
+                HeaderAction(secondaryActionLabel, secondaryActionIcon, if (secondaryActionDanger) tokens.danger else tokens.accent, onSecondaryAction)
             }
         }
+    }
+}
+
+@Composable
+private fun HeaderAction(label: String, icon: ImageVector?, color: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable(onClick = onClick)) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(15.dp))
+        }
+        Text(
+            label,
+            color = color,
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = if (icon != null) Modifier.padding(start = 4.dp) else Modifier,
+        )
     }
 }

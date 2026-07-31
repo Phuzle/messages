@@ -15,7 +15,7 @@ interface MessageDao {
     @Update
     suspend fun update(message: MessageEntity)
 
-    @Query("SELECT * FROM messages WHERE threadId = :threadId ORDER BY timestamp ASC")
+    @Query("SELECT * FROM messages WHERE threadId = :threadId AND deletedAt IS NULL ORDER BY timestamp ASC")
     fun observeForThread(threadId: String): Flow<List<MessageEntity>>
 
     /**
@@ -23,11 +23,11 @@ interface MessageDao {
      * years of history doesn't pull every row into memory at once. Ordered DESC here purely so
      * `LIMIT` keeps the *newest* rows — callers reverse it back to chronological order.
      */
-    @Query("SELECT * FROM messages WHERE threadId = :threadId ORDER BY timestamp DESC LIMIT :limit")
+    @Query("SELECT * FROM messages WHERE threadId = :threadId AND deletedAt IS NULL ORDER BY timestamp DESC LIMIT :limit")
     fun observeRecentForThread(threadId: String, limit: Int): Flow<List<MessageEntity>>
 
     /** One-shot "load older" page, keyed off the oldest timestamp currently held in memory. */
-    @Query("SELECT * FROM messages WHERE threadId = :threadId AND timestamp < :beforeTimestamp ORDER BY timestamp DESC LIMIT :limit")
+    @Query("SELECT * FROM messages WHERE threadId = :threadId AND deletedAt IS NULL AND timestamp < :beforeTimestamp ORDER BY timestamp DESC LIMIT :limit")
     suspend fun olderThan(threadId: String, beforeTimestamp: Long, limit: Int): List<MessageEntity>
 
     @Query("SELECT * FROM messages WHERE sent = 0 AND scheduledFor <= :now")
@@ -53,11 +53,11 @@ interface MessageDao {
     suspend fun findById(id: Long): MessageEntity?
 
     /** Storage & Data's overview total. */
-    @Query("SELECT COUNT(*) FROM messages")
+    @Query("SELECT COUNT(*) FROM messages WHERE deletedAt IS NULL")
     suspend fun countAll(): Int
 
     /** Used to recompute a thread's cached preview/time after its last message is deleted. */
-    @Query("SELECT * FROM messages WHERE threadId = :threadId ORDER BY timestamp DESC LIMIT 1")
+    @Query("SELECT * FROM messages WHERE threadId = :threadId AND deletedAt IS NULL ORDER BY timestamp DESC LIMIT 1")
     suspend fun latestForThread(threadId: String): MessageEntity?
 
     /** Contact-info page's "First contact" row. */
@@ -77,20 +77,50 @@ interface MessageDao {
     @Query("SELECT COUNT(*) FROM messages WHERE threadId = :threadId AND body = :body AND timestamp = :timestamp AND outgoing = :outgoing")
     suspend fun countMatching(threadId: String, body: String, timestamp: Long, outgoing: Boolean): Int
 
-    @Query("DELETE FROM messages WHERE timestamp < :cutoff AND threadId IN (SELECT id FROM threads WHERE category = 'Otp')")
-    suspend fun purgeOtpMessagesBefore(cutoff: Long)
+    /** Soft-delete only (see MessageEntity.deletedAt) — moves expired OTP messages into the
+     * recycle bin instead of destroying them outright, same as every other delete in this app.
+     * [purgeSoftDeletedBefore] is what removes them for good, 30 days later. */
+    @Query(
+        "UPDATE messages SET deletedAt = :now WHERE timestamp < :cutoff AND deletedAt IS NULL " +
+            "AND threadId IN (SELECT id FROM threads WHERE category = 'Otp')"
+    )
+    suspend fun purgeOtpMessagesBefore(cutoff: Long, now: Long)
+
+    /** Recycle Bin's "Deleted OTP codes" section — soft-deleted OTP messages, newest-deleted
+     * first, joined with the thread for a sender name to display since the message row alone
+     * doesn't carry one. */
+    @Query(
+        "SELECT m.id AS id, m.threadId AS threadId, t.displayName AS senderName, m.body AS body, " +
+            "m.timestamp AS timestamp, m.deletedAt AS deletedAt FROM messages m JOIN threads t ON m.threadId = t.id " +
+            "WHERE m.deletedAt IS NOT NULL ORDER BY m.deletedAt DESC"
+    )
+    fun observeDeletedOtpMessages(): Flow<List<DeletedOtpMessageRow>>
+
+    @Query("UPDATE messages SET deletedAt = NULL WHERE id = :id")
+    suspend fun restoreDeletedMessage(id: Long)
+
+    /** The undo half of [restoreDeletedMessage] — re-deletes one message by id, for "Restore all"'s
+     * own undo bar (see AppViewModel.restoreAllDeleted). */
+    @Query("UPDATE messages SET deletedAt = :deletedAt WHERE id = :id")
+    suspend fun softDeleteMessage(id: Long, deletedAt: Long)
+
+    /** The 30-day auto-purge worker's other half — see RecycleBinPurgeWorker. Same cutoff as
+     * ThreadDao.purgeDeletedBefore, just for individually soft-deleted messages instead of whole
+     * threads. */
+    @Query("DELETE FROM messages WHERE deletedAt IS NOT NULL AND deletedAt < :cutoff")
+    suspend fun purgeSoftDeletedBefore(cutoff: Long)
 
     /** Drives the 30-second OTP hot-swap modal on app foreground. */
     @Query(
         "SELECT m.* FROM messages m JOIN threads t ON m.threadId = t.id " +
-            "WHERE t.category = 'Otp' AND m.outgoing = 0 ORDER BY m.timestamp DESC LIMIT 1"
+            "WHERE t.category = 'Otp' AND m.outgoing = 0 AND m.deletedAt IS NULL ORDER BY m.timestamp DESC LIMIT 1"
     )
     suspend fun latestIncomingOtpMessage(): MessageEntity?
 
     /** Per-thread unread *message* counts (not just the thread-level unread flag) — the numbered
      * badge on each dashboard row. Only inbound messages count; an outgoing message is never
      * "unread". */
-    @Query("SELECT threadId, COUNT(*) AS count FROM messages WHERE outgoing = 0 AND read = 0 GROUP BY threadId")
+    @Query("SELECT threadId, COUNT(*) AS count FROM messages WHERE outgoing = 0 AND read = 0 AND deletedAt IS NULL GROUP BY threadId")
     fun observeUnreadCounts(): Flow<List<ThreadUnreadCount>>
 
     /** Opening a thread (or explicitly marking one read) reads every message in it, not just the
@@ -134,7 +164,7 @@ interface MessageDao {
     @Query("UPDATE messages SET read = :read WHERE id = :id")
     suspend fun setReadState(id: Long, read: Boolean)
 
-    @Query("SELECT COUNT(*) FROM messages WHERE threadId = :threadId AND outgoing = 0 AND read = 0")
+    @Query("SELECT COUNT(*) FROM messages WHERE threadId = :threadId AND outgoing = 0 AND read = 0 AND deletedAt IS NULL")
     suspend fun unreadCountForThread(threadId: String): Int
 
     /** Every message that has a system-provider counterpart — reconciliation's starting point
@@ -149,3 +179,5 @@ interface MessageDao {
 data class ThreadUnreadCount(val threadId: String, val count: Int)
 
 data class SystemLinkedMessageRow(val id: Long, val threadId: String, val systemSmsId: Long, val read: Boolean, val outgoing: Boolean)
+
+data class DeletedOtpMessageRow(val id: Long, val threadId: String, val senderName: String, val body: String, val timestamp: Long, val deletedAt: Long)

@@ -50,7 +50,7 @@ class AppContainer(context: Context) {
     }
     val smsSender: SmsSender by lazy { SmsSender(appContext) }
     val messageNotifier: MessageNotifier by lazy { MessageNotifier(appContext, settingsRepository) }
-    val updateChecker: UpdateChecker by lazy { UpdateChecker() }
+    val updateChecker: UpdateChecker by lazy { UpdateChecker(appContext) }
     val smsHistoryImporter: SmsHistoryImporter by lazy {
         SmsHistoryImporter(appContext, database.threadDao(), database.messageDao(), contactLookup, classifier, passbookRepository, regexRules)
     }

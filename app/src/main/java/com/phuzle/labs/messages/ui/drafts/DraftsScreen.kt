@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Drafts
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -64,6 +65,7 @@ fun DraftsScreen(state: AppUiState, viewModel: AppViewModel) {
                         count = state.drafts.size,
                         noun = if (state.drafts.size == 1) "draft" else "drafts",
                         actionLabel = "Delete all",
+                        actionIcon = Icons.Filled.DeleteSweep,
                         actionDanger = true,
                         onAction = { showDeleteAllConfirm = true },
                     )

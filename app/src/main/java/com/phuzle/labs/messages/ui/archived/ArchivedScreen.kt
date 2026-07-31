@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -41,11 +42,12 @@ fun ArchivedScreen(state: AppUiState, viewModel: AppViewModel) {
                         count = state.archivedThreads.size,
                         noun = if (state.archivedThreads.size == 1) "chat archived" else "chats archived",
                         actionLabel = "Unarchive all",
+                        actionIcon = Icons.Filled.Unarchive,
                         onAction = viewModel::unarchiveAll,
                     )
                 }
                 items(state.archivedThreads, key = { it.id }) { item ->
-                    SimpleThreadRow(item = item, actionLabel = "Unarchive", onAction = { viewModel.unarchiveThread(item.id) })
+                    SimpleThreadRow(item = item, actionLabel = "Unarchive", actionIcon = Icons.Filled.Unarchive, onAction = { viewModel.unarchiveThread(item.id) })
                 }
             }
         }

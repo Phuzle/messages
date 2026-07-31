@@ -326,7 +326,16 @@ class ThreadRepository(
     }
 
     fun observeSearchCandidates(): Flow<List<SearchCandidateRow>> = threadDao.observeSearchCandidates()
-    suspend fun purgeOtpMessagesBefore(cutoffMillis: Long) = messageDao.purgeOtpMessagesBefore(cutoffMillis)
+    suspend fun purgeOtpMessagesBefore(cutoffMillis: Long) = messageDao.purgeOtpMessagesBefore(cutoffMillis, System.currentTimeMillis())
+
+    fun observeDeletedOtpMessages() = messageDao.observeDeletedOtpMessages()
+    suspend fun restoreDeletedMessage(id: Long) {
+        messageDao.restoreDeletedMessage(id)
+        val message = messageDao.findById(id)
+        message?.let { refreshLastMessage(it.threadId) }
+    }
+    suspend fun purgeSoftDeletedMessagesBefore(cutoffMillis: Long) = messageDao.purgeSoftDeletedBefore(cutoffMillis)
+    suspend fun softDeleteMessage(id: Long, whenMillis: Long) = messageDao.softDeleteMessage(id, whenMillis)
 
     suspend fun block(number: String) = blockedNumberDao.block(BlockedNumberEntity(number))
     suspend fun unblock(number: String) = blockedNumberDao.unblock(BlockedNumberEntity(number))
