@@ -55,13 +55,14 @@ fun AppRoot(viewModel: AppViewModel) {
     MessagesTheme(themeMode = state.themeMode, accentHex = state.settings.accentHex) {
         val tokens = MessagesTheme.tokens
 
-        BackHandler(enabled = state.undoMessage != null || state.updateInfo != null || state.driveRestoreAvailable || state.driveSignInNeededForRestore || state.driveNoBackupFoundEmail != null || state.actionSheet != null || state.overflowMenuOpen || state.showDrawer || state.multiSelectThreadIds.isNotEmpty() || state.threadSearchActive || state.composeToSuggestions.isNotEmpty() || state.pushedScreen != null || state.searchQuery.isNotEmpty()) {
+        BackHandler(enabled = state.undoMessage != null || state.updateInfo != null || state.driveRestoreAvailable || state.driveSignInNeededForRestore || state.driveNoBackupFoundEmail != null || state.markAllReadConfirmThreadIds != null || state.actionSheet != null || state.overflowMenuOpen || state.showDrawer || state.multiSelectThreadIds.isNotEmpty() || state.threadSearchActive || state.composeToSuggestions.isNotEmpty() || state.pushedScreen != null || state.searchQuery.isNotEmpty()) {
             when {
                 state.undoMessage != null -> viewModel.dismissUndo()
                 state.updateInfo != null -> viewModel.dismissUpdate()
                 state.driveRestoreAvailable -> viewModel.dismissDriveRestorePrompt()
                 state.driveSignInNeededForRestore -> viewModel.skipDriveSignInForRestore()
                 state.driveNoBackupFoundEmail != null -> viewModel.dismissNoBackupFound()
+                state.markAllReadConfirmThreadIds != null -> viewModel.dismissMarkAllAsReadConfirm()
                 state.actionSheet != null -> viewModel.closeActionSheet()
                 state.overflowMenuOpen -> viewModel.closeOverflowMenu()
                 state.showDrawer -> viewModel.closeDrawer()
@@ -181,11 +182,33 @@ fun AppRoot(viewModel: AppViewModel) {
                 visible = state.overflowMenuOpen,
                 onDismiss = viewModel::closeOverflowMenu,
                 items = listOf(
-                    MenuItem("Mark all as read", onClick = viewModel::markAllAsRead),
+                    MenuItem("Mark all as read", onClick = viewModel::requestMarkAllAsRead),
                     MenuItem(if (state.unreadOnly) "Show all messages" else "Show unread only", onClick = viewModel::toggleUnreadOnly),
                     MenuItem("Settings", onClick = viewModel::openSettings),
                 ),
             )
+
+            state.markAllReadConfirmThreadIds?.let { threadIds ->
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = viewModel::dismissMarkAllAsReadConfirm,
+                    title = { Text("Mark all as read?") },
+                    text = {
+                        Text(
+                            if (state.activeCategory == com.phuzle.labs.messages.domain.model.Category.All) {
+                                "This marks all ${threadIds.size} conversation(s) in your inbox as read."
+                            } else {
+                                "This marks ${threadIds.size} conversation(s) in ${state.activeCategory.label} as read."
+                            },
+                        )
+                    },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(onClick = viewModel::confirmMarkAllAsRead) { Text("Mark as read") }
+                    },
+                    dismissButton = {
+                        androidx.compose.material3.TextButton(onClick = viewModel::dismissMarkAllAsReadConfirm) { Text("Cancel") }
+                    },
+                )
+            }
 
             ActionSheet(
                 sheet = state.actionSheet,

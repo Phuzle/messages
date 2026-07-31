@@ -72,6 +72,12 @@ interface ThreadDao {
     @Query("UPDATE threads SET unread = 0 WHERE deletedAt IS NULL")
     suspend fun markAllRead()
 
+    /** Scoped variant of [markAllRead] for the overflow menu's "Mark all as read" — [ids] is
+     * whatever the dashboard's current category/unread filter actually shows, so this only ever
+     * touches threads the user can see, not the whole inbox regardless of which tab they're on. */
+    @Query("UPDATE threads SET unread = 0 WHERE id IN (:ids)")
+    suspend fun markThreadsRead(ids: List<String>)
+
     /** See ThreadEntity.preferredSubscriptionId — only ever called with a non-null subscription
      * id (recordIncomingMessage/reply-send skip this entirely when none is knowable), so an
      * already-known SIM is never overwritten with "unknown" just because one later message

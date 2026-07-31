@@ -87,6 +87,14 @@ private data class Ephemeral(
     val unreadOnly: Boolean = false,
     val showDrawer: Boolean = false,
     val overflowMenuOpen: Boolean = false,
+    /** Non-null while confirming the overflow menu's "Mark all as read" — the exact thread ids to
+     * touch, captured at the moment the menu item was tapped rather than re-derived at confirm
+     * time, so the dialog's own displayed count can never drift from what actually gets mutated.
+     * Affects potentially many threads at once and writes through to the system SMS provider, with
+     * no practical way to undo it afterward — a confirmation dialog, not an undo bar, matches how
+     * every other multi-item destructive action here is handled (see RecycleBinScreen's "Empty
+     * recycle bin?"). */
+    val markAllReadConfirmThreadIds: List<String>? = null,
     val actionSheetThreadId: String? = null,
     val threadInput: String = "",
     val composeTo: String = "",
@@ -544,6 +552,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             blockedList = threads.blocked.map { BlockedNumberUi(it.number) },
             showDrawer = eph.showDrawer,
             overflowMenuOpen = eph.overflowMenuOpen,
+            markAllReadConfirmThreadIds = eph.markAllReadConfirmThreadIds,
             actionSheet = actionSheet,
             otpModal = eph.otpModal,
             isDefaultSmsApp = eph.isDefaultSmsApp,
@@ -852,10 +861,27 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         if (it.olderMessages.isEmpty()) it else it.copy(olderMessages = emptyList(), hasMoreOlderMessages = true)
     }
 
-    fun markAllAsRead() = viewModelScope.launch {
-        container.threadRepository.markAllRead()
-        ephemeral.update { it.copy(overflowMenuOpen = false) }
+    /** Overflow menu's "Mark all as read" — captures which threads are affected (whatever the
+     * current category/unread-only filter shows, see uiState.value.threads) and asks for
+     * confirmation before touching anything. Used to call ThreadRepository.markAllRead()
+     * unconditionally, which silently marked *every* thread in the whole inbox read regardless of
+     * which category tab was open — e.g. tapping this while filtered to OTP marked Personal,
+     * Transactions, and Promotions read too, with no way to tell it had happened until those
+     * threads' unread state was already gone. */
+    fun requestMarkAllAsRead() {
+        val threadIds = uiState.value.threads.map { it.id }
+        ephemeral.update {
+            it.copy(overflowMenuOpen = false, markAllReadConfirmThreadIds = threadIds.ifEmpty { null })
+        }
     }
+
+    fun confirmMarkAllAsRead() = viewModelScope.launch {
+        val threadIds = ephemeral.value.markAllReadConfirmThreadIds ?: return@launch
+        ephemeral.update { it.copy(markAllReadConfirmThreadIds = null) }
+        container.threadRepository.markThreadsRead(threadIds)
+    }
+
+    fun dismissMarkAllAsReadConfirm() = ephemeral.update { it.copy(markAllReadConfirmThreadIds = null) }
 
     fun toggleUnreadOnly() = ephemeral.update { it.copy(unreadOnly = !it.unreadOnly, overflowMenuOpen = false) }
 

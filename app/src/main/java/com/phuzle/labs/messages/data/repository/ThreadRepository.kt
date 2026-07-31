@@ -264,6 +264,19 @@ class ThreadRepository(
         messageDao.markAllRead()
         smsProviderSync.markRead(systemIds)
     }
+
+    /** The overflow menu's "Mark all as read" actually calls this, not [markAllRead] — [threadIds]
+     * is exactly what the dashboard's current category/unread-only filter shows, so this can never
+     * silently reach into a category the user isn't even looking at. [markAllRead] itself is kept
+     * for whatever legitimately wants every thread regardless of filter (there's no such caller
+     * today, but scoping is the caller's job, not something to bake into "read every message"). */
+    suspend fun markThreadsRead(threadIds: List<String>) {
+        if (threadIds.isEmpty()) return
+        val systemIds = messageDao.unreadSystemSmsIdsForThreads(threadIds)
+        threadDao.markThreadsRead(threadIds)
+        messageDao.markThreadsRead(threadIds)
+        smsProviderSync.markRead(systemIds)
+    }
     suspend fun archive(id: String) = threadDao.setArchived(id, true)
     suspend fun unarchive(id: String) = threadDao.setArchived(id, false)
     suspend fun setPrivate(id: String, isPrivate: Boolean) = threadDao.setPrivate(id, isPrivate)

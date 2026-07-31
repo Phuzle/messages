@@ -93,6 +93,11 @@ interface MessageDao {
     @Query("UPDATE messages SET read = 1 WHERE outgoing = 0")
     suspend fun markAllRead()
 
+    /** Scoped variant of [markAllRead] — see ThreadDao.markThreadsRead for why this is scoped to
+     * specific thread ids rather than every message in the database. */
+    @Query("UPDATE messages SET read = 1 WHERE threadId IN (:threadIds) AND outgoing = 0")
+    suspend fun markThreadsRead(threadIds: List<String>)
+
     // region ---- system SMS provider sync (see SmsProviderSync / MessageEntity.systemSmsId) ----
 
     @Query("UPDATE messages SET systemSmsId = :systemSmsId WHERE id = :id")
@@ -112,6 +117,9 @@ interface MessageDao {
 
     @Query("SELECT systemSmsId FROM messages WHERE outgoing = 0 AND read = 0 AND systemSmsId IS NOT NULL")
     suspend fun allUnreadSystemSmsIds(): List<Long>
+
+    @Query("SELECT systemSmsId FROM messages WHERE threadId IN (:threadIds) AND outgoing = 0 AND read = 0 AND systemSmsId IS NOT NULL")
+    suspend fun unreadSystemSmsIdsForThreads(threadIds: List<String>): List<Long>
 
     @Query("UPDATE messages SET read = :read WHERE id = :id")
     suspend fun setReadState(id: Long, read: Boolean)

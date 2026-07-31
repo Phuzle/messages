@@ -59,6 +59,8 @@ data class AppUiState(
 
     val showDrawer: Boolean = false,
     val overflowMenuOpen: Boolean = false,
+    /** See AppViewModel's field of the same name — non-null while confirming "Mark all as read". */
+    val markAllReadConfirmThreadIds: List<String>? = null,
     val actionSheet: ActionSheetUi? = null,
     val otpModal: OtpModalUi? = null,
     val updateInfo: UpdateInfoUi? = null,
