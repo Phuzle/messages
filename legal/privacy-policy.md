@@ -96,6 +96,6 @@ updated effective date.
 
 ## Contact us
 
-Questions about this policy: **support@phuzle.com**
+Questions about this policy: **support+labs.messages@phuzle.com**
 
 See also our [Terms of Service](https://docs.phuzle.com/messages/terms).

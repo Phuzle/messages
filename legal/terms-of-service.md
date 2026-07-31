@@ -65,4 +65,4 @@ server-side service the app relies on (such as push notifications for update ale
 
 ## Contact us
 
-Questions about these terms: **support@phuzle.com**
+Questions about these terms: **support+labs.messages@phuzle.com**

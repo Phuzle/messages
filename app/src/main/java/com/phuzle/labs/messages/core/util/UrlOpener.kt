@@ -24,7 +24,7 @@ fun openUrl(context: Context, inAppBrowser: Boolean, url: String) {
     if (!launched) Toast.makeText(context, "Couldn't open that link", Toast.LENGTH_SHORT).show()
 }
 
-private const val PRODUCTION_SUPPORT_EMAIL = "support@phuzle.com"
+private const val PRODUCTION_SUPPORT_EMAIL = "support+labs.messages@phuzle.com"
 
 // Testers Google Group — same one release.yml's tag-suffix routes to internal/closed testing
 // (see RELEASING.md). A plain "vX.Y.Z" tag/versionName means production; any "-alpha"/"-beta"/
