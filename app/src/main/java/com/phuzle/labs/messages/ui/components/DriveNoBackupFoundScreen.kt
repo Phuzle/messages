@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -21,20 +21,15 @@ import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 
 /**
- * Startup step shown when a Drive backup was found for the signed-in account (see
- * AppViewModel.checkFirstLaunchDriveRestore), offering to merge it into whatever is already on this
- * device.
+ * Startup step shown when a *silent*, zero-interaction sign-in resolved a Google account but that
+ * account has no Messages backup (see AppViewModel.checkDriveBackupsAndOffer) — without this the
+ * user was never told a check even happened for this branch, nor which account got checked, nor
+ * given any chance to try a different one before this one-time startup window closes for good.
  *
- * A full screen, not the floating dialog this used to be. StartupFlowScreen renders exactly one
- * step at a time with nothing behind it, so a scrim-over-content component had no content to sit
- * over: the translucent overlayBg fell straight through to the bare window, and the step rendered
- * as a small card adrift in a murky void — visibly broken next to the other startup steps, which
- * are all real screens. Same information, same two choices, DESIGN.md's startup pattern (centered
- * header block, actions pinned to the bottom) shared with SmsDisclosureScreen and
- * DriveSignInPromptScreen.
+ * Layout matches DESIGN.md's "Startup/status screens" pattern shared with the rest of this flow.
  */
 @Composable
-fun DriveRestorePromptScreen(onRestore: () -> Unit, onSkip: () -> Unit, onSwitchAccount: () -> Unit) {
+fun DriveNoBackupFoundScreen(email: String, onSwitchAccount: () -> Unit, onContinue: () -> Unit) {
     val tokens = MessagesTheme.tokens
     Box(Modifier.fillMaxSize().background(tokens.bg)) {
         Column(
@@ -42,14 +37,14 @@ fun DriveRestorePromptScreen(onRestore: () -> Unit, onSkip: () -> Unit, onSwitch
                 .align(Alignment.TopCenter),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            IconBadge(icon = Icons.Filled.CloudDownload, size = 56.dp)
+            IconBadge(icon = Icons.Filled.CloudOff, size = 56.dp)
             Text(
-                "Restore from Google Drive?",
+                "No backup found",
                 color = tokens.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center, modifier = Modifier.padding(top = 20.dp),
             )
             Text(
-                "We found a backup in your Google account. Restoring merges it in with anything already on this device — nothing local gets removed.",
+                "We checked $email and didn't find a Messages backup there. If your backup is under a different Google account, you can switch and check again.",
                 color = tokens.textSecondary,
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center,
@@ -63,12 +58,8 @@ fun DriveRestorePromptScreen(onRestore: () -> Unit, onSkip: () -> Unit, onSwitch
                 .navigationBarsPadding()
                 .padding(horizontal = 28.dp, vertical = 20.dp),
         ) {
-            PrimaryButton(label = "Restore & Merge", onClick = onRestore)
-            SecondaryTextButton(label = "Not now", onClick = onSkip, modifier = Modifier.padding(top = 4.dp))
-            // This account was resolved by a silent, zero-interaction sign-in — the user was never
-            // actually asked which Google account to check, so without this the only way to check a
-            // different one is buried in Settings, well after this one-time startup window closes.
-            SecondaryTextButton(label = "Not you? Switch Google account", onClick = onSwitchAccount)
+            PrimaryButton(label = "Switch Google account", onClick = onSwitchAccount)
+            SecondaryTextButton(label = "Continue", onClick = onContinue, modifier = Modifier.padding(top = 4.dp))
         }
     }
 }

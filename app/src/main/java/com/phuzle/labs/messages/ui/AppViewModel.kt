@@ -135,6 +135,12 @@ private data class Ephemeral(
      * falling through to its generic "Setting up Messages" gap-filler — this is a real network
      * call that can take seconds, not one of the sub-frame gaps that fallback exists for. */
     val driveCheckInProgress: Boolean = false,
+    /** Set when a silent sign-in resolved a Google account with zero interaction but that account
+     * had no Drive backup — see checkDriveBackupsAndOffer. Without this the user was never told a
+     * check happened at all for this branch: the app would just silently accept whichever account
+     * Play Services happened to cache and move on, with no chance to try a different one even
+     * though they were never actually asked which account to check in the first place. */
+    val driveNoBackupFoundEmail: String? = null,
     /** Fetched once when Thread Info opens (see openThreadInfo) — not worth a continuous reactive
      * flow just for a "first contact" date that never changes after the fact. */
     val threadInfoFirstContactAt: Long? = null,
@@ -549,6 +555,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             driveSignInNeededForRestore = eph.driveSignInNeededForRestore,
             driveRestoreInProgress = eph.driveRestoreInProgress,
             driveCheckInProgress = eph.driveCheckInProgress,
+            driveNoBackupFoundEmail = eph.driveNoBackupFoundEmail,
             messageActionTarget = eph.messageActionTarget,
             isImportingHistory = eph.isImportingHistory,
             importDone = eph.importDone,
@@ -1299,23 +1306,36 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     /** Backfills pre-existing on-device SMS the first time we gain the default-SMS-app role. */
     private fun importHistoryOnce() = viewModelScope.launch {
-        // Snapshotted before any work below can add rows — this is what tells apart "this install
-        // genuinely already finished its one-time setup" from "Android's Auto Backup silently
-        // restored the *record* of that decision from a previous install, without restoring the
-        // data it was a decision about". allowBackup/dataExtractionRules deliberately excludes
-        // messages.db from that cloud backup (see res/xml/backup_rules.xml) so real messages are
-        // never restored outside the app's own explicit Drive-backup opt-in — but the DataStore
-        // file holding historyImported/driveRestorePromptShown is NOT excluded, since losing the
-        // user's theme/accent/other preferences on every reinstall would be its own regression.
-        // Confirmed on a real device signed into a Google account: uninstall + reinstall correctly
-        // wipes the local database, but the restored settings still say historyImported=true and
-        // driveRestorePromptShown=true from the previous install, so the app trusted them
-        // completely and skipped straight past both the sync screen and the Drive check to a
-        // blank dashboard — silently and permanently, since nothing here ever re-checks either
-        // flag against reality on its own.
-        val databaseWasEmptyAtLaunch = container.threadRepository.storageOverview().messageCount == 0
+        // Captured inside the mutex, at the moment historyImported itself is read — this is what
+        // tells apart "this install genuinely already finished its one-time setup" from "Android's
+        // Auto Backup silently restored the *record* of that decision from a previous install,
+        // without restoring the data it was a decision about". allowBackup/dataExtractionRules
+        // deliberately excludes messages.db from that cloud backup (see res/xml/backup_rules.xml)
+        // so real messages are never restored outside the app's own explicit Drive-backup opt-in —
+        // but the DataStore file holding historyImported/driveRestorePromptShown is NOT excluded,
+        // since losing the user's theme/accent/other preferences on every reinstall would be its
+        // own regression. Confirmed on a real device signed into a Google account: uninstall +
+        // reinstall correctly wipes the local database, but the restored settings still say
+        // historyImported=true and driveRestorePromptShown=true from the previous install, so the
+        // app trusted them completely and skipped straight past both the sync screen and the Drive
+        // check to a blank dashboard — silently and permanently, since nothing here ever re-checked
+        // either flag against reality on its own.
+        //
+        // container.freshInstallMarker is the actual signal (see its own doc comment for why a
+        // no-backup-directory marker file, not a database row count, is what correctly answers
+        // "was this specific installation ever set up" independent of whether the user's inbox
+        // happens to be empty for entirely unrelated reasons). wasFreshAtEntry has to be read here,
+        // inside the lock, rather than before it: setDefaultSmsAppStatus(true) fires from two
+        // places within milliseconds of each other (see historyImportMutex's own doc comment), and
+        // reading the marker before acquiring the lock would let the second caller see the same
+        // "still fresh" snapshot the first caller already acted on and is about to resolve —
+        // reading it after the lock is held guarantees the second caller sees the marker the first
+        // caller just wrote, the same protection the mutex already gives historyImported itself.
+        var wasFreshAtEntry = false
         historyImportMutex.withLock {
-            val alreadyImported = container.settingsRepository.settingsFlow.first().historyImported && !databaseWasEmptyAtLaunch
+            val settings = container.settingsRepository.settingsFlow.first()
+            wasFreshAtEntry = container.freshInstallMarker.isFreshInstall()
+            val alreadyImported = settings.historyImported && !wasFreshAtEntry
             if (!alreadyImported) {
                 ephemeral.update { it.copy(isImportingHistory = true, importDone = 0, importTotal = 0, historySyncSuccess = false) }
                 try {
@@ -1323,6 +1343,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                         ephemeral.update { it.copy(importDone = done, importTotal = total) }
                     }
                     container.settingsRepository.setHistoryImported(true)
+                    container.freshInstallMarker.markComplete()
                     // A brief "done!" beat instead of jumping straight to whatever's next — the
                     // progress screen otherwise just vanishes the instant sync finishes, with
                     // nothing telling the user it actually succeeded.
@@ -1345,11 +1366,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         // itself is cheap to call redundantly on every later launch — it no-ops immediately once
         // driveRestorePromptShown is set.
         //
-        // forceRecheck carries the same "was the database actually empty" signal forward: by this
-        // point the import above may have just filled it with real messages, so re-deriving
-        // "was this fresh" from the *current* message count here would get the wrong answer for
-        // exactly the restored-settings case this is meant to catch.
-        checkFirstLaunchDriveRestore(forceRecheck = databaseWasEmptyAtLaunch)
+        // forceRecheck carries wasFreshAtEntry forward rather than re-reading the marker here: the
+        // import above may have just written it (markComplete(), right after a successful import),
+        // so re-checking now would get the wrong answer for exactly the restored-settings case this
+        // is meant to catch — the whole point is "was this fresh at the *start* of this sequence".
+        checkFirstLaunchDriveRestore(forceRecheck = wasFreshAtEntry)
     }
 
     // endregion
@@ -1780,10 +1801,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
      * silently never appeared for real accounts with real backups. Now a silent-sign-in failure
      * instead offers an explicit interactive "Sign in to check" step (driveSignInNeededForRestore),
      * still with Skip — see handleDriveSignInResult for what happens after that sign-in returns. */
-    /** [forceRecheck] — see importHistoryOnce's databaseWasEmptyAtLaunch: a stale
-     * driveRestorePromptShown restored by Android's Auto Backup onto an otherwise-empty database
-     * is exactly as untrustworthy as a stale historyImported would be, and for the same reason —
-     * it describes a decision made about data that this install never actually had. */
+    /** [forceRecheck] — see importHistoryOnce's wasFreshAtEntry: a stale driveRestorePromptShown
+     * restored by Android's Auto Backup onto a fresh install is exactly as untrustworthy as a
+     * stale historyImported would be, and for the same reason — it describes a decision made on a
+     * previous installation, not this one. */
     fun checkFirstLaunchDriveRestore(forceRecheck: Boolean = false) = viewModelScope.launch {
         // Already showing one of the two prompts (the user hasn't decided yet) — importHistoryOnce
         // calls this again on every onResume, not just the first, so this avoids redundant sign-in/
@@ -1844,7 +1865,12 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
         if (container.driveBackupManager.listBackups(token).isEmpty()) {
             container.settingsRepository.setDriveRestorePromptShown(true)
-            ephemeral.update { it.copy(driveSignInNeededForRestore = false) }
+            // Surfaced instead of silently continuing to the dashboard: a *silent* sign-in resolved
+            // this account with zero interaction from the user, so this is the only moment they
+            // find out which account got checked — and their only chance to try a different one
+            // before this startup step is gone for the rest of the install (checkFirstLaunchDriveRestore
+            // no-ops on every later launch once driveRestorePromptShown is set).
+            ephemeral.update { it.copy(driveSignInNeededForRestore = false, driveNoBackupFoundEmail = account.email) }
             return
         }
         container.settingsRepository.setGoogleAccountEmail(account.email!!)
@@ -1858,6 +1884,23 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     fun skipDriveSignInForRestore() = viewModelScope.launch {
         ephemeral.update { it.copy(driveSignInNeededForRestore = false) }
+        container.settingsRepository.setDriveRestorePromptShown(true)
+    }
+
+    /** "Not you?" action from the restore-offer screen or the no-backup-found screen — lets the
+     * user pick a different Google account through the same interactive chooser Settings' "Connect
+     * to Google Drive" uses, instead of silently accepting whichever account a background sign-in
+     * happened to resolve. Routes back through driveSignInNeededForRestore, the exact branch
+     * handleDriveSignInResult already uses for the rest of the startup flow, so picking a different
+     * account re-runs the backup check against it rather than being treated as a Settings-initiated
+     * connect. */
+    fun switchDriveAccountForRestore() {
+        ephemeral.update { it.copy(driveRestoreAvailable = false, driveNoBackupFoundEmail = null, driveSignInNeededForRestore = true) }
+        requestDriveSignIn()
+    }
+
+    fun dismissNoBackupFound() = viewModelScope.launch {
+        ephemeral.update { it.copy(driveNoBackupFoundEmail = null) }
         container.settingsRepository.setDriveRestorePromptShown(true)
     }
 

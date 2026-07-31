@@ -41,6 +41,16 @@ fun StartupFlowScreen(state: AppUiState, viewModel: AppViewModel) {
         state.driveRestoreAvailable -> DriveRestorePromptScreen(
             onRestore = viewModel::confirmDriveRestore,
             onSkip = viewModel::dismissDriveRestorePrompt,
+            onSwitchAccount = viewModel::switchDriveAccountForRestore,
+        )
+
+        // A silent sign-in resolved an account with zero interaction, but it has no backup — the
+        // user was never actually asked which account to check, so this is their only chance to
+        // try a different one before checkFirstLaunchDriveRestore never runs again this install.
+        state.driveNoBackupFoundEmail != null -> DriveNoBackupFoundScreen(
+            email = state.driveNoBackupFoundEmail,
+            onSwitchAccount = viewModel::switchDriveAccountForRestore,
+            onContinue = viewModel::dismissNoBackupFound,
         )
 
         // The actual download+merge is in flight (user tapped Restore & Merge) — stay on the

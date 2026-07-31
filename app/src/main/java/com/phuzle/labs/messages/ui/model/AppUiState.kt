@@ -78,6 +78,9 @@ data class AppUiState(
      * trip is in flight, so StartupFlowScreen can name that step instead of showing its generic
      * gap-filler loader through what can be several seconds of network work. */
     val driveCheckInProgress: Boolean = false,
+    /** See AppViewModel's field of the same name — a silent sign-in resolved an account with no
+     * Drive backup, and this is the account's email so the screen can name it and offer switching. */
+    val driveNoBackupFoundEmail: String? = null,
     val messageActionTarget: MessageActionTargetUi? = null,
     val multiSelectThreadIds: Set<String> = emptySet(),
 

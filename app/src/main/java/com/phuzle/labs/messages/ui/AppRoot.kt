@@ -55,12 +55,13 @@ fun AppRoot(viewModel: AppViewModel) {
     MessagesTheme(themeMode = state.themeMode, accentHex = state.settings.accentHex) {
         val tokens = MessagesTheme.tokens
 
-        BackHandler(enabled = state.undoMessage != null || state.updateInfo != null || state.driveRestoreAvailable || state.driveSignInNeededForRestore || state.actionSheet != null || state.overflowMenuOpen || state.showDrawer || state.multiSelectThreadIds.isNotEmpty() || state.threadSearchActive || state.composeToSuggestions.isNotEmpty() || state.pushedScreen != null || state.searchQuery.isNotEmpty()) {
+        BackHandler(enabled = state.undoMessage != null || state.updateInfo != null || state.driveRestoreAvailable || state.driveSignInNeededForRestore || state.driveNoBackupFoundEmail != null || state.actionSheet != null || state.overflowMenuOpen || state.showDrawer || state.multiSelectThreadIds.isNotEmpty() || state.threadSearchActive || state.composeToSuggestions.isNotEmpty() || state.pushedScreen != null || state.searchQuery.isNotEmpty()) {
             when {
                 state.undoMessage != null -> viewModel.dismissUndo()
                 state.updateInfo != null -> viewModel.dismissUpdate()
                 state.driveRestoreAvailable -> viewModel.dismissDriveRestorePrompt()
                 state.driveSignInNeededForRestore -> viewModel.skipDriveSignInForRestore()
+                state.driveNoBackupFoundEmail != null -> viewModel.dismissNoBackupFound()
                 state.actionSheet != null -> viewModel.closeActionSheet()
                 state.overflowMenuOpen -> viewModel.closeOverflowMenu()
                 state.showDrawer -> viewModel.closeDrawer()
@@ -91,6 +92,7 @@ fun AppRoot(viewModel: AppViewModel) {
             state.driveSignInNeededForRestore ||
             state.driveRestoreAvailable ||
             state.driveRestoreInProgress ||
+            state.driveNoBackupFoundEmail != null ||
             !state.settings.driveRestorePromptShown
         if (startupActive) {
             com.phuzle.labs.messages.ui.components.StartupFlowScreen(state = state, viewModel = viewModel)

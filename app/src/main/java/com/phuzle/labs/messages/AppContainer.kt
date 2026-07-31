@@ -8,6 +8,7 @@ import com.phuzle.labs.messages.core.cloud.CloudClassifierClient
 import com.phuzle.labs.messages.core.contacts.ContactLookup
 import com.phuzle.labs.messages.core.notifications.MessageNotifier
 import com.phuzle.labs.messages.core.push.UpdateChecker
+import com.phuzle.labs.messages.core.util.FreshInstallMarker
 import com.phuzle.labs.messages.core.sms.SmsHistoryImporter
 import com.phuzle.labs.messages.core.sms.SmsProviderSync
 import com.phuzle.labs.messages.core.sms.SmsSender
@@ -53,6 +54,7 @@ class AppContainer(context: Context) {
         SmsHistoryImporter(appContext, database.threadDao(), database.messageDao(), contactLookup, classifier, passbookRepository, regexRules)
     }
     val cloudClassifierClient: CloudClassifierClient by lazy { CloudClassifierClient() }
+    val freshInstallMarker: FreshInstallMarker by lazy { FreshInstallMarker(appContext) }
 
     fun copyToClipboard(label: String, text: String) {
         val clipboard = appContext.getSystemService(android.content.ClipboardManager::class.java)
