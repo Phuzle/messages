@@ -8,6 +8,7 @@ import com.phuzle.labs.messages.core.cloud.CloudClassifierClient
 import com.phuzle.labs.messages.core.contacts.ContactLookup
 import com.phuzle.labs.messages.core.notifications.MessageNotifier
 import com.phuzle.labs.messages.core.push.UpdateChecker
+import com.phuzle.labs.messages.core.scheduling.ScheduledMessageAlarmScheduler
 import com.phuzle.labs.messages.core.util.FreshInstallMarker
 import com.phuzle.labs.messages.core.sms.SmsHistoryImporter
 import com.phuzle.labs.messages.core.sms.SmsProviderSync
@@ -55,6 +56,7 @@ class AppContainer(context: Context) {
     }
     val cloudClassifierClient: CloudClassifierClient by lazy { CloudClassifierClient() }
     val freshInstallMarker: FreshInstallMarker by lazy { FreshInstallMarker(appContext) }
+    val scheduledMessageAlarmScheduler: ScheduledMessageAlarmScheduler by lazy { ScheduledMessageAlarmScheduler(appContext) }
 
     fun copyToClipboard(label: String, text: String) {
         val clipboard = appContext.getSystemService(android.content.ClipboardManager::class.java)

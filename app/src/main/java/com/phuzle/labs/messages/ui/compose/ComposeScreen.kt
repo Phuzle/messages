@@ -27,22 +27,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,17 +54,12 @@ import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.model.ContactSuggestionUi
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapePill
-import java.time.Instant
-import java.time.ZoneId
-import java.time.ZoneOffset
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
     val tokens = MessagesTheme.tokens
-    var showDatePicker by remember { mutableStateOf(false) }
-    var showTimePicker by remember { mutableStateOf(false) }
-    var pickedDateMillis by remember { mutableStateOf<Long?>(null) }
+    val scheduleState = com.phuzle.labs.messages.ui.components.rememberScheduleSendState()
 
     val canSend = state.composeBody.isNotBlank() && (state.composeRecipients.isNotEmpty() || state.composeTo.isNotBlank())
 
@@ -192,7 +177,7 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(
                         Modifier.size(38.dp).background(tokens.surfaceAlt, ShapePill)
-                            .roundClickable(onClick = { showDatePicker = true }),
+                            .roundClickable(onClick = scheduleState::start),
                         contentAlignment = Alignment.Center,
                     ) { Icon(Icons.Filled.CalendarMonth, contentDescription = "Schedule send", tint = tokens.textSecondary, modifier = Modifier.size(19.dp)) }
 
@@ -206,8 +191,13 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            Text(formatScheduleTime(millis), color = tokens.accentText, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                            Icon(Icons.Filled.Close, contentDescription = "Clear schedule", tint = tokens.accentText, modifier = Modifier.size(13.dp))
+                            // accentSoft (a translucent accent tint, near-background in dark mode)
+                            // pairs with accent as foreground — accentText is only readable against
+                            // the *solid* accent background used by the Send button next to this,
+                            // which is why this chip was nearly invisible in dark mode: near-black
+                            // text on a background barely lighter than the screen itself.
+                            Text(formatScheduleTime(millis), color = tokens.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Icon(Icons.Filled.Close, contentDescription = "Clear schedule", tint = tokens.accent, modifier = Modifier.size(13.dp))
                         }
                     }
                 }
@@ -294,38 +284,7 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
         }
     }
 
-    if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    pickedDateMillis = datePickerState.selectedDateMillis
-                    showDatePicker = false
-                    showTimePicker = true
-                }) { Text("Next") }
-            },
-            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } },
-        ) { DatePicker(state = datePickerState) }
-    }
-
-    if (showTimePicker) {
-        val timePickerState = rememberTimePickerState(is24Hour = false)
-        AlertDialog(
-            onDismissRequest = { showTimePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    val zone = ZoneId.systemDefault()
-                    val date = Instant.ofEpochMilli(pickedDateMillis ?: System.currentTimeMillis()).atZone(ZoneOffset.UTC).toLocalDate()
-                    val dateTime = date.atTime(timePickerState.hour, timePickerState.minute).atZone(zone)
-                    viewModel.setComposeCustomSchedule(dateTime.toInstant().toEpochMilli())
-                    showTimePicker = false
-                }) { Text("Set") }
-            },
-            dismissButton = { TextButton(onClick = { showTimePicker = false }) { Text("Cancel") } },
-            text = { TimePicker(state = timePickerState) },
-        )
-    }
+    com.phuzle.labs.messages.ui.components.ScheduleSendDialogs(scheduleState, onScheduled = viewModel::setComposeCustomSchedule)
 }
 
 @Composable

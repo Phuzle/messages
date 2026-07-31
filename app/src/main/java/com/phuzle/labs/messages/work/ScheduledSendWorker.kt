@@ -5,18 +5,13 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.phuzle.labs.messages.appContainer
 
-/** Sends compose messages queued with a "send later" schedule option once their time arrives. */
+/** Fallback safety net for scheduled sends: [com.phuzle.labs.messages.core.scheduling.ScheduledMessageAlarmScheduler]'s
+ * exact per-message alarm is the primary dispatch path now, but this periodic sweep still catches
+ * anything that alarm missed — the exact-alarm permission not being granted, a device that
+ * aggressively kills alarms, or (before this worker existed at all) any other gap. */
 class ScheduledSendWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
-        val container = applicationContext.appContainer
-        val now = System.currentTimeMillis()
-        val due = container.threadRepository.dueScheduledMessages(now)
-        for (message in due) {
-            val thread = container.threadRepository.getThread(message.threadId) ?: continue
-            val systemSmsId = container.smsSender.send(thread.sender, message.body, message.subscriptionId)
-            container.threadRepository.markMessageSent(message.id, now)
-            if (systemSmsId != null) container.threadRepository.setSystemSmsId(message.id, systemSmsId)
-        }
+        com.phuzle.labs.messages.work.ScheduledMessageDispatcher.dispatchDue(applicationContext.appContainer)
         return Result.success()
     }
 

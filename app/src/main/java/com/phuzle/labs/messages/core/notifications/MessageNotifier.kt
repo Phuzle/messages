@@ -51,6 +51,31 @@ class MessageNotifier(
         manager.cancel(threadId.hashCode())
     }
 
+    /** Posted once a scheduled message is actually dispatched (see ScheduledMessageDispatcher,
+     * used by both the exact-alarm receiver and the periodic-worker fallback) — the whole point of
+     * a schedule is that the user isn't watching when it fires, so without this there was no way
+     * to tell "it sent" from "it silently never sent" short of reopening the thread later. Uses
+     * the SYSTEM channel (not the recipient's own category channel): this is a status update about
+     * the app's own background work, not a new message from that contact, and shouldn't be
+     * silenceable by toggling that contact's message-category notifications off. Its own
+     * notification id (distinct from thread.id.hashCode(), which is the thread's live-message
+     * notification) so this doesn't collide with or get overwritten by a real incoming-message
+     * notification for the same thread. */
+    fun confirmScheduledSent(thread: ThreadEntity, message: MessageEntity) {
+        if (context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) return
+        val notification = NotificationCompat.Builder(context, com.phuzle.labs.messages.domain.model.NotificationChannelIds.SYSTEM)
+            .setSmallIcon(com.phuzle.labs.messages.R.drawable.ic_stat_message)
+            .setContentTitle("Scheduled message sent")
+            .setContentText("To ${thread.displayName}: ${message.body}")
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message.body))
+            .setContentIntent(openThreadIntent(thread.id))
+            .setAutoCancel(true)
+            .build()
+        manager.notify(("scheduled-sent-" + message.id).hashCode(), notification)
+    }
+
     /** Rebuilds the thread's notification to show the reply we just sent, per RemoteInput convention. */
     fun confirmReplySent(threadId: String, sender: String, replyText: String) {
         val notificationId = threadId.hashCode()

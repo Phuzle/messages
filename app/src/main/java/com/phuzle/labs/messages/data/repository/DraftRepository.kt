@@ -11,9 +11,9 @@ class DraftRepository(private val dao: DraftDao) {
     suspend fun delete(id: String) = dao.delete(id)
 
     /** Upserts by [id] when editing an existing draft, otherwise creates a fresh one. */
-    suspend fun save(id: String?, to: String, body: String): String {
+    suspend fun save(id: String?, to: String, body: String, scheduledFor: Long? = null): String {
         val draftId = id ?: "draft-" + UUID.randomUUID()
-        dao.upsert(DraftEntity(id = draftId, to = to, body = body, updatedAt = System.currentTimeMillis()))
+        dao.upsert(DraftEntity(id = draftId, to = to, body = body, updatedAt = System.currentTimeMillis(), scheduledFor = scheduledFor))
         return draftId
     }
 }

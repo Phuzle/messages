@@ -55,7 +55,7 @@ fun AppRoot(viewModel: AppViewModel) {
     MessagesTheme(themeMode = state.themeMode, accentHex = state.settings.accentHex) {
         val tokens = MessagesTheme.tokens
 
-        BackHandler(enabled = state.undoMessage != null || state.updateInfo != null || state.driveRestoreAvailable || state.driveSignInNeededForRestore || state.driveNoBackupFoundEmail != null || state.markAllReadConfirmThreadIds != null || state.actionSheet != null || state.overflowMenuOpen || state.showDrawer || state.multiSelectThreadIds.isNotEmpty() || state.threadSearchActive || state.composeToSuggestions.isNotEmpty() || state.pushedScreen != null || state.searchQuery.isNotEmpty()) {
+        BackHandler(enabled = state.undoMessage != null || state.updateInfo != null || state.driveRestoreAvailable || state.driveSignInNeededForRestore || state.driveNoBackupFoundEmail != null || state.markAllReadConfirmThreadIds != null || state.scheduledMessageActionTarget != null || state.scheduledMessageEdit != null || state.actionSheet != null || state.overflowMenuOpen || state.showDrawer || state.multiSelectThreadIds.isNotEmpty() || state.threadSearchActive || state.composeToSuggestions.isNotEmpty() || state.pushedScreen != null || state.searchQuery.isNotEmpty()) {
             when {
                 state.undoMessage != null -> viewModel.dismissUndo()
                 state.updateInfo != null -> viewModel.dismissUpdate()
@@ -63,6 +63,8 @@ fun AppRoot(viewModel: AppViewModel) {
                 state.driveSignInNeededForRestore -> viewModel.skipDriveSignInForRestore()
                 state.driveNoBackupFoundEmail != null -> viewModel.dismissNoBackupFound()
                 state.markAllReadConfirmThreadIds != null -> viewModel.dismissMarkAllAsReadConfirm()
+                state.scheduledMessageEdit != null -> viewModel.dismissScheduledMessageEdit()
+                state.scheduledMessageActionTarget != null -> viewModel.closeScheduledMessageActions()
                 state.actionSheet != null -> viewModel.closeActionSheet()
                 state.overflowMenuOpen -> viewModel.closeOverflowMenu()
                 state.showDrawer -> viewModel.closeDrawer()
@@ -137,6 +139,7 @@ fun AppRoot(viewModel: AppViewModel) {
                 PushedScreen.Drafts -> DraftsScreen(state, viewModel)
                 PushedScreen.AccountDetail -> AccountDetailScreen(state, viewModel)
                 PushedScreen.BackupList -> com.phuzle.labs.messages.ui.settings.BackupListScreen(viewModel)
+                PushedScreen.ScheduledMessages -> com.phuzle.labs.messages.ui.scheduled.ScheduledMessagesScreen(viewModel)
             }
 
             NavDrawer(
@@ -152,6 +155,7 @@ fun AppRoot(viewModel: AppViewModel) {
                     if (com.phuzle.labs.messages.domain.model.FeatureFlags.PASSBOOK_AND_REMINDERS_ENABLED) {
                         DrawerItem("Reminders", DrawerIconType.Reminders, viewModel::openRemindersTab)
                     } else null,
+                    DrawerItem("Scheduled Messages", DrawerIconType.ScheduledMessages, viewModel::openScheduledMessagesScreen),
                     DrawerItem("Settings", DrawerIconType.Settings, viewModel::openSettings),
                     DrawerItem("Recycle Bin", DrawerIconType.RecycleBin, viewModel::openRecycleBin),
                 ),
@@ -220,6 +224,26 @@ fun AppRoot(viewModel: AppViewModel) {
             )
 
             OtpModal(otp = state.otpModal, onCopy = viewModel::copyOtpCode, onDismiss = viewModel::closeOtpModal)
+
+            // Shared by the thread view's scheduled-message bubbles and the Scheduled Messages
+            // hub — same overlay, same ViewModel state, regardless of which screen is currently
+            // pushed, so a long-press behaves identically from either place.
+            com.phuzle.labs.messages.ui.components.ScheduledMessageActionSheet(
+                visible = state.scheduledMessageActionTarget != null,
+                onDismiss = viewModel::closeScheduledMessageActions,
+                onEdit = viewModel::beginEditScheduledMessage,
+                onDelete = viewModel::deleteScheduledMessage,
+            )
+
+            state.scheduledMessageEdit?.let { edit ->
+                com.phuzle.labs.messages.ui.components.EditScheduledMessageDialog(
+                    edit = edit,
+                    onBodyChange = viewModel::updateScheduledMessageEditBody,
+                    onTimeChange = viewModel::updateScheduledMessageEditTime,
+                    onSave = viewModel::confirmScheduledMessageEdit,
+                    onDismiss = viewModel::dismissScheduledMessageEdit,
+                )
+            }
 
             UpdateAvailableDialog(
                 update = state.updateInfo,

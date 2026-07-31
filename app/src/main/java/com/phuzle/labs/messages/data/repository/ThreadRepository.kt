@@ -241,7 +241,30 @@ class ThreadRepository(
 
     suspend fun latestIncomingOtpMessage(): MessageEntity? = messageDao.latestIncomingOtpMessage()
     suspend fun dueScheduledMessages(now: Long) = messageDao.dueScheduled(now)
-    suspend fun markMessageSent(messageId: Long, sentAt: Long) = messageDao.markSent(messageId, sentAt)
+    /** Marks a scheduled message as actually sent and recomputes the thread's cached preview —
+     * otherwise the dashboard keeps showing "Scheduled for {time}" forever after it's gone out,
+     * since [appendOutgoingMessage] is the only other place that preview text gets set. */
+    suspend fun markMessageSent(messageId: Long, sentAt: Long) {
+        val message = messageDao.findById(messageId)
+        messageDao.markSent(messageId, sentAt)
+        message?.let { refreshLastMessage(it.threadId) }
+    }
+    suspend fun getMessage(id: Long): MessageEntity? = messageDao.findById(id)
+
+    /** The Scheduled Messages hub's whole list, and what a boot receiver re-arms exact alarms
+     * from — see MessageDao.allPendingScheduled. */
+    suspend fun allPendingScheduledMessages() = messageDao.allPendingScheduled()
+    fun observePendingScheduledMessages() = messageDao.observePendingScheduled()
+
+    /** Edits a still-pending scheduled message's body and/or send time — used by the Scheduled
+     * Messages hub's and in-thread long-press "Edit" action. Recomputes the thread's cached
+     * preview the same way appendOutgoingMessage does, since that preview shows "Scheduled for
+     * {label}" for a scheduled message and would otherwise go stale the moment the time changes. */
+    suspend fun editScheduledMessage(messageId: Long, newBody: String, newScheduledFor: Long, newScheduleLabel: String) {
+        val existing = messageDao.findById(messageId) ?: return
+        messageDao.update(existing.copy(body = newBody, scheduledFor = newScheduledFor, scheduleLabel = newScheduleLabel))
+        threadDao.touchLastMessage(existing.threadId, "Scheduled for $newScheduleLabel", existing.timestamp, outgoing = true)
+    }
 
     /** [currentlyUnread] true means the call is transitioning the thread TO read — in that case
      * every message in it is marked read too, not just the thread-level flag, so the numbered

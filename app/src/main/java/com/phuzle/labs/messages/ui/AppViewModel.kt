@@ -1,6 +1,7 @@
 package com.phuzle.labs.messages.ui
 
 import android.content.Intent
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -38,6 +39,9 @@ import com.phuzle.labs.messages.ui.model.MessageUi
 import com.phuzle.labs.messages.ui.model.OtpModalUi
 import com.phuzle.labs.messages.ui.model.PushedScreen
 import com.phuzle.labs.messages.ui.model.ReminderUi
+import com.phuzle.labs.messages.ui.model.ScheduledMessageActionTargetUi
+import com.phuzle.labs.messages.ui.model.ScheduledMessageEditUi
+import com.phuzle.labs.messages.ui.model.ScheduledMessageUi
 import com.phuzle.labs.messages.ui.model.SettingsSub
 import com.phuzle.labs.messages.ui.model.ThreadUi
 import com.phuzle.labs.messages.ui.model.SimOptionUi
@@ -50,6 +54,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -97,6 +102,11 @@ private data class Ephemeral(
     val markAllReadConfirmThreadIds: List<String>? = null,
     val actionSheetThreadId: String? = null,
     val threadInput: String = "",
+    /** A "send later" schedule chosen for the *next* reply in the currently open thread — the
+     * in-thread mirror of composeCustomScheduleMillis, added because the reply bar previously had
+     * no way to schedule a reply at all, only Compose did. Cleared once that reply is actually
+     * sent/scheduled or the thread is left. */
+    val threadCustomScheduleMillis: Long? = null,
     val composeTo: String = "",
     val composeBody: String = "",
     val composeRecipients: List<ContactSuggestionUi> = emptyList(),
@@ -153,6 +163,11 @@ private data class Ephemeral(
      * flow just for a "first contact" date that never changes after the fact. */
     val threadInfoFirstContactAt: Long? = null,
     val messageActionTarget: MessageActionTargetUi? = null,
+    /** See AppViewModel's fields of the same name — the restricted (Edit/Delete-only) action
+     * sheet and edit dialog shared by the thread view's scheduled-message bubbles and the
+     * Scheduled Messages hub. */
+    val scheduledMessageActionTarget: ScheduledMessageActionTargetUi? = null,
+    val scheduledMessageEdit: ScheduledMessageEditUi? = null,
     /** Non-empty means multi-select is active (started by long-pressing a chat's avatar — see
      * ThreadRow.onAvatarLongPress). Reaching empty via individual toggles exits select mode the
      * same way an explicit "close" would, matching most inbox apps' behavior. */
@@ -372,6 +387,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppUiState())
 
     init {
+        observeScheduledMessages()
         viewModelScope.launch {
             val update = container.updateChecker.checkForUpdate(BuildConfig.VERSION_CODE.toLong())
             if (update != null) {
@@ -536,6 +552,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             isLoadingOlderMessages = eph.isLoadingOlderMessages,
             hasMoreOlderMessages = eph.hasMoreOlderMessages,
             threadInput = eph.threadInput,
+            threadCustomScheduleMillis = eph.threadCustomScheduleMillis,
             composeTo = eph.composeTo,
             composeBody = eph.composeBody,
             composeRecipients = eph.composeRecipients,
@@ -566,6 +583,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             driveCheckInProgress = eph.driveCheckInProgress,
             driveNoBackupFoundEmail = eph.driveNoBackupFoundEmail,
             messageActionTarget = eph.messageActionTarget,
+            scheduledMessageActionTarget = eph.scheduledMessageActionTarget,
+            scheduledMessageEdit = eph.scheduledMessageEdit,
             isImportingHistory = eph.isImportingHistory,
             importDone = eph.importDone,
             importTotal = eph.importTotal,
@@ -666,7 +685,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         // so a draft with an already-added recipient doesn't come back showing "No recipient".
         val typed = eph.composeTo.trim()
         val to = (eph.composeRecipients.map { it.number } + listOfNotNull(typed.takeIf { it.isNotEmpty() })).joinToString(",")
-        container.draftRepository.save(eph.composeDraftId, to, body)
+        container.draftRepository.save(eph.composeDraftId, to, body, eph.composeCustomScheduleMillis)
         toast("Saved to drafts")
     }
 
@@ -690,7 +709,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 composeBody = draft.body,
                 composeRecipients = recipients,
                 composeDraftId = draft.id,
-                composeCustomScheduleMillis = null,
+                composeCustomScheduleMillis = draft.scheduledFor,
                 composeToSuggestions = emptyList(),
                 composeOpenedFromDrafts = true,
             )
@@ -700,7 +719,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun deleteDraft(id: String) = viewModelScope.launch {
         val draft = container.draftRepository.findById(id) ?: return@launch
         container.draftRepository.delete(id)
-        offerUndo("Draft deleted") { container.draftRepository.save(draft.id, draft.to, draft.body) }
+        offerUndo("Draft deleted") { container.draftRepository.save(draft.id, draft.to, draft.body, draft.scheduledFor) }
     }
 
     /** Recycle Bin/Archived/Private Chats can be reached either from the drawer (top level) or
@@ -1068,6 +1087,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             )
             sent += Sent(thread.id, message.id, recipient.number)
             lastThreadId = thread.id
+            if (scheduledFor != null) container.scheduledMessageAlarmScheduler.schedule(message.id, scheduledFor)
         }
         eph.composeDraftId?.let { container.draftRepository.delete(it) }
 
@@ -1105,6 +1125,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     fun onThreadInputChange(value: String) = ephemeral.update { it.copy(threadInput = value) }
 
+    fun setThreadCustomSchedule(epochMillis: Long?) = ephemeral.update { it.copy(threadCustomScheduleMillis = epochMillis) }
+
     fun sendThreadMessage() = viewModelScope.launch {
         val eph = ephemeral.value
         val threadId = eph.activeThreadId ?: return@launch
@@ -1118,6 +1140,21 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         // incoming message yet (composed by us first) has none, in which case the system default
         // SIM is exactly what "no preference" should mean.
         val subscriptionId = thread.preferredSubscriptionId ?: SubscriptionHelper.defaultSmsSubscriptionId()
+
+        val scheduledFor = eph.threadCustomScheduleMillis
+        if (scheduledFor != null) {
+            // Same "queue it, don't send" path Compose uses (see sendCompose) — the reply bar
+            // previously had no way to reach this at all.
+            val scheduleLabel = formatScheduleTime(scheduledFor)
+            val message = container.threadRepository.appendOutgoingMessage(
+                threadId, text, scheduledFor, scheduleLabel, System.currentTimeMillis(), subscriptionId,
+            )
+            container.scheduledMessageAlarmScheduler.schedule(message.id, scheduledFor)
+            ephemeral.update { it.copy(threadInput = "", threadCustomScheduleMillis = null) }
+            toast("Scheduled for $scheduleLabel")
+            return@launch
+        }
+
         val message = container.threadRepository.appendOutgoingMessage(
             threadId, text, null, null, System.currentTimeMillis(), subscriptionId,
         )
@@ -1243,6 +1280,103 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun copyDetectedText(value: String) {
         container.copyToClipboard("Copied text", value)
         toast("Copied")
+    }
+
+    // endregion
+
+    // region ---- scheduled messages (thread long-press + Scheduled Messages hub) ----
+
+    /** Reactive backing for the Scheduled Messages hub — a plain collected StateFlow rather than
+     * threading a new source into the big uiState combine (see AppViewModel.storageOverview for
+     * the same lightweight pattern used for Settings > Storage). Rebuilt from scratch on every
+     * emission: this list is realistically tiny (how many messages does anyone have queued up at
+     * once?), so there's no real cost to simplicity here. */
+    private val _scheduledMessages = MutableStateFlow<List<ScheduledMessageUi>>(emptyList())
+    val scheduledMessages: StateFlow<List<ScheduledMessageUi>> = _scheduledMessages.asStateFlow()
+
+    private fun observeScheduledMessages() = viewModelScope.launch {
+        container.threadRepository.observePendingScheduledMessages().collect { pending ->
+            _scheduledMessages.value = pending.mapNotNull { message ->
+                val scheduledFor = message.scheduledFor ?: return@mapNotNull null
+                val thread = container.threadRepository.getThread(message.threadId) ?: return@mapNotNull null
+                ScheduledMessageUi(
+                    id = message.id,
+                    threadId = thread.id,
+                    threadDisplayName = thread.displayName,
+                    avatarColor = Color(thread.avatarColor),
+                    category = Category.fromStoredName(thread.category),
+                    isBusiness = thread.isBusiness,
+                    photoUri = thread.photoUri,
+                    body = message.body,
+                    scheduledFor = scheduledFor,
+                    scheduleLabel = message.scheduleLabel ?: formatScheduleTime(scheduledFor),
+                )
+            }
+        }
+    }
+
+    fun openScheduledMessagesScreen() = ephemeral.update {
+        it.copy(pushedScreen = PushedScreen.ScheduledMessages, showDrawer = false)
+    }
+
+    /** Long-press on a scheduled message bubble (thread view) or hub row — both routes land here,
+     * one shared restricted (Edit/Delete-only) sheet regardless of which screen triggered it. */
+    fun openScheduledMessageActions(id: Long, threadId: String) =
+        ephemeral.update { it.copy(scheduledMessageActionTarget = ScheduledMessageActionTargetUi(id, threadId)) }
+
+    fun closeScheduledMessageActions() = ephemeral.update { it.copy(scheduledMessageActionTarget = null) }
+
+    fun beginEditScheduledMessage() = viewModelScope.launch {
+        val target = ephemeral.value.scheduledMessageActionTarget ?: return@launch
+        val message = container.threadRepository.getMessage(target.id) ?: return@launch
+        val scheduledFor = message.scheduledFor ?: return@launch
+        ephemeral.update {
+            it.copy(
+                scheduledMessageActionTarget = null,
+                scheduledMessageEdit = ScheduledMessageEditUi(message.id, target.threadId, message.body, scheduledFor),
+            )
+        }
+    }
+
+    fun updateScheduledMessageEditBody(text: String) = ephemeral.update {
+        it.copy(scheduledMessageEdit = it.scheduledMessageEdit?.copy(body = text))
+    }
+
+    fun updateScheduledMessageEditTime(epochMillis: Long) = ephemeral.update {
+        it.copy(scheduledMessageEdit = it.scheduledMessageEdit?.copy(scheduledFor = epochMillis))
+    }
+
+    fun dismissScheduledMessageEdit() = ephemeral.update { it.copy(scheduledMessageEdit = null) }
+
+    fun confirmScheduledMessageEdit() = viewModelScope.launch {
+        val edit = ephemeral.value.scheduledMessageEdit ?: return@launch
+        val body = edit.body.trim()
+        if (body.isEmpty()) return@launch
+        val scheduleLabel = formatScheduleTime(edit.scheduledFor)
+        container.threadRepository.editScheduledMessage(edit.messageId, body, edit.scheduledFor, scheduleLabel)
+        // Re-arms unconditionally rather than only when the time actually changed — cancel+
+        // schedule on an id that was never armed (or already fired) is a harmless no-op, and this
+        // avoids having to track "did the time change" as its own bit of state.
+        container.scheduledMessageAlarmScheduler.cancel(edit.messageId)
+        container.scheduledMessageAlarmScheduler.schedule(edit.messageId, edit.scheduledFor)
+        ephemeral.update { it.copy(scheduledMessageEdit = null) }
+        toast("Scheduled message updated")
+    }
+
+    /** Delete from either the thread view's restricted sheet or the hub — cancels the exact alarm
+     * so a message the user just deleted can't still go out moments later, then offers the same
+     * single-item undo every other message delete in this app gets (see deleteSelectedMessage). */
+    fun deleteScheduledMessage() = viewModelScope.launch {
+        val target = ephemeral.value.scheduledMessageActionTarget ?: return@launch
+        closeScheduledMessageActions()
+        container.scheduledMessageAlarmScheduler.cancel(target.id)
+        val deleted = container.threadRepository.deleteMessage(target.threadId, target.id)
+        offerUndo("Scheduled message deleted") {
+            deleted?.let {
+                container.threadRepository.restoreMessage(it)
+                it.scheduledFor?.let { at -> container.scheduledMessageAlarmScheduler.schedule(it.id, at) }
+            }
+        }
     }
 
     // endregion

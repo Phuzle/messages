@@ -35,6 +35,8 @@ data class AppUiState(
     val isLoadingOlderMessages: Boolean = false,
     val hasMoreOlderMessages: Boolean = true,
     val threadInput: String = "",
+    /** See AppViewModel's field of the same name — the reply bar's own "send later" schedule. */
+    val threadCustomScheduleMillis: Long? = null,
 
     val composeTo: String = "",
     val composeBody: String = "",
@@ -84,6 +86,9 @@ data class AppUiState(
      * Drive backup, and this is the account's email so the screen can name it and offer switching. */
     val driveNoBackupFoundEmail: String? = null,
     val messageActionTarget: MessageActionTargetUi? = null,
+    /** See AppViewModel's fields of the same name. */
+    val scheduledMessageActionTarget: ScheduledMessageActionTargetUi? = null,
+    val scheduledMessageEdit: ScheduledMessageEditUi? = null,
     val multiSelectThreadIds: Set<String> = emptySet(),
 
     val isDefaultSmsApp: Boolean = true,

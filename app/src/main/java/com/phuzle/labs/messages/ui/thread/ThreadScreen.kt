@@ -25,8 +25,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,6 +46,7 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -119,6 +123,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
     var lastKnownEntryCount by remember { mutableIntStateOf(0) }
 
     val canSend = state.threadInput.isNotBlank()
+    val scheduleState = com.phuzle.labs.messages.ui.components.rememberScheduleSendState()
     val listEntries = remember(state.currentThreadMessages, state.threadSearchQuery) {
         val query = state.threadSearchQuery.trim()
         if (query.isEmpty()) {
@@ -183,7 +188,18 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                             MessageBubble(
                                 entry.message,
                                 matchedIndices = entry.matchedIndices,
-                                onLongPress = { viewModel.openMessageActions(MessageActionTargetUi(entry.message.id, entry.message.text)) },
+                                onLongPress = {
+                                    // A message still waiting to send gets the restricted
+                                    // Edit/Delete sheet (see ScheduledMessageActionSheet) instead
+                                    // of the normal Copy/Reply/Forward/Delete set — "reply" and
+                                    // "forward" don't mean anything for something that hasn't
+                                    // actually gone out yet.
+                                    if (entry.message.isScheduled) {
+                                        viewModel.openScheduledMessageActions(entry.message.id, thread.id)
+                                    } else {
+                                        viewModel.openMessageActions(MessageActionTargetUi(entry.message.id, entry.message.text))
+                                    }
+                                },
                                 onOpenUrl = onOpenUrl,
                                 onCall = onCall,
                                 onEmail = onEmail,
@@ -247,11 +263,38 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                         modifier = Modifier.padding(start = 14.dp, top = 4.dp),
                     )
                 }
+                state.threadCustomScheduleMillis?.let { millis ->
+                    Row(
+                        modifier = Modifier
+                            .padding(start = 14.dp, top = 6.dp)
+                            .clip(com.phuzle.labs.messages.ui.theme.ShapePill)
+                            .background(tokens.accentSoft, com.phuzle.labs.messages.ui.theme.ShapePill)
+                            .clickable(onClick = { viewModel.setThreadCustomSchedule(null) })
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        // Same accentSoft-background/accent-foreground pairing as Compose's own
+                        // schedule chip — accentText only reads correctly on the solid accent
+                        // background, not this translucent tint (see ComposeScreen).
+                        Text(
+                            com.phuzle.labs.messages.ui.format.formatScheduleTime(millis),
+                            color = tokens.accent, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold,
+                        )
+                        Icon(Icons.Filled.Close, contentDescription = "Clear schedule", tint = tokens.accent, modifier = Modifier.size(12.dp))
+                    }
+                }
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    Box(
+                        Modifier.size(40.dp).background(tokens.surfaceAlt, CircleShape).roundClickable(onClick = scheduleState::start),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Filled.CalendarMonth, contentDescription = "Schedule send", tint = tokens.textSecondary, modifier = Modifier.size(18.dp))
+                    }
                     FlatTextField(
                         value = state.threadInput,
                         onValueChange = viewModel::onThreadInputChange,
@@ -268,7 +311,8 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            Icons.AutoMirrored.Filled.Send, contentDescription = "Send",
+                            if (state.threadCustomScheduleMillis != null) Icons.Filled.Schedule else Icons.AutoMirrored.Filled.Send,
+                            contentDescription = if (state.threadCustomScheduleMillis != null) "Schedule" else "Send",
                             tint = if (canSend) tokens.accentText else tokens.textTertiary, modifier = Modifier.size(18.dp),
                         )
                     }
@@ -319,6 +363,8 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
             onDelete = viewModel::deleteSelectedMessage,
         )
     }
+
+    com.phuzle.labs.messages.ui.components.ScheduleSendDialogs(scheduleState, onScheduled = viewModel::setThreadCustomSchedule)
 }
 
 /** WhatsApp-style grouping: a date header before the first message of each calendar day (skipped

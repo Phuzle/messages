@@ -10,4 +10,8 @@ data class DraftEntity(
     val to: String,
     val body: String,
     val updatedAt: Long,
+    /** A "send later" schedule chosen before Compose was closed — without this, closing Compose
+     * on a scheduled-but-unsent draft silently dropped the chosen time, and reopening it looked
+     * exactly like an ordinary unscheduled draft. */
+    val scheduledFor: Long? = null,
 )

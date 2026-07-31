@@ -20,6 +20,16 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Precise "send later" scheduling (see core/scheduling/ScheduledMessageAlarmScheduler.kt).
+         A normal permission on API 31-32; on API 33+ it's "special" and the user must separately
+         grant it via system Settings > Alarms & reminders (canScheduleExactAlarms() reflects
+         that) — the scheduler falls back to an inexact alarm rather than failing outright when
+         it isn't granted, so declaring this is what makes the exact path *available*, not a hard
+         requirement for scheduling to work at all. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Re-arms scheduled messages' alarms after a reboot, since AlarmManager forgets every alarm
+         across one (see ScheduledSendBootReceiver). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".MessagesApplication"
@@ -94,6 +104,20 @@
         <receiver
             android:name=".core.notifications.CopyCodeReceiver"
             android:exported="false" />
+
+        <!-- Fires a single scheduled message's exact-time send (see ScheduledMessageAlarmScheduler) -->
+        <receiver
+            android:name=".core.scheduling.ScheduledSendAlarmReceiver"
+            android:exported="false" />
+
+        <!-- Re-arms every pending scheduled message's alarm after a reboot -->
+        <receiver
+            android:name=".core.scheduling.ScheduledSendBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Inline quick-reply notification action target: sends the reply via SmsManager -->
         <receiver

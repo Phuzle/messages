@@ -54,9 +54,11 @@ fun FlatTextField(
     focusRequester: FocusRequester? = null,
     fillHeight: Boolean = false,
     scrollState: ScrollState? = null,
+    textColor: androidx.compose.ui.graphics.Color? = null,
+    placeholderColor: androidx.compose.ui.graphics.Color? = null,
 ) {
     val tokens = MessagesTheme.tokens
-    val textStyle = TextStyle(color = tokens.textPrimary, fontSize = fontSize)
+    val textStyle = TextStyle(color = textColor ?: tokens.textPrimary, fontSize = fontSize)
     val background = if (filled) Modifier.background(tokens.inputBg, ShapeSmall).padding(horizontal = 12.dp, vertical = 10.dp) else Modifier
     val resolvedScrollState = scrollState ?: rememberScrollState()
     var fieldModifier = when {
@@ -82,7 +84,7 @@ fun FlatTextField(
 
     Box(modifier = modifier.then(background)) {
         if (value.isEmpty()) {
-            Text(placeholder, color = tokens.textTertiary, fontSize = fontSize)
+            Text(placeholder, color = placeholderColor ?: tokens.textTertiary, fontSize = fontSize)
         }
         BasicTextField(
             value = fieldValue,

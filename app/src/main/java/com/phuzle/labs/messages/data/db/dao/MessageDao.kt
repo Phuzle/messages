@@ -33,6 +33,16 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE sent = 0 AND scheduledFor <= :now")
     suspend fun dueScheduled(now: Long): List<MessageEntity>
 
+    /** Every not-yet-sent scheduled message regardless of whether its time has passed — the
+     * Scheduled Messages hub's whole list, and also what a boot receiver needs to re-arm exact
+     * alarms with (AlarmManager forgets every alarm across a reboot; the database is the only
+     * durable record of what was still pending). */
+    @Query("SELECT * FROM messages WHERE sent = 0 AND scheduledFor IS NOT NULL ORDER BY scheduledFor ASC")
+    suspend fun allPendingScheduled(): List<MessageEntity>
+
+    @Query("SELECT * FROM messages WHERE sent = 0 AND scheduledFor IS NOT NULL ORDER BY scheduledFor ASC")
+    fun observePendingScheduled(): Flow<List<MessageEntity>>
+
     @Query("UPDATE messages SET sent = 1, timestamp = :sentAt WHERE id = :id")
     suspend fun markSent(id: Long, sentAt: Long)
 

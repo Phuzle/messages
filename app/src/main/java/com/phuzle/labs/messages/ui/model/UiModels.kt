@@ -6,7 +6,7 @@ import com.phuzle.labs.messages.domain.model.Category
 
 enum class DashboardTab { Messages, Passbook, Reminders }
 
-enum class PushedScreen { Thread, ThreadInfo, Compose, Settings, RecycleBin, Archived, PrivateChats, Drafts, AccountDetail, BackupList }
+enum class PushedScreen { Thread, ThreadInfo, Compose, Settings, RecycleBin, Archived, PrivateChats, Drafts, AccountDetail, BackupList, ScheduledMessages }
 
 enum class SettingsSub(val title: String) {
     Notifications("Notifications"),
@@ -147,3 +147,26 @@ data class BackupListUiState(
 data class ContactSuggestionUi(val name: String, val number: String, val photoUri: String? = null)
 data class DraftUi(val id: String, val to: String, val bodyPreview: String, val timeLabel: String)
 data class MessageActionTargetUi(val id: Long, val text: String)
+
+/** A single row in the Scheduled Messages hub — see AppViewModel.scheduledMessages. */
+data class ScheduledMessageUi(
+    val id: Long,
+    val threadId: String,
+    val threadDisplayName: String,
+    val avatarColor: Color,
+    val category: Category,
+    val isBusiness: Boolean,
+    val photoUri: String?,
+    val body: String,
+    val scheduledFor: Long,
+    val scheduleLabel: String,
+)
+
+/** Which scheduled message the restricted (Edit/Delete-only) action sheet is currently showing
+ * for — reachable from either the thread view's own long-press or the hub's, see
+ * AppViewModel.openScheduledMessageActions. */
+data class ScheduledMessageActionTargetUi(val id: Long, val threadId: String)
+
+/** The in-flight edit of a scheduled message's body/time — non-null while EditScheduledMessageDialog
+ * is showing. [body] is a live copy the dialog edits locally before Save commits it. */
+data class ScheduledMessageEditUi(val messageId: Long, val threadId: String, val body: String, val scheduledFor: Long)
