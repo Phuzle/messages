@@ -234,10 +234,20 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
         // this used to be added after GlassBar in the Box, so its opaque background painted over
         // the bar and trapped the user with no way out except picking a suggestion or clearing
         // the field by hand.
+        //
+        // padding() BEFORE background(), not after: Modifier.fillMaxSize().background(x).padding(y)
+        // paints the background over the full fillMaxSize box first and only then insets the
+        // *content* by the padding — the background itself isn't clipped to start below it. That
+        // ordering here painted this overlay's background over the entire screen, including the
+        // "To" field and whatever the user had typed into it above where the (still-visible)
+        // "Suggested contacts" list started — invisible in practice since the overlay's color is
+        // the same flat background as the rest of the screen, so it just looked like the To field
+        // and its typed text had vanished the moment a suggestion appeared.
         if (state.composeToSuggestions.isNotEmpty()) {
             Column(
-                Modifier.fillMaxSize().background(tokens.bg)
-                    .padding(top = topBarContentPadding(126.dp)),
+                Modifier.fillMaxSize()
+                    .padding(top = topBarContentPadding(126.dp))
+                    .background(tokens.bg),
             ) {
                 Text(
                     "Suggested contacts", color = tokens.textSecondary, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold,

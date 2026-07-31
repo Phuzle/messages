@@ -982,10 +982,19 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    /** Adds whatever's currently typed in "To" as a raw recipient (no contact match required). */
+    /** Adds whatever's currently typed in "To" as a raw recipient — no contact match required,
+     * since texting a number that isn't saved is completely ordinary. What it must not accept is
+     * something that was never a phone number to begin with: [PhoneNumberUtils.isWellFormedSmsAddress]
+     * is the same check Android's own Messages-style clients use to gate an SMS destination, and
+     * rejects plain text like "dddd" that would otherwise sit in the recipient list looking
+     * legitimate right up until SmsManager.sendTextMessage fails on it at actual send time. */
     fun addTypedComposeRecipient() {
         val number = ephemeral.value.composeTo.trim()
         if (number.isEmpty()) return
+        if (!android.telephony.PhoneNumberUtils.isWellFormedSmsAddress(number)) {
+            toast("Enter a valid phone number")
+            return
+        }
         selectComposeContact(ContactSuggestionUi(name = number, number = number))
     }
 
