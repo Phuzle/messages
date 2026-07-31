@@ -1299,8 +1299,23 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     /** Backfills pre-existing on-device SMS the first time we gain the default-SMS-app role. */
     private fun importHistoryOnce() = viewModelScope.launch {
+        // Snapshotted before any work below can add rows — this is what tells apart "this install
+        // genuinely already finished its one-time setup" from "Android's Auto Backup silently
+        // restored the *record* of that decision from a previous install, without restoring the
+        // data it was a decision about". allowBackup/dataExtractionRules deliberately excludes
+        // messages.db from that cloud backup (see res/xml/backup_rules.xml) so real messages are
+        // never restored outside the app's own explicit Drive-backup opt-in — but the DataStore
+        // file holding historyImported/driveRestorePromptShown is NOT excluded, since losing the
+        // user's theme/accent/other preferences on every reinstall would be its own regression.
+        // Confirmed on a real device signed into a Google account: uninstall + reinstall correctly
+        // wipes the local database, but the restored settings still say historyImported=true and
+        // driveRestorePromptShown=true from the previous install, so the app trusted them
+        // completely and skipped straight past both the sync screen and the Drive check to a
+        // blank dashboard — silently and permanently, since nothing here ever re-checks either
+        // flag against reality on its own.
+        val databaseWasEmptyAtLaunch = container.threadRepository.storageOverview().messageCount == 0
         historyImportMutex.withLock {
-            val alreadyImported = container.settingsRepository.settingsFlow.first().historyImported
+            val alreadyImported = container.settingsRepository.settingsFlow.first().historyImported && !databaseWasEmptyAtLaunch
             if (!alreadyImported) {
                 ephemeral.update { it.copy(isImportingHistory = true, importDone = 0, importTotal = 0, historySyncSuccess = false) }
                 try {
@@ -1329,7 +1344,12 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         // then sync, then (only if still empty) offer to restore from Drive. checkFirstLaunchDriveRestore
         // itself is cheap to call redundantly on every later launch — it no-ops immediately once
         // driveRestorePromptShown is set.
-        checkFirstLaunchDriveRestore()
+        //
+        // forceRecheck carries the same "was the database actually empty" signal forward: by this
+        // point the import above may have just filled it with real messages, so re-deriving
+        // "was this fresh" from the *current* message count here would get the wrong answer for
+        // exactly the restored-settings case this is meant to catch.
+        checkFirstLaunchDriveRestore(forceRecheck = databaseWasEmptyAtLaunch)
     }
 
     // endregion
@@ -1760,7 +1780,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
      * silently never appeared for real accounts with real backups. Now a silent-sign-in failure
      * instead offers an explicit interactive "Sign in to check" step (driveSignInNeededForRestore),
      * still with Skip — see handleDriveSignInResult for what happens after that sign-in returns. */
-    fun checkFirstLaunchDriveRestore() = viewModelScope.launch {
+    /** [forceRecheck] — see importHistoryOnce's databaseWasEmptyAtLaunch: a stale
+     * driveRestorePromptShown restored by Android's Auto Backup onto an otherwise-empty database
+     * is exactly as untrustworthy as a stale historyImported would be, and for the same reason —
+     * it describes a decision made about data that this install never actually had. */
+    fun checkFirstLaunchDriveRestore(forceRecheck: Boolean = false) = viewModelScope.launch {
         // Already showing one of the two prompts (the user hasn't decided yet) — importHistoryOnce
         // calls this again on every onResume, not just the first, so this avoids redundant sign-in/
         // Drive API calls for as long as either gate sits there waiting on a tap.
@@ -1770,7 +1794,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         // start a duplicate sign-in + backup listing.
         if (ephemeral.value.driveCheckInProgress) return@launch
         val settings = container.settingsRepository.settingsFlow.first()
-        if (settings.driveRestorePromptShown) return@launch
+        if (settings.driveRestorePromptShown && !forceRecheck) return@launch
 
         ephemeral.update { it.copy(driveCheckInProgress = true) }
         try {
