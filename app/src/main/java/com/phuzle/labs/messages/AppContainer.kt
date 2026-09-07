@@ -58,6 +58,14 @@ class AppContainer(context: Context) {
     val freshInstallMarker: FreshInstallMarker by lazy { FreshInstallMarker(appContext) }
     val scheduledMessageAlarmScheduler: ScheduledMessageAlarmScheduler by lazy { ScheduledMessageAlarmScheduler(appContext) }
 
+    /** See NotificationChannels.updateChannelPriority — deletes and recreates the OS channel,
+     * since importance can't be changed on an existing one. */
+    fun applyChannelPriority(channelId: String, priority: String) {
+        com.phuzle.labs.messages.core.notifications.NotificationChannels.updateChannelPriority(
+            appContext, channelId, com.phuzle.labs.messages.core.notifications.NotificationChannels.priorityKeyToImportance(priority),
+        )
+    }
+
     fun copyToClipboard(label: String, text: String) {
         val clipboard = appContext.getSystemService(android.content.ClipboardManager::class.java)
         clipboard?.setPrimaryClip(android.content.ClipData.newPlainText(label, text))

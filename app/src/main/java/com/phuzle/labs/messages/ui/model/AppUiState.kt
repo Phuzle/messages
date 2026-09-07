@@ -93,6 +93,9 @@ data class AppUiState(
     val scheduledMessageActionTarget: ScheduledMessageActionTargetUi? = null,
     val scheduledMessageEdit: ScheduledMessageEditUi? = null,
     val multiSelectThreadIds: Set<String> = emptySet(),
+    val multiSelectArchivedIds: Set<String> = emptySet(),
+    val multiSelectPrivateIds: Set<String> = emptySet(),
+    val multiSelectRecycleBinIds: Set<String> = emptySet(),
 
     val isDefaultSmsApp: Boolean = true,
     val isImportingHistory: Boolean = false,

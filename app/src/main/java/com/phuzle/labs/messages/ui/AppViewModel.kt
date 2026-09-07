@@ -176,6 +176,12 @@ private data class Ephemeral(
      * ThreadRow.onAvatarLongPress). Reaching empty via individual toggles exits select mode the
      * same way an explicit "close" would, matching most inbox apps' behavior. */
     val multiSelectThreadIds: Set<String> = emptySet(),
+    /** Same pattern as [multiSelectThreadIds], one independent set per other SimpleThreadRow-based
+     * list — Archived, Private Chats, and Recycle Bin's Chats section — so switching screens never
+     * carries a selection over into a list it didn't come from. */
+    val multiSelectArchivedIds: Set<String> = emptySet(),
+    val multiSelectPrivateIds: Set<String> = emptySet(),
+    val multiSelectRecycleBinIds: Set<String> = emptySet(),
 )
 
 private data class ThreadsSnapshot(
@@ -468,7 +474,21 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         settings: AppSettings,
         eph: Ephemeral,
     ): AppUiState {
-        val categories = Category.entries.map { CategoryChipUi(it, it.label, it == eph.activeCategory) }
+        // Category chips only show up once the inbox actually has a message in them — a
+        // permanently empty chip (Personal on a phone with no known contacts yet, IPO for the
+        // ~all users who never get one, ...) is just clutter. Two exceptions: with zero messages
+        // total there's nothing to filter, so no chips at all (not even All); and once there's at
+        // least one message, Unknown stays visible even before it has one of its own, since it's
+        // the catch-all any future unclassifiable message lands in and shouldn't have to wait for
+        // that to happen to become reachable.
+        val categoriesWithThreads = threads.inbox.mapTo(mutableSetOf()) { Category.fromStoredName(it.category) }
+        val categories = if (threads.inbox.isEmpty()) {
+            emptyList()
+        } else {
+            Category.entries
+                .filter { it == Category.All || it == Category.Unknown || it in categoriesWithThreads }
+                .map { CategoryChipUi(it, it.label, it == eph.activeCategory) }
+        }
 
         // Real text search (against full message history, not just the cached preview) is applied
         // as a separate layer over this state — see searchMatchingIds — so only category/unread
@@ -588,6 +608,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             privateChatsUnlockedThisSession = eph.privateChatsUnlockedThisSession,
             appUnlockedThisSession = !settings.appLockEnabled || eph.appUnlockedThisSession,
             multiSelectThreadIds = eph.multiSelectThreadIds,
+            multiSelectArchivedIds = eph.multiSelectArchivedIds,
+            multiSelectPrivateIds = eph.multiSelectPrivateIds,
+            multiSelectRecycleBinIds = eph.multiSelectRecycleBinIds,
             blockedList = threads.blocked.map { BlockedNumberUi(it.number) },
             showDrawer = eph.showDrawer,
             overflowMenuOpen = eph.overflowMenuOpen,
@@ -644,6 +667,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         Category.Personal -> "Direct Messages"
         Category.Otp -> "Authentication"
         Category.Transactions -> "Transactions"
+        Category.Ipo -> "IPO Updates"
         else -> "Promotional"
     }
 
@@ -792,6 +816,14 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         it.copy(multiSelectThreadIds = if (threadId in current) current - threadId else current + threadId)
     }
 
+    /** [visibleIds] is the caller's already-filtered/sorted list (state.threads.map { it.id }) —
+     * selecting "all" only ever means everything currently on screen, not every thread in the DB. */
+    fun selectAllThreads(visibleIds: List<String>) = ephemeral.update { it.copy(multiSelectThreadIds = visibleIds.toSet()) }
+
+    fun invertThreadSelection(visibleIds: List<String>) = ephemeral.update {
+        it.copy(multiSelectThreadIds = visibleIds.toSet() - it.multiSelectThreadIds)
+    }
+
     fun exitMultiSelect() = ephemeral.update { it.copy(multiSelectThreadIds = emptySet()) }
 
     /** Multiple destructive actions ask for confirmation instead of offering undo (the dialog
@@ -815,6 +847,84 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         val ids = ephemeral.value.multiSelectThreadIds
         ids.forEach { container.threadRepository.toggleRead(it, true) }
         exitMultiSelect()
+    }
+
+    // endregion
+
+    // region ---- Multi-select: Archived / Private Chats / Recycle Bin ----
+    // Same shape as the dashboard's multi-select above, one independent copy per list so a
+    // selection never bleeds from one screen into another — see the Ephemeral fields' doc comment.
+
+    fun startArchivedSelect(threadId: String) = ephemeral.update { it.copy(multiSelectArchivedIds = setOf(threadId)) }
+    fun toggleArchivedSelection(threadId: String) = ephemeral.update {
+        val current = it.multiSelectArchivedIds
+        it.copy(multiSelectArchivedIds = if (threadId in current) current - threadId else current + threadId)
+    }
+    fun selectAllArchived(visibleIds: List<String>) = ephemeral.update { it.copy(multiSelectArchivedIds = visibleIds.toSet()) }
+    fun invertArchivedSelection(visibleIds: List<String>) = ephemeral.update {
+        it.copy(multiSelectArchivedIds = visibleIds.toSet() - it.multiSelectArchivedIds)
+    }
+    fun exitArchivedSelect() = ephemeral.update { it.copy(multiSelectArchivedIds = emptySet()) }
+    fun bulkUnarchiveSelected() = viewModelScope.launch {
+        val ids = ephemeral.value.multiSelectArchivedIds
+        ids.forEach { container.threadRepository.unarchive(it) }
+        exitArchivedSelect()
+        toast("${ids.size} ${if (ids.size == 1) "chat" else "chats"} unarchived")
+    }
+    fun bulkDeleteArchivedSelected() = viewModelScope.launch {
+        val ids = ephemeral.value.multiSelectArchivedIds
+        val now = System.currentTimeMillis()
+        ids.forEach { container.threadRepository.softDelete(it, now) }
+        exitArchivedSelect()
+        toast("${ids.size} ${if (ids.size == 1) "chat" else "chats"} deleted")
+    }
+
+    fun startPrivateSelect(threadId: String) = ephemeral.update { it.copy(multiSelectPrivateIds = setOf(threadId)) }
+    fun togglePrivateSelection(threadId: String) = ephemeral.update {
+        val current = it.multiSelectPrivateIds
+        it.copy(multiSelectPrivateIds = if (threadId in current) current - threadId else current + threadId)
+    }
+    fun selectAllPrivate(visibleIds: List<String>) = ephemeral.update { it.copy(multiSelectPrivateIds = visibleIds.toSet()) }
+    fun invertPrivateSelection(visibleIds: List<String>) = ephemeral.update {
+        it.copy(multiSelectPrivateIds = visibleIds.toSet() - it.multiSelectPrivateIds)
+    }
+    fun exitPrivateSelect() = ephemeral.update { it.copy(multiSelectPrivateIds = emptySet()) }
+    fun bulkRemoveFromPrivateSelected() = viewModelScope.launch {
+        val ids = ephemeral.value.multiSelectPrivateIds
+        ids.forEach { container.threadRepository.setPrivate(it, false) }
+        exitPrivateSelect()
+        toast("${ids.size} ${if (ids.size == 1) "chat" else "chats"} removed from Private")
+    }
+    fun bulkDeletePrivateSelected() = viewModelScope.launch {
+        val ids = ephemeral.value.multiSelectPrivateIds
+        val now = System.currentTimeMillis()
+        ids.forEach { container.threadRepository.softDelete(it, now) }
+        exitPrivateSelect()
+        toast("${ids.size} ${if (ids.size == 1) "chat" else "chats"} deleted")
+    }
+
+    fun startRecycleBinSelect(threadId: String) = ephemeral.update { it.copy(multiSelectRecycleBinIds = setOf(threadId)) }
+    fun toggleRecycleBinSelection(threadId: String) = ephemeral.update {
+        val current = it.multiSelectRecycleBinIds
+        it.copy(multiSelectRecycleBinIds = if (threadId in current) current - threadId else current + threadId)
+    }
+    fun selectAllRecycleBin(visibleIds: List<String>) = ephemeral.update { it.copy(multiSelectRecycleBinIds = visibleIds.toSet()) }
+    fun invertRecycleBinSelection(visibleIds: List<String>) = ephemeral.update {
+        it.copy(multiSelectRecycleBinIds = visibleIds.toSet() - it.multiSelectRecycleBinIds)
+    }
+    fun exitRecycleBinSelect() = ephemeral.update { it.copy(multiSelectRecycleBinIds = emptySet()) }
+    fun bulkRestoreSelected() = viewModelScope.launch {
+        val ids = ephemeral.value.multiSelectRecycleBinIds
+        ids.forEach { container.threadRepository.restore(it) }
+        exitRecycleBinSelect()
+        toast("${ids.size} ${if (ids.size == 1) "chat" else "chats"} restored")
+    }
+    /** Permanent — not reversible via undo, so the confirm dialog lives in RecycleBinScreen. */
+    fun bulkDeleteForeverSelected() = viewModelScope.launch {
+        val ids = ephemeral.value.multiSelectRecycleBinIds
+        ids.forEach { container.threadRepository.hardDelete(it) }
+        exitRecycleBinSelect()
+        toast("${ids.size} ${if (ids.size == 1) "chat" else "chats"} deleted forever")
     }
 
     // endregion
@@ -1591,9 +1701,19 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             NotificationChannelIds.PERSONAL -> settings.channelPersonalEnabled
             NotificationChannelIds.OTP -> settings.channelOtpEnabled
             NotificationChannelIds.TRANSACTIONS -> settings.channelTransactEnabled
+            NotificationChannelIds.IPO -> settings.channelIpoEnabled
+            NotificationChannelIds.OTHERS -> settings.channelOthersEnabled
+            NotificationChannelIds.UNKNOWN -> settings.channelUnknownEnabled
             else -> settings.channelPromoEnabled
         }
         container.settingsRepository.setChannelEnabled(channelId, !current)
+    }
+
+    /** [priority] is "high" | "default" | "low" — see NotificationChannels.updateChannelPriority
+     * for why this has to delete and recreate the OS channel rather than just flip a setting. */
+    fun setChannelPriority(channelId: String, priority: String) = viewModelScope.launch {
+        container.settingsRepository.setChannelPriority(channelId, priority)
+        container.applyChannelPriority(channelId, priority)
     }
     fun toggleNotificationsAllowed() = viewModelScope.launch {
         container.settingsRepository.setNotificationsAllowed(!uiState.value.settings.notificationsAllowed)

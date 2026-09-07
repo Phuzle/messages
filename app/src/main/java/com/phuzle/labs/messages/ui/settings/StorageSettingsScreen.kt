@@ -61,7 +61,7 @@ fun StorageSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
 
         Column(Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium).padding(14.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Timer, contentDescription = null, tint = tokens.textSecondary, modifier = Modifier.size(20.dp).padding(end = 12.dp))
+                com.phuzle.labs.messages.ui.components.SettingsIconBadge(icon = Icons.Filled.Timer, modifier = Modifier.padding(end = 12.dp))
                 Column(Modifier.weight(1f)) {
                     Text("24-hour OTP eviction", color = tokens.textPrimary, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
                     Text("Move OTP codes to the recycle bin after 24h", color = tokens.textTertiary, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))

@@ -52,12 +52,14 @@ import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MarkEmailRead
+import androidx.compose.material.icons.filled.MarkEmailUnread
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.AccountBalanceWallet as AccountBalanceWalletOutlined
+import androidx.compose.material.icons.outlined.MarkEmailUnread as MarkEmailUnreadOutlined
 import androidx.compose.material.icons.outlined.Notifications as NotificationsOutlined
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -76,6 +78,8 @@ import com.phuzle.labs.messages.ui.components.CategoryChip
 import com.phuzle.labs.messages.ui.components.FlatTextField
 import com.phuzle.labs.messages.ui.components.EmptyState
 import com.phuzle.labs.messages.ui.components.GlassBar
+import com.phuzle.labs.messages.ui.components.SelectionOverflowMenu
+import com.phuzle.labs.messages.ui.components.SelectionTopBar
 import com.phuzle.labs.messages.ui.components.ThreadRow
 import com.phuzle.labs.messages.ui.components.roundClickable
 import com.phuzle.labs.messages.ui.model.AccountUi
@@ -119,6 +123,11 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
     // FAB with no scroll position that would reveal them.
     val bottomContentPadding = (if (FeatureFlags.PASSBOOK_AND_REMINDERS_ENABLED) BOTTOM_BAR_HEIGHT else 0).dp +
         (FAB_MARGIN + FAB_SIZE + 16).dp + navBarInset
+    // Hoisted out of GlassBar's content (not just declared inline in the selection bar below) so
+    // SelectionOverflowMenu can be rendered as a sibling of GlassBar instead of nested inside it —
+    // GlassBar's shadow clips its content by default, which would make the popup invisible and
+    // untouchable the moment it's taller than the bar itself. See SelectionTopBar.kt.
+    var showSelectionMenu by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize()) {
         when (state.activeTab) {
@@ -246,15 +255,11 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                 if (state.multiSelectThreadIds.isNotEmpty()) {
                     var showBulkArchiveConfirm by remember { mutableStateOf(false) }
                     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier.size(40.dp).roundClickable(onClick = viewModel::exitMultiSelect),
-                            contentAlignment = Alignment.Center,
-                        ) { Icon(Icons.Filled.Close, contentDescription = "Cancel selection", tint = tokens.textPrimary, modifier = Modifier.size(22.dp)) }
-                        Text(
-                            "${state.multiSelectThreadIds.size} selected", color = tokens.textPrimary, fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 4.dp),
-                        )
+                    SelectionTopBar(
+                        count = state.multiSelectThreadIds.size,
+                        onClose = viewModel::exitMultiSelect,
+                        onMenuClick = { showSelectionMenu = true },
+                    ) {
                         Box(
                             Modifier.size(40.dp).roundClickable(onClick = viewModel::bulkMarkReadSelected),
                             contentAlignment = Alignment.Center,
@@ -324,13 +329,29 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                         DashboardTab.Reminders -> Text("Reminders", color = tokens.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                     }
 
+                    if (isMessages) {
+                        Box(
+                            Modifier.size(40.dp).roundClickable(onClick = viewModel::toggleUnreadOnly),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            // An envelope-with-a-dot reads as "unread messages" on sight — the
+                            // generic funnel this replaced looked like it filtered by category,
+                            // which is what the chips above it already do.
+                            Icon(
+                                if (state.unreadOnly) Icons.Filled.MarkEmailUnread else Icons.Outlined.MarkEmailUnreadOutlined,
+                                contentDescription = if (state.unreadOnly) "Showing unread only" else "Show unread only",
+                                tint = if (state.unreadOnly) tokens.accent else tokens.textPrimary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
                     Box(
                         Modifier.size(40.dp).roundClickable(onClick = viewModel::toggleOverflowMenu),
                         contentAlignment = Alignment.Center,
                     ) { Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = tokens.textPrimary, modifier = Modifier.size(22.dp)) }
                 }
             }
-            if (isMessages) {
+            if (isMessages && state.categories.isNotEmpty()) {
                 val categoryScrollState = rememberScrollState()
                 val coroutineScope = rememberCoroutineScope()
                 var rowWidth by remember { mutableIntStateOf(0) }
@@ -419,6 +440,13 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
         ) {
             Icon(Icons.Filled.Add, contentDescription = "Compose", tint = tokens.accentText, modifier = Modifier.size(26.dp))
         }
+
+        SelectionOverflowMenu(
+            visible = showSelectionMenu,
+            onDismiss = { showSelectionMenu = false },
+            onSelectAll = { viewModel.selectAllThreads(state.threads.map { it.id }) },
+            onInvertSelection = { viewModel.invertThreadSelection(state.threads.map { it.id }) },
+        )
     }
 }
 

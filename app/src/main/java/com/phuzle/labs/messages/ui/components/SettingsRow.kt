@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.phuzle.labs.messages.ui.theme.IconSizes
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapeMedium
 
@@ -32,7 +33,7 @@ fun ChevronIcon(modifier: Modifier = Modifier) {
         Icons.AutoMirrored.Filled.KeyboardArrowRight,
         contentDescription = null,
         tint = MessagesTheme.tokens.textTertiary,
-        modifier = modifier.size(20.dp),
+        modifier = modifier.size(IconSizes.Medium),
     )
 }
 
@@ -87,7 +88,7 @@ fun SettingsToggleRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (leadingIcon != null) {
-            Icon(leadingIcon, contentDescription = null, tint = MessagesTheme.tokens.textSecondary, modifier = Modifier.size(20.dp).padding(end = 12.dp))
+            SettingsIconBadge(icon = leadingIcon, modifier = Modifier.padding(end = 12.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(title, color = MessagesTheme.tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)

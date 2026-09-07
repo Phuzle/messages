@@ -15,9 +15,24 @@ class CategoryClassifier(
     fun classify(sender: String, body: String): Category {
         val text = body.lowercase()
 
+        // Computed once up front: a promo blast that happens to mention "code" (e.g. "Use code
+        // SAVE20 — offer valid for 10 mins!") used to slip into Otp, since the generic
+        // alphanumeric-with-a-digit codePattern below matches promo codes just as readily as real
+        // OTPs. Any actual promotion keyword match disqualifies Otp outright — promotional intent
+        // always wins that ambiguity.
+        val hasPromotionKeyword = rules.promotionKeywords.any { text.contains(it) }
+
         val hasOtpKeyword = rules.otpKeywords.any { text.contains(it) }
-        if (hasOtpKeyword && rules.otpCodePattern.containsMatchIn(body)) {
+        if (hasOtpKeyword && !hasPromotionKeyword && rules.otpCodePattern.containsMatchIn(body)) {
             return Category.Otp
+        }
+
+        // Checked ahead of Transactions: registrar/exchange IPO messages ("Your IPO application
+        // for XYZ Ltd worth Rs 15,000 via ASBA a/c XXXX1234 has been received") carry the same
+        // amount + account-reference signal a bank transaction does, so without this they'd never
+        // reach the Ipo branch below.
+        if (rules.ipoKeywords.any { text.contains(it) }) {
+            return Category.Ipo
         }
 
         // A keyword match still counts (works for the ~60% of messages that arrive in English),
@@ -33,7 +48,7 @@ class CategoryClassifier(
             return Category.Transactions
         }
 
-        if (rules.promotionKeywords.any { text.contains(it) }) {
+        if (hasPromotionKeyword) {
             return Category.Promotions
         }
 

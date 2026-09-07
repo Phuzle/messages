@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.phuzle.labs.messages.ui.theme.IconSizes
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapeMedium
 
@@ -57,7 +58,7 @@ fun OverflowMenu(visible: Boolean, onDismiss: () -> Unit, items: List<MenuItem>,
                         item.icon,
                         contentDescription = null,
                         tint = if (item.danger) tokens.danger else tokens.textSecondary,
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(IconSizes.Medium),
                     )
                     Text(
                         item.label,

@@ -144,9 +144,14 @@ fun ThreadRow(
                             .border(1.dp, if (selected) tokens.accent else tokens.border, CircleShape),
                         contentAlignment = Alignment.Center,
                     ) {
-                        if (selected) {
-                            Icon(Icons.Filled.Check, contentDescription = "Selected", tint = tokens.accentText, modifier = Modifier.size(20.dp))
-                        }
+                        // Always shows a checkmark, muted when not selected — an empty circle read
+                        // as a blank/broken avatar rather than an actual "tap to select" control.
+                        Icon(
+                            Icons.Filled.Check,
+                            contentDescription = if (selected) "Selected" else "Not selected",
+                            tint = if (selected) tokens.accentText else tokens.textTertiary,
+                            modifier = Modifier.size(20.dp),
+                        )
                     }
                 } else {
                     AvatarBubble(thread.category, thread.avatarColor, thread.isBusiness, photoUri = thread.photoUri)

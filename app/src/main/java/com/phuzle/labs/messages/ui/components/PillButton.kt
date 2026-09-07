@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.clip
+import com.phuzle.labs.messages.ui.theme.IconSizes
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapePill
 import com.phuzle.labs.messages.ui.theme.pillOptionColors
@@ -36,7 +37,7 @@ fun PillButton(label: String, active: Boolean, onClick: () -> Unit, modifier: Mo
             .padding(horizontal = 13.dp, vertical = 7.dp),
     ) {
         if (icon != null) {
-            Icon(icon, contentDescription = null, tint = colors.content, modifier = Modifier.size(14.dp))
+            Icon(icon, contentDescription = null, tint = colors.content, modifier = Modifier.size(IconSizes.Small))
         }
         Text(
             text = label,

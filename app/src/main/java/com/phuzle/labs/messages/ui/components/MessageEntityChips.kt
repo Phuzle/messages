@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.domain.text.DetectedEntity
+import com.phuzle.labs.messages.ui.theme.IconSizes
 
 /**
  * One row of small action chips per detected phone/URL/email/code in a message body — a primary
@@ -76,7 +77,7 @@ private fun EntityChip(label: String, icon: androidx.compose.ui.graphics.vector.
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        Icon(icon, contentDescription = label, tint = contentColor, modifier = Modifier.size(13.dp))
+        Icon(icon, contentDescription = label, tint = contentColor, modifier = Modifier.size(IconSizes.Small))
         Text(label, color = contentColor, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
     }
 }
@@ -90,6 +91,6 @@ private fun CopyIconChip(contentColor: Color, onClick: () -> Unit) {
             .padding(horizontal = 8.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.ContentCopy, contentDescription = "Copy", tint = contentColor, modifier = Modifier.size(13.dp))
+        Icon(Icons.Filled.ContentCopy, contentDescription = "Copy", tint = contentColor, modifier = Modifier.size(IconSizes.Small))
     }
 }

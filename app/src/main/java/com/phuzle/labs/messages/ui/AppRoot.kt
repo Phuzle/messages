@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.FilterAlt
-import androidx.compose.material.icons.filled.FilterAltOff
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -192,11 +190,6 @@ fun AppRoot(viewModel: AppViewModel) {
                 onDismiss = viewModel::closeOverflowMenu,
                 items = listOf(
                     MenuItem("Mark all as read", icon = Icons.Filled.DoneAll, onClick = viewModel::requestMarkAllAsRead),
-                    MenuItem(
-                        if (state.unreadOnly) "Show all messages" else "Show unread only",
-                        icon = if (state.unreadOnly) Icons.Filled.FilterAltOff else Icons.Filled.FilterAlt,
-                        onClick = viewModel::toggleUnreadOnly,
-                    ),
                     MenuItem("Settings", icon = Icons.Filled.Settings, onClick = viewModel::openSettings),
                 ),
             )

@@ -119,7 +119,7 @@ fun BackupSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(Icons.Filled.Wifi, contentDescription = null, tint = tokens.textSecondary, modifier = Modifier.size(20.dp).padding(end = 12.dp))
+                            com.phuzle.labs.messages.ui.components.SettingsIconBadge(icon = Icons.Filled.Wifi, modifier = Modifier.padding(end = 12.dp))
                             Column {
                                 Text("Wi-Fi only", color = tokens.textPrimary, fontSize = 13.sp)
                                 Text("Disabling this will use mobile data", color = tokens.textTertiary, fontSize = 11.5.sp, modifier = Modifier.padding(top = 2.dp))

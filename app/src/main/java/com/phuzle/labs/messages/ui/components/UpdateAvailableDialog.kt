@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SystemUpdate
@@ -22,6 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.model.UpdateInfoUi
+import com.phuzle.labs.messages.ui.theme.IconSizes
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapeMedium
 
@@ -46,7 +48,7 @@ fun UpdateAvailableDialog(update: UpdateInfoUi?, onUpdate: () -> Unit, onDismiss
                 .padding(horizontal = 22.dp, vertical = 26.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Icon(Icons.Filled.SystemUpdate, contentDescription = null, tint = tokens.accent, modifier = Modifier.padding(bottom = 12.dp))
+            Icon(Icons.Filled.SystemUpdate, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(IconSizes.Large).padding(bottom = 12.dp))
             Text("Update Ready", color = tokens.modalText, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             Text(
                 update.message,

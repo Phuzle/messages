@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.model.CategoryChipUi
+import com.phuzle.labs.messages.ui.theme.IconSizes
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapePill
 import com.phuzle.labs.messages.ui.theme.categoryChipColors
@@ -36,7 +37,7 @@ fun CategoryChip(chip: CategoryChipUi, onClick: () -> Unit, modifier: Modifier =
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (chip.active) {
-            Icon(Icons.Filled.Check, contentDescription = null, tint = colors.content, modifier = Modifier.size(14.dp).padding(end = 3.dp))
+            Icon(Icons.Filled.Check, contentDescription = null, tint = colors.content, modifier = Modifier.size(IconSizes.Small).padding(end = 3.dp))
         }
         Text(text = chip.label, color = colors.content, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
     }

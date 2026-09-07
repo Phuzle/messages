@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.phuzle.labs.messages.ui.theme.IconSizes
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 
 /** The bottom sheet triggered by a long-press on a message bubble: copy/reply/forward/delete.
@@ -69,7 +70,7 @@ private fun MessageActionRow(label: String, color: Color, icon: ImageVector, onC
             .clickable(onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 14.dp),
     ) {
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(IconSizes.Medium))
         Text(label, color = color, fontSize = 14.sp, modifier = Modifier.padding(start = 16.dp))
     }
 }

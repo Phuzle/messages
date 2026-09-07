@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Sell
+import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -67,6 +68,7 @@ fun AvatarBubble(
 fun iconForCategory(category: Category): ImageVector = when (category) {
     Category.Otp -> Icons.Filled.Lock
     Category.Transactions -> Icons.Filled.AccountBalanceWallet
+    Category.Ipo -> Icons.Filled.ShowChart
     Category.Promotions -> Icons.Filled.Sell
     Category.Others -> Icons.Filled.Business
     Category.Personal, Category.Unknown, Category.All -> Icons.Filled.Person

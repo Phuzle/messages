@@ -9,7 +9,21 @@ data class AppSettings(
     val channelPersonalEnabled: Boolean = true,
     val channelOtpEnabled: Boolean = true,
     val channelTransactEnabled: Boolean = true,
+    val channelIpoEnabled: Boolean = true,
     val channelPromoEnabled: Boolean = true,
+    val channelOthersEnabled: Boolean = true,
+    val channelUnknownEnabled: Boolean = true,
+    // Per-category notification priority: "high" | "default" | "low". Defaults mirror
+    // NotificationChannels' shipped importance for each channel — see
+    // NotificationChannels.updateChannelPriority for why changing these means deleting and
+    // recreating the underlying OS channel rather than mutating it in place.
+    val channelPersonalPriority: String = "high",
+    val channelOtpPriority: String = "high",
+    val channelTransactPriority: String = "default",
+    val channelIpoPriority: String = "default",
+    val channelPromoPriority: String = "low",
+    val channelOthersPriority: String = "default",
+    val channelUnknownPriority: String = "low",
     val notificationsAllowed: Boolean = true,
     val wakeScreenForHighPriority: Boolean = true,
     val quickActionButtons: Boolean = true,

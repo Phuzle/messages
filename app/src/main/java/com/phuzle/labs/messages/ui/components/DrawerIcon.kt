@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.phuzle.labs.messages.ui.theme.IconSizes
 
 enum class DrawerIconType { Inbox, Archived, Drafts, Passbook, Reminders, ScheduledMessages, PrivateChats, Settings, RecycleBin, AboutUs, Share }
 
@@ -39,5 +40,5 @@ private fun DrawerIconType.imageVector(): ImageVector = when (this) {
 /** Nav drawer item icons — a real Material icon per destination, replacing the earlier hand-drawn glyphs. */
 @Composable
 fun DrawerIcon(type: DrawerIconType, color: Color, modifier: Modifier = Modifier) {
-    Icon(imageVector = type.imageVector(), contentDescription = null, tint = color, modifier = modifier.size(20.dp))
+    Icon(imageVector = type.imageVector(), contentDescription = null, tint = color, modifier = modifier.size(IconSizes.Medium))
 }

@@ -196,6 +196,9 @@ class MessageNotifier(
             Category.Personal.channelId -> settings.channelPersonalEnabled
             Category.Otp.channelId -> settings.channelOtpEnabled
             Category.Transactions.channelId -> settings.channelTransactEnabled
+            Category.Ipo.channelId -> settings.channelIpoEnabled
+            Category.Others.channelId -> settings.channelOthersEnabled
+            Category.Unknown.channelId -> settings.channelUnknownEnabled
             else -> settings.channelPromoEnabled
         }
 

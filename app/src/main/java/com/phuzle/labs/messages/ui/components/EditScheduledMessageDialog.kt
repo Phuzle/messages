@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.phuzle.labs.messages.ui.format.formatScheduleTime
 import com.phuzle.labs.messages.ui.model.ScheduledMessageEditUi
+import com.phuzle.labs.messages.ui.theme.IconSizes
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapeMedium
 import com.phuzle.labs.messages.ui.theme.ShapePill
@@ -68,7 +69,7 @@ fun EditScheduledMessageDialog(
                     .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Filled.CalendarMonth, contentDescription = null, tint = tokens.textSecondary, modifier = Modifier.size(16.dp))
+                Icon(Icons.Filled.CalendarMonth, contentDescription = null, tint = tokens.textSecondary, modifier = Modifier.size(IconSizes.Small))
                 Text(
                     formatScheduleTime(edit.scheduledFor),
                     color = tokens.modalText,

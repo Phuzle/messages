@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -40,18 +41,50 @@ import com.phuzle.labs.messages.ui.components.BackBarScaffold
 import com.phuzle.labs.messages.ui.components.EmptyState
 import com.phuzle.labs.messages.ui.components.ListCountHeader
 import com.phuzle.labs.messages.ui.components.SectionLabel
+import com.phuzle.labs.messages.ui.components.SelectionOverflowMenu
+import com.phuzle.labs.messages.ui.components.SelectionTopBar
 import com.phuzle.labs.messages.ui.components.SimpleThreadRow
+import com.phuzle.labs.messages.ui.components.roundClickable
 import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.model.DeletedOtpMessageUi
+import com.phuzle.labs.messages.ui.theme.IconSizes
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 
 @Composable
 fun RecycleBinScreen(state: AppUiState, viewModel: AppViewModel) {
     val tokens = MessagesTheme.tokens
     var showEmptyConfirm by remember { mutableStateOf(false) }
+    var showBulkDeleteForeverConfirm by remember { mutableStateOf(false) }
+    // Hoisted here (not inside topBarContent) so the popup can be rendered as a sibling of
+    // GlassBar instead of nested inside it — see SelectionTopBar.kt for why nesting it there
+    // makes the popup invisible and untouchable.
+    var showSelectionMenu by remember { mutableStateOf(false) }
     val totalCount = state.deletedThreads.size + state.deletedOtpMessages.size
+    // Multi-select only covers the "Chats" section — deleted OTP messages are a different entity
+    // (MessageEntity, not ThreadEntity) with their own single restore action, and mixing the two
+    // into one selection would make "select all" mean two different things at once.
+    val selection = state.multiSelectRecycleBinIds
 
-    BackBarScaffold(title = "Recycle Bin", onBack = viewModel::goBack) {
+    BackBarScaffold(
+        title = "Recycle Bin",
+        onBack = viewModel::goBack,
+        topBarContent = if (selection.isNotEmpty()) {
+            {
+                SelectionTopBar(
+                    count = selection.size,
+                    onClose = viewModel::exitRecycleBinSelect,
+                    onMenuClick = { showSelectionMenu = true },
+                ) {
+                    Box(Modifier.size(40.dp).roundClickable(onClick = viewModel::bulkRestoreSelected), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Restore, contentDescription = "Restore", tint = tokens.textPrimary, modifier = Modifier.size(IconSizes.Medium))
+                    }
+                    Box(Modifier.size(40.dp).roundClickable(onClick = { showBulkDeleteForeverConfirm = true }), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.DeleteForever, contentDescription = "Delete forever", tint = tokens.danger, modifier = Modifier.size(IconSizes.Medium))
+                    }
+                }
+            }
+        } else null,
+    ) {
         if (totalCount == 0) {
             EmptyState(
                 icon = Icons.Filled.Delete,
@@ -85,7 +118,16 @@ fun RecycleBinScreen(state: AppUiState, viewModel: AppViewModel) {
                 if (state.deletedThreads.isNotEmpty()) {
                     item { SectionLabel("Chats", Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
                     items(state.deletedThreads, key = { "thread-${it.id}" }) { item ->
-                        SimpleThreadRow(item = item, actionLabel = "Restore", actionIcon = Icons.Filled.Restore, onAction = { viewModel.restoreThread(item.id) })
+                        SimpleThreadRow(
+                            item = item,
+                            actionLabel = "Restore",
+                            actionIcon = Icons.Filled.Restore,
+                            onAction = { viewModel.restoreThread(item.id) },
+                            selectionMode = selection.isNotEmpty(),
+                            selected = item.id in selection,
+                            onToggleSelect = { viewModel.toggleRecycleBinSelection(item.id) },
+                            onLongPress = { viewModel.startRecycleBinSelect(item.id) },
+                        )
                     }
                 }
                 if (state.deletedOtpMessages.isNotEmpty()) {
@@ -96,6 +138,13 @@ fun RecycleBinScreen(state: AppUiState, viewModel: AppViewModel) {
                 }
             }
         }
+
+        SelectionOverflowMenu(
+            visible = showSelectionMenu,
+            onDismiss = { showSelectionMenu = false },
+            onSelectAll = { viewModel.selectAllRecycleBin(state.deletedThreads.map { it.id }) },
+            onInvertSelection = { viewModel.invertRecycleBinSelection(state.deletedThreads.map { it.id }) },
+        )
     }
 
     if (showEmptyConfirm) {
@@ -109,6 +158,20 @@ fun RecycleBinScreen(state: AppUiState, viewModel: AppViewModel) {
                 }
             },
             dismissButton = { TextButton(onClick = { showEmptyConfirm = false }) { Text("Cancel") } },
+        )
+    }
+
+    if (showBulkDeleteForeverConfirm) {
+        AlertDialog(
+            onDismissRequest = { showBulkDeleteForeverConfirm = false },
+            title = { Text("Delete ${selection.size} chats forever?") },
+            text = { Text("This permanently deletes them and can't be undone.") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.bulkDeleteForeverSelected(); showBulkDeleteForeverConfirm = false }) {
+                    Text("Delete forever", color = tokens.danger)
+                }
+            },
+            dismissButton = { TextButton(onClick = { showBulkDeleteForeverConfirm = false }) { Text("Cancel") } },
         )
     }
 }

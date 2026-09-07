@@ -17,20 +17,32 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.phuzle.labs.messages.ui.theme.IconSizes
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 
-/** The back-arrow + title bar shared by every pushed sub-screen (Recycle Bin, Archived, Settings subs, ...). */
+/** The back-arrow + title bar shared by every pushed sub-screen (Recycle Bin, Archived, Settings subs, ...).
+ * [topBarContent], when non-null, replaces the default back+title row entirely — used to swap in a
+ * multi-select bar (see SelectionTopBar) without every caller reimplementing this scaffold. */
 @Composable
-fun BackBarScaffold(title: String, onBack: () -> Unit, content: @Composable BoxScope.() -> Unit) {
+fun BackBarScaffold(
+    title: String,
+    onBack: () -> Unit,
+    topBarContent: (@Composable () -> Unit)? = null,
+    content: @Composable BoxScope.() -> Unit,
+) {
     val tokens = MessagesTheme.tokens
     Box(Modifier.fillMaxSize()) {
         content()
         GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 56.dp, inset = BarInset.Top) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(36.dp).roundClickable(onClick = onBack), contentAlignment = Alignment.Center) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
+            if (topBarContent != null) {
+                topBarContent()
+            } else {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(36.dp).roundClickable(onClick = onBack), contentAlignment = Alignment.Center) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = tokens.textPrimary, modifier = Modifier.size(IconSizes.Medium))
+                    }
+                    Text(title, color = tokens.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
                 }
-                Text(title, color = tokens.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
             }
         }
     }

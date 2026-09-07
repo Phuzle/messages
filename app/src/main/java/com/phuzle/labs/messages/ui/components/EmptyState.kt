@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.phuzle.labs.messages.ui.theme.IconSizes
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapePill
 
@@ -42,7 +43,7 @@ fun EmptyState(
         Box(
             Modifier.size(64.dp).background(tokens.surfaceAlt, CircleShape),
             contentAlignment = Alignment.Center,
-        ) { Icon(icon, contentDescription = null, tint = tokens.textTertiary, modifier = Modifier.size(28.dp)) }
+        ) { Icon(icon, contentDescription = null, tint = tokens.textTertiary, modifier = Modifier.size(IconSizes.Large)) }
         Text(title, color = tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 14.dp))
         Text(detail, color = tokens.textTertiary, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
         if (actionLabel != null && onAction != null) {

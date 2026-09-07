@@ -18,6 +18,7 @@ data class RegexRules(
      * other language, so this catches real transactional SMS that an amount + English-keyword
      * match alone would miss (see CategoryClassifier). */
     val accountRefPattern: Regex,
+    val ipoKeywords: List<String>,
     val promotionKeywords: List<String>,
     val otherKeywords: List<String>,
 ) {
@@ -33,13 +34,14 @@ data class RegexRules(
          * whatever category they were assigned on first arrival forever, since nothing else ever
          * re-evaluates it — shipping smarter rules would silently do nothing for senders the app
          * already knows about without this. */
-        const val CURRENT_VERSION = 5
+        const val CURRENT_VERSION = 6
 
         fun loadFrom(context: Context): RegexRules {
             val json = context.assets.open("regex_rules.json").bufferedReader().use { it.readText() }
             val root = JSONObject(json)
             val otp = root.getJSONObject("otp")
             val transaction = root.getJSONObject("transaction")
+            val ipo = root.getJSONObject("ipo")
             val promotion = root.getJSONObject("promotion")
             val other = root.getJSONObject("other")
             return RegexRules(
@@ -54,6 +56,7 @@ data class RegexRules(
                 transactionKeywords = transaction.getJSONArray("keywords").toStringList(),
                 amountPattern = Regex(transaction.getString("amountPattern"), RegexOption.IGNORE_CASE),
                 accountRefPattern = Regex(transaction.getString("accountRefPattern"), RegexOption.IGNORE_CASE),
+                ipoKeywords = ipo.getJSONArray("keywords").toStringList(),
                 promotionKeywords = promotion.getJSONArray("keywords").toStringList(),
                 otherKeywords = other.getJSONArray("keywords").toStringList(),
             )

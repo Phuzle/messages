@@ -44,6 +44,7 @@ import com.phuzle.labs.messages.ui.components.SettingsCard
 import com.phuzle.labs.messages.ui.components.SettingsRowDivider
 import com.phuzle.labs.messages.ui.components.withLongPressHaptic
 import com.phuzle.labs.messages.ui.model.AppUiState
+import com.phuzle.labs.messages.ui.theme.IconSizes
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapeMedium
 
@@ -72,12 +73,7 @@ fun PrivacySettingsScreen(state: AppUiState, viewModel: AppViewModel) {
             SectionLabel("App lock", Modifier.padding(bottom = 8.dp))
             Column(Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium).padding(14.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Filled.Lock,
-                        contentDescription = null,
-                        tint = tokens.textSecondary,
-                        modifier = Modifier.size(20.dp).padding(end = 12.dp),
-                    )
+                    com.phuzle.labs.messages.ui.components.SettingsIconBadge(icon = Icons.Filled.Lock, modifier = Modifier.padding(end = 12.dp))
                     Text("Require authentication to open app", color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                     com.phuzle.labs.messages.ui.components.LabeledSwitch(
                         checked = settings.appLockEnabled,
@@ -138,7 +134,7 @@ fun PrivacySettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                                     .clickable { viewModel.unblockNumber(blocked.number) }
                                     .padding(horizontal = 12.dp, vertical = 6.dp),
                             ) {
-                                Icon(Icons.Filled.LockOpen, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(14.dp))
+                                Icon(Icons.Filled.LockOpen, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(IconSizes.Small))
                                 Text("Unblock", color = tokens.accent, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 5.dp))
                             }
                         }

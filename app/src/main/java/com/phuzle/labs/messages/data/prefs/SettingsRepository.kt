@@ -25,7 +25,17 @@ class SettingsRepository(private val context: Context) {
         val CH_PERSONAL = booleanPreferencesKey("ch_personal_enabled")
         val CH_OTP = booleanPreferencesKey("ch_otp_enabled")
         val CH_TRANSACT = booleanPreferencesKey("ch_transact_enabled")
+        val CH_IPO = booleanPreferencesKey("ch_ipo_enabled")
         val CH_PROMO = booleanPreferencesKey("ch_promo_enabled")
+        val CH_OTHERS = booleanPreferencesKey("ch_others_enabled")
+        val CH_UNKNOWN = booleanPreferencesKey("ch_unknown_enabled")
+        val CH_PERSONAL_PRIORITY = stringPreferencesKey("ch_personal_priority")
+        val CH_OTP_PRIORITY = stringPreferencesKey("ch_otp_priority")
+        val CH_TRANSACT_PRIORITY = stringPreferencesKey("ch_transact_priority")
+        val CH_IPO_PRIORITY = stringPreferencesKey("ch_ipo_priority")
+        val CH_PROMO_PRIORITY = stringPreferencesKey("ch_promo_priority")
+        val CH_OTHERS_PRIORITY = stringPreferencesKey("ch_others_priority")
+        val CH_UNKNOWN_PRIORITY = stringPreferencesKey("ch_unknown_priority")
         val NOTIFICATIONS_ALLOWED = booleanPreferencesKey("notifications_allowed")
         val WAKE_SCREEN = booleanPreferencesKey("wake_screen")
         val QUICK_ACTIONS = booleanPreferencesKey("quick_actions")
@@ -63,7 +73,17 @@ class SettingsRepository(private val context: Context) {
             channelPersonalEnabled = prefs[Keys.CH_PERSONAL] ?: true,
             channelOtpEnabled = prefs[Keys.CH_OTP] ?: true,
             channelTransactEnabled = prefs[Keys.CH_TRANSACT] ?: true,
+            channelIpoEnabled = prefs[Keys.CH_IPO] ?: true,
             channelPromoEnabled = prefs[Keys.CH_PROMO] ?: true,
+            channelOthersEnabled = prefs[Keys.CH_OTHERS] ?: true,
+            channelUnknownEnabled = prefs[Keys.CH_UNKNOWN] ?: true,
+            channelPersonalPriority = prefs[Keys.CH_PERSONAL_PRIORITY] ?: "high",
+            channelOtpPriority = prefs[Keys.CH_OTP_PRIORITY] ?: "high",
+            channelTransactPriority = prefs[Keys.CH_TRANSACT_PRIORITY] ?: "default",
+            channelIpoPriority = prefs[Keys.CH_IPO_PRIORITY] ?: "default",
+            channelPromoPriority = prefs[Keys.CH_PROMO_PRIORITY] ?: "low",
+            channelOthersPriority = prefs[Keys.CH_OTHERS_PRIORITY] ?: "default",
+            channelUnknownPriority = prefs[Keys.CH_UNKNOWN_PRIORITY] ?: "low",
             notificationsAllowed = prefs[Keys.NOTIFICATIONS_ALLOWED] ?: true,
             wakeScreenForHighPriority = prefs[Keys.WAKE_SCREEN] ?: true,
             quickActionButtons = prefs[Keys.QUICK_ACTIONS] ?: true,
@@ -102,9 +122,24 @@ class SettingsRepository(private val context: Context) {
             "ch_personal" -> Keys.CH_PERSONAL
             "ch_otp" -> Keys.CH_OTP
             "ch_transact" -> Keys.CH_TRANSACT
+            "ch_ipo" -> Keys.CH_IPO
+            "ch_others" -> Keys.CH_OTHERS
+            "ch_unknown" -> Keys.CH_UNKNOWN
             else -> Keys.CH_PROMO
         }
         it[key] = enabled
+    }
+    suspend fun setChannelPriority(channelId: String, priority: String) = edit {
+        val key = when (channelId) {
+            "ch_personal" -> Keys.CH_PERSONAL_PRIORITY
+            "ch_otp" -> Keys.CH_OTP_PRIORITY
+            "ch_transact" -> Keys.CH_TRANSACT_PRIORITY
+            "ch_ipo" -> Keys.CH_IPO_PRIORITY
+            "ch_others" -> Keys.CH_OTHERS_PRIORITY
+            "ch_unknown" -> Keys.CH_UNKNOWN_PRIORITY
+            else -> Keys.CH_PROMO_PRIORITY
+        }
+        it[key] = priority
     }
     suspend fun setNotificationsAllowed(allowed: Boolean) = edit { it[Keys.NOTIFICATIONS_ALLOWED] = allowed }
     suspend fun setWakeScreen(enabled: Boolean) = edit { it[Keys.WAKE_SCREEN] = enabled }
