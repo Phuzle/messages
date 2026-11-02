@@ -44,15 +44,15 @@ fun SelectionTopBar(
 ) {
     val tokens = MessagesTheme.tokens
     Row(modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(40.dp).roundClickable(onClick = onClose), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(48.dp).roundClickable(onClick = onClose), contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Close, contentDescription = "Cancel selection", tint = tokens.textPrimary, modifier = Modifier.size(IconSizes.Medium))
         }
         Text(
-            "$count selected", color = tokens.textPrimary, fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f).padding(start = 4.dp),
+            "$count selected", color = tokens.textPrimary, fontSize = 18.sp,
+            fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 4.dp),
         )
         actions()
-        Box(Modifier.size(40.dp).roundClickable(onClick = onMenuClick), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(48.dp).roundClickable(onClick = onMenuClick), contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.MoreVert, contentDescription = "Selection options", tint = tokens.textPrimary, modifier = Modifier.size(IconSizes.Medium))
         }
     }

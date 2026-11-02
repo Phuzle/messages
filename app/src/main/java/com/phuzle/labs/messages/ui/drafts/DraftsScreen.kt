@@ -52,13 +52,13 @@ fun DraftsScreen(state: AppUiState, viewModel: AppViewModel) {
                 icon = Icons.Filled.Drafts,
                 title = "No drafts",
                 detail = "Unsent messages you back out of will be saved here.",
-                modifier = Modifier.padding(top = topBarContentPadding(68.dp)),
+                modifier = Modifier.padding(top = topBarContentPadding(76.dp)),
             )
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 // See ArchivedScreen — a flat bottom padding rests the last row under the nav bar.
-                contentPadding = PaddingValues(top = topBarContentPadding(68.dp), bottom = bottomBarContentPadding(24.dp)),
+                contentPadding = PaddingValues(top = topBarContentPadding(76.dp), bottom = bottomBarContentPadding(24.dp)),
             ) {
                 item {
                     ListCountHeader(

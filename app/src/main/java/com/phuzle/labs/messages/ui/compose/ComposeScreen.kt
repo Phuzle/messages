@@ -35,6 +35,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.pointer.pointerInput
@@ -78,7 +80,7 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
     Box(Modifier.fillMaxSize()) {
         Column(
             Modifier.fillMaxSize().navigationBarsPadding().imePadding()
-                .padding(top = topBarContentPadding(70.dp), start = 16.dp, end = 16.dp, bottom = 16.dp),
+                .padding(top = topBarContentPadding(78.dp), start = 16.dp, end = 16.dp, bottom = 16.dp),
         ) {
             if (state.composeRecipients.isNotEmpty()) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 8.dp)) {
@@ -92,15 +94,15 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
                     value = state.composeTo,
                     onValueChange = viewModel::onComposeToChange,
                     placeholder = "To: name or number",
-                    fontSize = 15.sp,
-                    modifier = Modifier.weight(1f),
+                    fontSize = 16.sp,
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
                     focusRequester = toFocusRequester,
                 )
                 if (state.composeTo.isNotBlank()) {
                     Box(
-                        Modifier.size(30.dp).roundClickable(onClick = viewModel::addTypedComposeRecipient),
+                        Modifier.size(48.dp).roundClickable(onClick = viewModel::addTypedComposeRecipient),
                         contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Filled.Add, contentDescription = "Add recipient", tint = tokens.accent, modifier = Modifier.size(20.dp)) }
+                    ) { Icon(Icons.Filled.Add, contentDescription = "Add recipient", tint = tokens.accentLabel, modifier = Modifier.size(20.dp)) }
                 }
             }
             if (state.availableSims.size > 1) {
@@ -111,14 +113,14 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
                         val selected = sim.subscriptionId == selectedId
                         Text(
                             sim.label,
-                            color = if (selected) tokens.accentText else tokens.textSecondary,
-                            fontSize = 12.5.sp,
+                            color = if (selected) tokens.onAccentDeep else tokens.textSecondary,
+                            fontSize = 13.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier
                                 .clip(ShapePill)
-                                .background(if (selected) tokens.accent else tokens.surfaceAlt, ShapePill)
+                                .background(if (selected) tokens.accentDeep else tokens.surfaceAlt, ShapePill)
                                 .clickable(onClick = { viewModel.selectComposeSim(sim.subscriptionId) })
-                                .padding(horizontal = 12.dp, vertical = 7.dp),
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
                         )
                     }
                 }
@@ -138,7 +140,8 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
                     value = state.composeBody,
                     onValueChange = viewModel::onComposeBodyChange,
                     placeholder = "Type a message",
-                    fontSize = 15.sp,
+                    fontSize = 16.sp,
+                    lineHeight = 24.sp,
                     singleLine = false,
                     fillHeight = true,
                     scrollState = bodyScrollState,
@@ -165,7 +168,7 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
             }
             if (state.settings.showCharCount) {
                 Text(
-                    "${state.composeBody.length} characters", color = tokens.textTertiary, fontSize = 11.sp,
+                    "${state.composeBody.length} characters", color = tokens.textTertiary, fontSize = 12.sp,
                     modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.End,
                 )
             }
@@ -176,10 +179,10 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(
-                        Modifier.size(38.dp).background(tokens.surfaceAlt, ShapePill)
+                        Modifier.size(48.dp).background(tokens.surfaceAlt, ShapePill)
                             .roundClickable(onClick = scheduleState::start),
                         contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Filled.CalendarMonth, contentDescription = "Schedule send", tint = tokens.textSecondary, modifier = Modifier.size(19.dp)) }
+                    ) { Icon(Icons.Filled.CalendarMonth, contentDescription = "Schedule send", tint = tokens.textSecondary, modifier = Modifier.size(22.dp)) }
 
                     state.composeCustomScheduleMillis?.let { millis ->
                         Row(
@@ -187,7 +190,7 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
                                 .clip(ShapePill)
                                 .background(tokens.accentSoft, ShapePill)
                                 .clickable(onClick = { viewModel.setComposeCustomSchedule(null) })
-                                .padding(horizontal = 10.dp, vertical = 7.dp),
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
@@ -196,22 +199,24 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
                             // the *solid* accent background used by the Send button next to this,
                             // which is why this chip was nearly invisible in dark mode: near-black
                             // text on a background barely lighter than the screen itself.
-                            Text(formatScheduleTime(millis), color = tokens.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                            Icon(Icons.Filled.Close, contentDescription = "Clear schedule", tint = tokens.accent, modifier = Modifier.size(13.dp))
+                            Text(formatScheduleTime(millis), color = tokens.accentLabel, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                            Icon(Icons.Filled.Close, contentDescription = "Clear schedule", tint = tokens.accentLabel, modifier = Modifier.size(13.dp))
                         }
                     }
                 }
 
                 Text(
                     if (state.composeCustomScheduleMillis != null) "Schedule" else "Send",
-                    color = if (canSend) tokens.accentText else tokens.textTertiary,
-                    fontSize = 14.sp,
+                    color = if (canSend) tokens.onAccentDeep else tokens.textTertiary,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier
                         .clip(ShapePill)
-                        .background(if (canSend) tokens.accent else tokens.surfaceAlt, ShapePill)
+                        .background(if (canSend) tokens.accentDeep else tokens.surfaceAlt, ShapePill)
                         .let { if (canSend) it.clickable(onClick = viewModel::sendCompose) else it }
-                        .padding(horizontal = 24.dp, vertical = 11.dp),
+                        .heightIn(min = 48.dp)
+                        .padding(horizontal = 28.dp)
+                        .wrapContentHeight(Alignment.CenterVertically),
                 )
             }
         }
@@ -236,11 +241,11 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
         if (state.composeToSuggestions.isNotEmpty()) {
             Column(
                 Modifier.fillMaxSize()
-                    .padding(top = topBarContentPadding(126.dp))
+                    .padding(top = topBarContentPadding(134.dp))
                     .background(tokens.bg),
             ) {
                 Text(
-                    "Suggested contacts", color = tokens.textSecondary, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold,
+                    "Suggested contacts", color = tokens.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
                 )
                 LazyColumn(Modifier.fillMaxSize()) {
@@ -249,17 +254,17 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
                             Modifier
                                 .fillMaxWidth()
                                 .clickable(onClick = { viewModel.selectComposeContact(contact) })
-                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
                             AvatarBubble(
                                 category = com.phuzle.labs.messages.domain.model.Category.Personal, color = tokens.accent, isBusiness = false,
-                                size = 44.dp, photoUri = contact.photoUri,
+                                size = 48.dp, photoUri = contact.photoUri,
                             )
                             Column(Modifier.weight(1f)) {
-                                Text(contact.name, color = tokens.textPrimary, fontSize = 15.5.sp, fontWeight = FontWeight.Medium)
-                                Text(contact.number, color = tokens.textTertiary, fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
+                                Text(contact.name, color = tokens.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                                Text(contact.number, color = tokens.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(top = 2.dp))
                             }
                         }
                     }
@@ -267,15 +272,15 @@ fun ComposeScreen(state: AppUiState, viewModel: AppViewModel) {
             }
         }
 
-        GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 56.dp, inset = BarInset.Top) {
+        GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 64.dp, inset = BarInset.Top) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text("New message", color = tokens.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text("New message", color = tokens.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Box(
-                    Modifier.size(36.dp).roundClickable(onClick = viewModel::closeCompose),
+                    Modifier.size(48.dp).roundClickable(onClick = viewModel::closeCompose),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(Icons.Filled.Close, contentDescription = "Close", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
@@ -294,13 +299,14 @@ private fun RecipientChip(recipient: ContactSuggestionUi, onRemove: () -> Unit) 
         modifier = Modifier
             .clip(ShapePill)
             .background(tokens.surfaceAlt, ShapePill)
-            .padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+            .height(36.dp)
+            .padding(start = 14.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(recipient.name, color = tokens.textPrimary, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
+        Text(recipient.name, color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         Box(
-            Modifier.size(20.dp).roundClickable(onClick = onRemove),
+            Modifier.size(28.dp).roundClickable(onClick = onRemove),
             contentAlignment = Alignment.Center,
         ) { Icon(Icons.Filled.Close, contentDescription = "Remove", tint = tokens.textTertiary, modifier = Modifier.size(13.dp)) }
     }

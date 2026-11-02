@@ -40,8 +40,10 @@ fun MessagesTheme(
     val colorScheme = remember(tokens, dark) {
         val base = if (dark) darkColorScheme() else lightColorScheme()
         base.copy(
-            primary = tokens.accent,
-            onPrimary = tokens.accentText,
+            // Material components use `primary` for both text buttons and fills, so take the label tone
+            // (accent in dark themes, deep accent in light ones) which reads well as either.
+            primary = tokens.accentLabel,
+            onPrimary = if (dark) tokens.accentText else tokens.onAccentDeep,
             background = tokens.bg,
             onBackground = tokens.textPrimary,
             surface = tokens.surface,

@@ -30,6 +30,7 @@ import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.model.SwipeAction
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapeMedium
+import com.phuzle.labs.messages.ui.theme.softElevation
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -38,18 +39,18 @@ fun ChatsSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
     val settings = state.settings
 
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(top = topBarContentPadding(76.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
         Column {
             SectionLabel("Swipe actions", Modifier.padding(bottom = 8.dp))
             Column(
-                Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium)
-                    .padding(14.dp),
+                Modifier.fillMaxWidth().softElevation(ShapeMedium).background(tokens.surface, ShapeMedium)
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
                 Column {
-                    Text("Swipe left", color = tokens.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
+                    Text("Swipe left", color = tokens.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         SwipeAction.entries.forEach { action ->
                             PillButton(action.label, settings.swipeLeftAction == action.key, { viewModel.setSwipeAction(left = true, action = action.key) })
@@ -57,7 +58,7 @@ fun ChatsSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                     }
                 }
                 Column {
-                    Text("Swipe right", color = tokens.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
+                    Text("Swipe right", color = tokens.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         SwipeAction.entries.forEach { action ->
                             PillButton(action.label, settings.swipeRightAction == action.key, { viewModel.setSwipeAction(left = false, action = action.key) })
@@ -74,9 +75,9 @@ fun ChatsSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                 onValueChange = viewModel::onSignatureChange,
                 placeholder = "Added to the end of messages you send",
                 filled = true,
-                fontSize = 13.5.sp,
+                fontSize = 15.sp,
                 singleLine = false,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
             )
         }
 

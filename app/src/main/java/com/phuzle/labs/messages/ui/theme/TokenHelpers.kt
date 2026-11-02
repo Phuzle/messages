@@ -12,16 +12,16 @@ data class TriColor(val background: Color, val content: Color, val border: Color
 
 data class SwipeActionMeta(val label: String, val color: Color, val icon: ImageVector?)
 
-/** Category chips: shadcn-style flat toggle — filled dark/light when active, per the prototype. */
+/** Category chips: tonal accent fill when active, quiet alt-surface fill when not. No borders. */
 fun categoryChipColors(active: Boolean, tokens: ThemeTokens): TriColor = if (active) {
-    TriColor(tokens.chipActiveBg, tokens.chipActiveText, tokens.chipActiveBg)
+    TriColor(tokens.accentSoft, tokens.accentLabel, Color.Transparent)
 } else {
-    TriColor(Color.Transparent, tokens.textSecondary, tokens.chipInactiveBorder)
+    TriColor(tokens.surfaceAlt, tokens.textSecondary, Color.Transparent)
 }
 
 /** Settings pill options (theme, swipe actions, schedule, app-lock method): mirrors `pillStyle(active, c)`. */
 fun pillOptionColors(active: Boolean, tokens: ThemeTokens): TriColor = if (active) {
-    TriColor(tokens.accentSoft, tokens.accent, tokens.accent)
+    TriColor(tokens.accentSoft, tokens.accentLabel, tokens.accentLabel)
 } else {
     TriColor(Color.Transparent, tokens.textSecondary, tokens.border)
 }
@@ -32,7 +32,7 @@ fun swipeActionMeta(actionKey: String, unreadNow: Boolean, tokens: ThemeTokens):
     "delete" -> SwipeActionMeta("Delete", tokens.danger, Icons.Filled.Delete)
     "toggleRead" -> SwipeActionMeta(
         if (unreadNow) "Mark read" else "Mark unread",
-        tokens.accent,
+        tokens.accentDeep,
         if (unreadNow) Icons.Filled.MarkEmailRead else Icons.Filled.MarkEmailUnread,
     )
     else -> SwipeActionMeta("—", tokens.switchTrackOff, null)

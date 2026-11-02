@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
@@ -34,17 +35,17 @@ fun ListCountHeader(
 ) {
     val tokens = MessagesTheme.tokens
     Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        modifier = modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("$count $noun", color = tokens.textSecondary, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+        Text("$count $noun", color = tokens.textSecondary, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
             if (actionLabel != null && onAction != null) {
-                HeaderAction(actionLabel, actionIcon, if (actionDanger) tokens.danger else tokens.accent, onAction)
+                HeaderAction(actionLabel, actionIcon, if (actionDanger) tokens.danger else tokens.accentLabel, onAction)
             }
             if (secondaryActionLabel != null && onSecondaryAction != null) {
-                HeaderAction(secondaryActionLabel, secondaryActionIcon, if (secondaryActionDanger) tokens.danger else tokens.accent, onSecondaryAction)
+                HeaderAction(secondaryActionLabel, secondaryActionIcon, if (secondaryActionDanger) tokens.danger else tokens.accentLabel, onSecondaryAction)
             }
         }
     }
@@ -52,14 +53,14 @@ fun ListCountHeader(
 
 @Composable
 private fun HeaderAction(label: String, icon: ImageVector?, color: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable(onClick = onClick)) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.heightIn(min = 48.dp).clickable(onClick = onClick).padding(horizontal = 4.dp)) {
         if (icon != null) {
             Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(15.dp))
         }
         Text(
             label,
             color = color,
-            fontSize = 12.5.sp,
+            fontSize = 13.5.sp,
             fontWeight = FontWeight.Bold,
             modifier = if (icon != null) Modifier.padding(start = 4.dp) else Modifier,
         )

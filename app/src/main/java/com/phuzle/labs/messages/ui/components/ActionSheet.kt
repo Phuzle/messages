@@ -21,6 +21,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -49,15 +51,24 @@ fun ActionSheet(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .background(tokens.surface, androidx.compose.foundation.shape.RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                .padding(bottom = 20.dp),
+                .background(tokens.surface, androidx.compose.foundation.shape.RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .navigationBarsPadding()
+                .padding(bottom = 12.dp),
         ) {
+            Box(
+                Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 10.dp)
+                    .size(width = 32.dp, height = 4.dp)
+                    .background(tokens.textTertiary.copy(alpha = 0.5f), androidx.compose.foundation.shape.RoundedCornerShape(4.dp)),
+            )
+
             Text(
                 sheet.sender,
                 color = tokens.textPrimary,
-                fontSize = 13.5.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.fillMaxWidth().padding(18.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp),
             )
             SettingsRowDivider()
             SheetAction(sheet.markReadLabel, tokens.textPrimary, if (sheet.markReadLabel == "Mark as read") Icons.Filled.MarkEmailRead else Icons.Filled.MarkEmailUnread, onMarkRead)
@@ -75,9 +86,10 @@ private fun SheetAction(label: String, color: Color, icon: ImageVector, onClick:
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 14.dp),
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 24.dp),
     ) {
         Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(IconSizes.Medium))
-        Text(label, color = color, fontSize = 14.sp, modifier = Modifier.padding(start = 16.dp))
+        Text(label, color = color, fontSize = 16.sp, modifier = Modifier.padding(start = 16.dp))
     }
 }

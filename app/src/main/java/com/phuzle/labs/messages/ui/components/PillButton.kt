@@ -3,7 +3,10 @@ package com.phuzle.labs.messages.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
@@ -27,14 +30,16 @@ import com.phuzle.labs.messages.ui.theme.pillOptionColors
 @Composable
 fun PillButton(label: String, active: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, icon: ImageVector? = null) {
     val colors = pillOptionColors(active, MessagesTheme.tokens)
+    // 40dp visual pill inside a 48dp tap target.
+    Box(modifier = modifier.heightIn(min = 48.dp).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
+        modifier = Modifier
+            .height(40.dp)
             .clip(ShapePill)
             .background(colors.background, ShapePill)
             .border(1.dp, colors.border, ShapePill)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 13.dp, vertical = 7.dp),
+            .padding(horizontal = 16.dp),
     ) {
         if (icon != null) {
             Icon(icon, contentDescription = null, tint = colors.content, modifier = Modifier.size(IconSizes.Small))
@@ -42,9 +47,10 @@ fun PillButton(label: String, active: Boolean, onClick: () -> Unit, modifier: Mo
         Text(
             text = label,
             color = colors.content,
-            fontSize = 12.5.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
             modifier = if (icon != null) Modifier.padding(start = 6.dp) else Modifier,
         )
+    }
     }
 }

@@ -49,13 +49,13 @@ fun EmptyState(
         if (actionLabel != null && onAction != null) {
             Text(
                 actionLabel,
-                color = tokens.accentText,
+                color = tokens.onAccentDeep,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
                     .padding(top = 18.dp)
                     .clip(ShapePill)
-                    .background(tokens.accent, ShapePill)
+                    .background(tokens.accentDeep, ShapePill)
                     .clickable(onClick = onAction)
                     .padding(horizontal = 20.dp, vertical = 10.dp),
             )

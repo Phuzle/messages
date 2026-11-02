@@ -54,16 +54,16 @@ fun SyncingScreen(
                 Box(
                     Modifier.padding(top = 24.dp).size(40.dp).background(tokens.success, CircleShape),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Filled.Check, contentDescription = null, tint = tokens.accentText, modifier = Modifier.size(22.dp)) }
+                ) { Icon(Icons.Filled.Check, contentDescription = null, tint = tokens.onAccentDeep, modifier = Modifier.size(22.dp)) }
             } else if (total > 0) {
                 LinearProgressIndicator(
                     progress = { (done.toFloat() / total).coerceIn(0f, 1f) },
-                    color = tokens.accent,
+                    color = tokens.accentLabel,
                     trackColor = tokens.surfaceAlt,
                     modifier = Modifier.padding(top = 24.dp).width(220.dp),
                 )
             } else {
-                CircularProgressIndicator(color = tokens.accent, modifier = Modifier.padding(top = 24.dp))
+                CircularProgressIndicator(color = tokens.accentLabel, modifier = Modifier.padding(top = 24.dp))
             }
 
             Text(

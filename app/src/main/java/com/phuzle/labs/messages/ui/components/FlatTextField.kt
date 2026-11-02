@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -28,7 +29,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
-import com.phuzle.labs.messages.ui.theme.ShapeSmall
+import com.phuzle.labs.messages.ui.theme.ShapeLarge
 
 /**
  * The design's flat pill/box inputs (search bar, reply bar, compose fields, signature) — plain
@@ -48,7 +49,8 @@ fun FlatTextField(
     placeholder: String,
     modifier: Modifier = Modifier,
     filled: Boolean = false,
-    fontSize: androidx.compose.ui.unit.TextUnit = 14.sp,
+    fontSize: androidx.compose.ui.unit.TextUnit = 15.sp,
+    lineHeight: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
     singleLine: Boolean = true,
     maxHeight: androidx.compose.ui.unit.Dp = 120.dp,
     focusRequester: FocusRequester? = null,
@@ -58,8 +60,13 @@ fun FlatTextField(
     placeholderColor: androidx.compose.ui.graphics.Color? = null,
 ) {
     val tokens = MessagesTheme.tokens
-    val textStyle = TextStyle(color = textColor ?: tokens.textPrimary, fontSize = fontSize)
-    val background = if (filled) Modifier.background(tokens.inputBg, ShapeSmall).padding(horizontal = 12.dp, vertical = 10.dp) else Modifier
+    val textStyle = TextStyle(color = textColor ?: tokens.textPrimary, fontSize = fontSize, lineHeight = lineHeight)
+    // Filled fields are at least 48dp tall (touch-target minimum) with the text vertically centered.
+    val background = if (filled) {
+        Modifier.heightIn(min = 48.dp).background(tokens.inputBg, ShapeLarge).padding(horizontal = 18.dp, vertical = 12.dp)
+    } else {
+        Modifier
+    }
     val resolvedScrollState = scrollState ?: rememberScrollState()
     var fieldModifier = when {
         singleLine -> Modifier.fillMaxWidth()
@@ -82,7 +89,7 @@ fun FlatTextField(
         fieldValue = TextFieldValue(value, selection = TextRange(value.length))
     }
 
-    Box(modifier = modifier.then(background)) {
+    Box(modifier = modifier.then(background), contentAlignment = if (filled || singleLine) Alignment.CenterStart else Alignment.TopStart) {
         if (value.isEmpty()) {
             Text(placeholder, color = placeholderColor ?: tokens.textTertiary, fontSize = fontSize)
         }

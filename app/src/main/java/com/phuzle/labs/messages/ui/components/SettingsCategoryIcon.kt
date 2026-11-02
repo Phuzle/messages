@@ -44,9 +44,9 @@ private fun SettingsSub.imageVector(): ImageVector = when (this) {
 fun SettingsIconBadge(
     icon: ImageVector,
     modifier: Modifier = Modifier,
-    size: Dp = 38.dp,
-    tint: Color = MessagesTheme.tokens.textSecondary,
-    background: Color = MessagesTheme.tokens.inputBg,
+    size: Dp = 44.dp,
+    tint: Color = MessagesTheme.tokens.accentLabel,
+    background: Color = MessagesTheme.tokens.accentSoft,
 ) {
     Box(
         modifier = modifier.size(size).background(background, RoundedCornerShape(size * 0.28f)),

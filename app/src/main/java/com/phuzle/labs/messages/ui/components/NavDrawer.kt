@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
+import com.phuzle.labs.messages.ui.theme.ShapePill
 
 data class DrawerItem(val label: String, val icon: DrawerIconType, val onClick: () -> Unit)
 
@@ -52,13 +54,13 @@ fun NavDrawer(
         Column(
             modifier = Modifier
                 .fillMaxHeight()
-                .widthIn(max = 290.dp)
-                .background(tokens.surface)
+                .widthIn(max = 304.dp)
+                .background(tokens.surface, RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp))
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 24.dp),
+                .padding(horizontal = 12.dp, vertical = 24.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 12.dp, bottom = 16.dp)) {
                 AppLogo()
                 Text(
                     "Messages",
@@ -83,18 +85,19 @@ private fun DrawerRow(item: DrawerItem, contentColor: Color) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .heightIn(min = 52.dp)
+            .clip(ShapePill)
             .clickable(onClick = item.onClick)
-            .padding(vertical = 12.dp, horizontal = 10.dp),
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         DrawerIcon(item.icon, contentColor)
         Text(
             item.label,
             color = contentColor,
-            fontSize = 14.5.sp,
+            fontSize = 15.5.sp,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(start = 14.dp),
+            modifier = Modifier.padding(start = 16.dp),
         )
     }
 }

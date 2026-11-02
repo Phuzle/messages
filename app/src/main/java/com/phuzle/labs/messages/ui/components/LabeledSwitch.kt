@@ -16,25 +16,34 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 
-/** The design's custom 40x22 toggle track — not the Material3 [androidx.compose.material3.Switch]. */
+/**
+ * The design's custom 52x32 toggle track — not the Material3 [androidx.compose.material3.Switch].
+ * The clickable area is 52x48 so the control meets the 48dp touch-target minimum.
+ */
 @Composable
 fun LabeledSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     val tokens = MessagesTheme.tokens
-    val trackColor = if (checked) tokens.accent else tokens.switchTrackOff
-    val knobOffset by animateDpAsState(if (checked) 20.dp else 2.dp, label = "switch_knob")
+    val trackColor = if (checked) tokens.accentDeep else tokens.switchTrackOff
+    val knobOffset by animateDpAsState(if (checked) 24.dp else 4.dp, label = "switch_knob")
 
     Box(
         modifier = modifier
-            .size(width = 40.dp, height = 22.dp)
-            .background(trackColor, RoundedCornerShape(50))
+            .size(width = 52.dp, height = 48.dp)
             .clickable { onCheckedChange(!checked) },
-        contentAlignment = Alignment.TopStart,
+        contentAlignment = Alignment.Center,
     ) {
         Box(
             modifier = Modifier
-                .offset(x = knobOffset, y = 2.dp)
-                .size(18.dp)
-                .background(Color.White, CircleShape),
-        )
+                .size(width = 52.dp, height = 32.dp)
+                .background(trackColor, RoundedCornerShape(50)),
+            contentAlignment = Alignment.TopStart,
+        ) {
+            Box(
+                modifier = Modifier
+                    .offset(x = knobOffset, y = 4.dp)
+                    .size(24.dp)
+                    .background(Color.White, CircleShape),
+            )
+        }
     }
 }

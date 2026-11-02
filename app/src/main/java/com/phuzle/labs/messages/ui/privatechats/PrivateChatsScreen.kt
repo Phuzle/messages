@@ -66,10 +66,10 @@ fun PrivateChatsScreen(state: AppUiState, viewModel: AppViewModel) {
                     onClose = viewModel::exitPrivateSelect,
                     onMenuClick = { showSelectionMenu = true },
                 ) {
-                    Box(Modifier.size(40.dp).roundClickable(onClick = viewModel::bulkRemoveFromPrivateSelected), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(48.dp).roundClickable(onClick = viewModel::bulkRemoveFromPrivateSelected), contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.LockOpen, contentDescription = "Remove from Private", tint = tokens.textPrimary, modifier = Modifier.size(IconSizes.Medium))
                     }
-                    Box(Modifier.size(40.dp).roundClickable(onClick = { showBulkDeleteConfirm = true }), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(48.dp).roundClickable(onClick = { showBulkDeleteConfirm = true }), contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = tokens.danger, modifier = Modifier.size(IconSizes.Medium))
                     }
                 }
@@ -80,7 +80,7 @@ fun PrivateChatsScreen(state: AppUiState, viewModel: AppViewModel) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 // See ArchivedScreen — a flat bottom padding rests the last row under the nav bar.
-                contentPadding = PaddingValues(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp, bottom = bottomBarContentPadding(24.dp)),
+                contentPadding = PaddingValues(top = topBarContentPadding(76.dp), start = 16.dp, end = 16.dp, bottom = bottomBarContentPadding(24.dp)),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (state.privateThreads.isEmpty()) {
@@ -123,11 +123,11 @@ fun PrivateChatsScreen(state: AppUiState, viewModel: AppViewModel) {
                         Text("Private chats are locked", color = tokens.textSecondary, fontSize = 14.sp)
                         Text(
                             "Unlock",
-                            color = tokens.accentText,
+                            color = tokens.onAccentDeep,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier
-                                .background(tokens.accent, ShapeMedium)
+                                .background(tokens.accentDeep, ShapeMedium)
                                 .clickable(onClick = retry)
                                 .padding(horizontal = 20.dp, vertical = 11.dp),
                         )

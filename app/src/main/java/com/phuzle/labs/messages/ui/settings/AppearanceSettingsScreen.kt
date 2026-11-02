@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -35,13 +36,14 @@ import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.theme.ACCENT_OPTIONS
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ThemeMode
+import com.phuzle.labs.messages.ui.theme.bubbleShape
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AppearanceSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
     val tokens = MessagesTheme.tokens
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = topBarContentPadding(76.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
         Column {
@@ -62,13 +64,18 @@ fun AppearanceSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                 ACCENT_OPTIONS.forEach { option ->
                     val swatch = if (MessagesTheme.isDark) option.dark else option.light
                     val ring = if (state.settings.accentHex == option.hex) tokens.textPrimary else Color.Transparent
+                    // 40dp swatch (always the raw accent the user is choosing) inside a 48dp tap target.
                     Box(
-                        Modifier
-                            .size(38.dp)
-                            .background(swatch, CircleShape)
-                            .border(3.dp, ring, CircleShape)
-                            .clickable { viewModel.setAccent(option.hex) },
-                    )
+                        Modifier.size(48.dp).clip(CircleShape).clickable { viewModel.setAccent(option.hex) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(
+                            Modifier
+                                .size(40.dp)
+                                .background(swatch, CircleShape)
+                                .border(3.dp, ring, CircleShape),
+                        )
+                    }
                 }
             }
         }
@@ -87,18 +94,18 @@ private fun ThemePreviewCard() {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
                 Column(
-                    Modifier.widthIn(max = 220.dp).background(tokens.surfaceAlt, RoundedCornerShape(16.dp)).padding(horizontal = 14.dp, vertical = 10.dp),
+                    Modifier.widthIn(max = 220.dp).background(tokens.surfaceAlt, bubbleShape(isMine = false, hasTail = true)).padding(horizontal = 16.dp, vertical = 11.dp),
                 ) {
-                    Text("Hey, how's it going?", color = tokens.textPrimary, fontSize = 14.sp, lineHeight = 19.sp)
-                    Text("9:41 AM", color = tokens.textPrimary.copy(alpha = 0.65f), fontSize = 10.sp, modifier = Modifier.align(Alignment.End).padding(top = 4.dp))
+                    Text("Hey, how's it going?", color = tokens.textPrimary, fontSize = 15.sp, lineHeight = 22.sp)
+                    Text("9:41 AM", color = tokens.textPrimary.copy(alpha = 0.65f), fontSize = 11.sp, modifier = Modifier.align(Alignment.End).padding(top = 4.dp))
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 Column(
-                    Modifier.widthIn(max = 220.dp).background(tokens.accent, RoundedCornerShape(16.dp)).padding(horizontal = 14.dp, vertical = 10.dp),
+                    Modifier.widthIn(max = 220.dp).background(tokens.accentDeep, bubbleShape(isMine = true, hasTail = true)).padding(horizontal = 16.dp, vertical = 11.dp),
                 ) {
-                    Text("Looking good, thanks!", color = tokens.accentText, fontSize = 14.sp, lineHeight = 19.sp)
-                    Text("9:42 AM", color = tokens.accentText.copy(alpha = 0.65f), fontSize = 10.sp, modifier = Modifier.align(Alignment.End).padding(top = 4.dp))
+                    Text("Looking good, thanks!", color = tokens.onAccentDeep, fontSize = 15.sp, lineHeight = 22.sp)
+                    Text("9:42 AM", color = tokens.onAccentDeep.copy(alpha = 0.7f), fontSize = 11.sp, modifier = Modifier.align(Alignment.End).padding(top = 4.dp))
                 }
             }
         }
@@ -109,7 +116,7 @@ private fun ThemePreviewCard() {
                 Text("Jordan Reyes", color = tokens.textPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 Text("You: Looking good, thanks!", color = tokens.textSecondary, fontSize = 13.sp, maxLines = 1)
             }
-            Box(Modifier.size(18.dp).background(tokens.accent, CircleShape))
+            Box(Modifier.size(18.dp).background(tokens.accentDeep, CircleShape))
         }
     }
 }

@@ -49,12 +49,12 @@ fun ScheduledMessagesScreen(viewModel: AppViewModel) {
                 icon = Icons.Filled.Schedule,
                 title = "No scheduled messages",
                 detail = "Messages you schedule to send later show up here until they're sent.",
-                modifier = Modifier.padding(top = topBarContentPadding(68.dp)),
+                modifier = Modifier.padding(top = topBarContentPadding(76.dp)),
             )
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = topBarContentPadding(68.dp), bottom = bottomBarContentPadding(24.dp)),
+                contentPadding = PaddingValues(top = topBarContentPadding(76.dp), bottom = bottomBarContentPadding(24.dp)),
             ) {
                 item {
                     ListCountHeader(
@@ -82,24 +82,24 @@ private fun ScheduledMessageRow(message: ScheduledMessageUi, onClick: () -> Unit
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = withLongPressHaptic(onLongPress))
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         AvatarBubble(
             category = message.category, color = message.avatarColor, isBusiness = message.isBusiness,
-            size = 44.dp, photoUri = message.photoUri,
+            size = 52.dp, photoUri = message.photoUri,
         )
         Column(Modifier.weight(1f)) {
-            Text(message.threadDisplayName, color = tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Text(message.threadDisplayName, color = tokens.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Text(
-                message.body, color = tokens.textSecondary, fontSize = 13.sp, maxLines = 2,
+                message.body, color = tokens.textSecondary, fontSize = 14.sp, lineHeight = 20.sp, maxLines = 2,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = 2.dp),
             )
             Text(
                 "Scheduled for ${message.scheduleLabel}",
-                color = tokens.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                color = tokens.accentLabel, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(top = 4.dp),
             )
         }

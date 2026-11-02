@@ -1,5 +1,6 @@
 package com.phuzle.labs.messages.ui.dashboard
 
+import com.phuzle.labs.messages.ui.theme.softElevation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -86,9 +87,12 @@ import com.phuzle.labs.messages.ui.model.AccountUi
 import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.model.DashboardTab
 import com.phuzle.labs.messages.ui.model.ReminderUi
+import androidx.compose.ui.draw.shadow
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapeMedium
+import com.phuzle.labs.messages.ui.theme.ShapePill
 import com.phuzle.labs.messages.ui.theme.ShapeSmall
+import com.phuzle.labs.messages.ui.theme.barElevation
 
 private const val BOTTOM_BAR_HEIGHT = 60
 
@@ -176,7 +180,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(top = topContentPadding, bottom = bottomContentPadding),
+                    contentPadding = PaddingValues(top = topContentPadding + 10.dp, bottom = bottomContentPadding),
                 ) {
                     // The first real item in the list, not a fixed overlay — scrolls with
                     // everything else and shows for every category filter (not just All), unless
@@ -251,7 +255,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
         Column(
             Modifier.align(Alignment.TopCenter).onGloballyPositioned { headerHeightPx = it.size.height },
         ) {
-            GlassBar(height = 52.dp, inset = BarInset.Top) {
+            GlassBar(height = 64.dp, inset = BarInset.Top) {
                 if (state.multiSelectThreadIds.isNotEmpty()) {
                     var showBulkArchiveConfirm by remember { mutableStateOf(false) }
                     var showBulkDeleteConfirm by remember { mutableStateOf(false) }
@@ -261,15 +265,15 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                         onMenuClick = { showSelectionMenu = true },
                     ) {
                         Box(
-                            Modifier.size(40.dp).roundClickable(onClick = viewModel::bulkMarkReadSelected),
+                            Modifier.size(48.dp).roundClickable(onClick = viewModel::bulkMarkReadSelected),
                             contentAlignment = Alignment.Center,
                         ) { Icon(Icons.Filled.MarkEmailRead, contentDescription = "Mark as read", tint = tokens.textPrimary, modifier = Modifier.size(20.dp)) }
                         Box(
-                            Modifier.size(40.dp).roundClickable(onClick = { showBulkArchiveConfirm = true }),
+                            Modifier.size(48.dp).roundClickable(onClick = { showBulkArchiveConfirm = true }),
                             contentAlignment = Alignment.Center,
                         ) { Icon(Icons.Filled.Archive, contentDescription = "Archive", tint = tokens.textPrimary, modifier = Modifier.size(20.dp)) }
                         Box(
-                            Modifier.size(40.dp).roundClickable(onClick = { showBulkDeleteConfirm = true }),
+                            Modifier.size(48.dp).roundClickable(onClick = { showBulkDeleteConfirm = true }),
                             contentAlignment = Alignment.Center,
                         ) { Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = tokens.danger, modifier = Modifier.size(20.dp)) }
                     }
@@ -303,7 +307,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        Modifier.size(40.dp).roundClickable(onClick = viewModel::toggleDrawer),
+                        Modifier.size(48.dp).roundClickable(onClick = viewModel::toggleDrawer),
                         contentAlignment = Alignment.Center,
                     ) { Icon(Icons.Filled.Menu, contentDescription = "Menu", tint = tokens.textPrimary, modifier = Modifier.size(22.dp)) }
 
@@ -311,13 +315,13 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                         DashboardTab.Messages -> Row(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(36.dp)
-                                .background(tokens.inputBg, ShapeSmall)
-                                .padding(horizontal = 10.dp),
+                                .height(48.dp)
+                                .background(tokens.inputBg, ShapePill)
+                                .padding(horizontal = 16.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            Icon(Icons.Filled.Search, contentDescription = null, tint = tokens.textTertiary, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Filled.Search, contentDescription = null, tint = tokens.textTertiary, modifier = Modifier.size(20.dp))
                             FlatTextField(
                                 value = state.searchQuery,
                                 onValueChange = viewModel::onSearchChange,
@@ -325,13 +329,13 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                                 modifier = Modifier.weight(1f),
                             )
                         }
-                        DashboardTab.Passbook -> Text("Passbook", color = tokens.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                        DashboardTab.Reminders -> Text("Reminders", color = tokens.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        DashboardTab.Passbook -> Text("Passbook", color = tokens.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        DashboardTab.Reminders -> Text("Reminders", color = tokens.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     }
 
                     if (isMessages) {
                         Box(
-                            Modifier.size(40.dp).roundClickable(onClick = viewModel::toggleUnreadOnly),
+                            Modifier.size(48.dp).roundClickable(onClick = viewModel::toggleUnreadOnly),
                             contentAlignment = Alignment.Center,
                         ) {
                             // An envelope-with-a-dot reads as "unread messages" on sight — the
@@ -340,13 +344,13 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                             Icon(
                                 if (state.unreadOnly) Icons.Filled.MarkEmailUnread else Icons.Outlined.MarkEmailUnreadOutlined,
                                 contentDescription = if (state.unreadOnly) "Showing unread only" else "Show unread only",
-                                tint = if (state.unreadOnly) tokens.accent else tokens.textPrimary,
+                                tint = if (state.unreadOnly) tokens.accentLabel else tokens.textPrimary,
                                 modifier = Modifier.size(20.dp),
                             )
                         }
                     }
                     Box(
-                        Modifier.size(40.dp).roundClickable(onClick = viewModel::toggleOverflowMenu),
+                        Modifier.size(48.dp).roundClickable(onClick = viewModel::toggleOverflowMenu),
                         contentAlignment = Alignment.Center,
                     ) { Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = tokens.textPrimary, modifier = Modifier.size(22.dp)) }
                 }
@@ -360,11 +364,11 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(tokens.bg)
-                        .border(androidx.compose.foundation.BorderStroke(1.dp, tokens.barBorder))
+                        .barElevation()
+                        .background(tokens.surface)
                         .onGloballyPositioned { rowWidth = it.size.width }
                         .horizontalScroll(categoryScrollState)
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                        .padding(start = 12.dp, end = 12.dp, top = 0.dp, bottom = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     state.categories.forEach { chip ->
@@ -434,11 +438,17 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                     bottom = (if (FeatureFlags.PASSBOOK_AND_REMINDERS_ENABLED) BOTTOM_BAR_HEIGHT + FAB_MARGIN else FAB_MARGIN).dp + navBarInset,
                 )
                 .size(FAB_SIZE.dp)
-                .background(tokens.accent, CircleShape)
+                .shadow(
+                    elevation = 8.dp,
+                    shape = CircleShape,
+                    ambientColor = tokens.accentDeep.copy(alpha = 0.25f),
+                    spotColor = tokens.accentDeep.copy(alpha = 0.55f),
+                )
+                .background(tokens.accentDeep, CircleShape)
                 .roundClickable(onClick = viewModel::openCompose),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Filled.Add, contentDescription = "Compose", tint = tokens.accentText, modifier = Modifier.size(26.dp))
+            Icon(Icons.Filled.Add, contentDescription = "Compose", tint = tokens.onAccentDeep, modifier = Modifier.size(26.dp))
         }
 
         SelectionOverflowMenu(
@@ -461,7 +471,7 @@ private fun BottomTabButton(
     modifier: Modifier = Modifier,
 ) {
     val tokens = MessagesTheme.tokens
-    val color = if (active) tokens.accent else tokens.textTertiary
+    val color = if (active) tokens.accentLabel else tokens.textTertiary
     Box(modifier.fillMaxSize().clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Box(
@@ -500,7 +510,7 @@ private fun AccountCard(account: AccountUi, onClick: () -> Unit, modifier: Modif
         Box(
             Modifier.size(44.dp).background(tokens.accentSoft, CircleShape),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Filled.AccountBalanceWallet, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(19.dp)) }
+        ) { Icon(Icons.Filled.AccountBalanceWallet, contentDescription = null, tint = tokens.accentLabel, modifier = Modifier.size(19.dp)) }
         Column(Modifier.weight(1f).padding(start = 12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("•• ${account.last4}", color = tokens.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
@@ -555,15 +565,15 @@ private fun FeedbackBanner(onSendFeedback: () -> Unit, onDismiss: () -> Unit, mo
 private fun ReminderCard(reminder: ReminderUi, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     val tokens = MessagesTheme.tokens
     Row(
-        modifier.fillMaxWidth().background(tokens.surface, ShapeMedium)
-            .border(1.dp, tokens.border, ShapeMedium).padding(horizontal = 16.dp, vertical = 14.dp),
+        modifier.fillMaxWidth().softElevation(ShapeMedium).background(tokens.surface, ShapeMedium)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Column(Modifier.weight(1f)) {
             Text(reminder.title, color = tokens.textPrimary, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold)
             Text(reminder.detail, color = tokens.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
             Text(
-                reminder.timeLabel.uppercase(), color = tokens.accent, fontSize = 11.5.sp, fontWeight = FontWeight.Bold,
+                reminder.timeLabel.uppercase(), color = tokens.accentLabel, fontSize = 11.5.sp, fontWeight = FontWeight.Bold,
                 letterSpacing = 0.3.sp, modifier = Modifier.padding(top = 6.dp),
             )
         }

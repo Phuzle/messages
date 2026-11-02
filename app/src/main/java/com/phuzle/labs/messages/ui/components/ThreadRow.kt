@@ -24,12 +24,15 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.model.ThreadUi
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
+import com.phuzle.labs.messages.ui.theme.ShapeMedium
+import com.phuzle.labs.messages.ui.theme.softElevation
 import com.phuzle.labs.messages.ui.theme.SwipeActionMeta
 import com.phuzle.labs.messages.ui.theme.swipeActionMeta
 
@@ -80,9 +83,12 @@ fun ThreadRow(
     val rightPanel = swipeActionMeta(swipeRightActionKey, thread.unread, tokens)
     val leftPanel = swipeActionMeta(swipeLeftActionKey, thread.unread, tokens)
 
+    // Unread rows lift into a soft card; read rows stay flat. The shadow lives outside the swipe
+    // panel's clip so it isn't cut off, and the gap between cards comes from this outer padding.
+    Box(modifier = modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
     SwipeToDismissBox(
         state = dismissState,
-        modifier = modifier,
+        modifier = Modifier,
         enableDismissFromStartToEnd = !selectionMode && rightPanel.label != "—",
         enableDismissFromEndToStart = !selectionMode && leftPanel.label != "—",
         backgroundContent = {
@@ -97,7 +103,7 @@ fun ThreadRow(
                 Alignment.CenterEnd
             }
             Box(
-                modifier = Modifier.fillMaxSize().background(panel.color).padding(horizontal = 22.dp),
+                modifier = Modifier.fillMaxSize().clip(ShapeMedium).background(panel.color).padding(horizontal = 22.dp),
                 contentAlignment = alignment,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -119,15 +125,25 @@ fun ThreadRow(
             }
         },
     ) {
+        val unreadCard = thread.unread && !selected
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(if (selected) tokens.accentSoft else tokens.bg)
+                .then(if (unreadCard) Modifier.softElevation(ShapeMedium) else Modifier)
+                .background(
+                    when {
+                        selected -> tokens.accentSoft
+                        unreadCard -> tokens.surface
+                        else -> tokens.bg
+                    },
+                    ShapeMedium,
+                )
+                .clip(ShapeMedium)
                 .combinedClickable(
                     onClick = if (selectionMode) onToggleSelect else onOpen,
                     onLongClick = if (selectionMode) null else withLongPressHaptic(onLongPress),
                 )
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -139,9 +155,9 @@ fun ThreadRow(
                 if (selectionMode) {
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
-                            .background(if (selected) tokens.accent else tokens.surfaceAlt, CircleShape)
-                            .border(1.dp, if (selected) tokens.accent else tokens.border, CircleShape),
+                            .size(52.dp)
+                            .background(if (selected) tokens.accentDeep else tokens.surfaceAlt, CircleShape)
+                            .border(1.dp, if (selected) tokens.accentDeep else tokens.border, CircleShape),
                         contentAlignment = Alignment.Center,
                     ) {
                         // Always shows a checkmark, muted when not selected — an empty circle read
@@ -149,29 +165,35 @@ fun ThreadRow(
                         Icon(
                             Icons.Filled.Check,
                             contentDescription = if (selected) "Selected" else "Not selected",
-                            tint = if (selected) tokens.accentText else tokens.textTertiary,
-                            modifier = Modifier.size(20.dp),
+                            tint = if (selected) tokens.onAccentDeep else tokens.textTertiary,
+                            modifier = Modifier.size(22.dp),
                         )
                     }
                 } else {
                     AvatarBubble(thread.category, thread.avatarColor, thread.isBusiness, photoUri = thread.photoUri)
                 }
             }
-            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+            Column(modifier = Modifier.weight(1f).padding(start = 14.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
                     Text(
                         highlightedText(thread.displayName, thread.displayNameMatch),
-                        color = tokens.textPrimary,
+                        color = if (thread.unread) tokens.textPrimary else tokens.textSecondary,
                         fontWeight = thread.nameWeight,
-                        fontSize = 15.sp,
+                        fontSize = 16.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    Text(thread.timeLabel, color = tokens.textTertiary, fontSize = 12.sp)
+                    Text(
+                        thread.timeLabel,
+                        color = if (thread.unread) tokens.accentLabel else tokens.textTertiary,
+                        fontSize = 12.sp,
+                        fontWeight = if (thread.unread) FontWeight.SemiBold else FontWeight.Normal,
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
                 }
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 3.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
                 ) {
@@ -190,8 +212,9 @@ fun ThreadRow(
                         } else {
                             highlightedText(thread.preview, thread.previewMatch)
                         },
-                        color = tokens.textSecondary,
-                        fontSize = 13.sp,
+                        color = if (thread.unread) tokens.textPrimary.copy(alpha = 0.82f) else tokens.textSecondary,
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
@@ -199,22 +222,23 @@ fun ThreadRow(
                     if (thread.unread && thread.unreadCount > 0) {
                         Box(
                             modifier = Modifier
-                                .padding(start = 8.dp)
-                                .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
-                                .background(tokens.accent, CircleShape),
+                                .padding(start = 10.dp)
+                                .defaultMinSize(minWidth = 24.dp, minHeight = 24.dp)
+                                .background(tokens.accentDeep, CircleShape),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
                                 text = if (thread.unreadCount > 99) "99+" else thread.unreadCount.toString(),
-                                color = tokens.accentText,
-                                fontSize = 11.sp,
+                                color = tokens.onAccentDeep,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp),
                             )
                         }
                     }
                 }
             }
         }
+    }
     }
 }

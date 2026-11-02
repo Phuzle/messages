@@ -37,7 +37,7 @@ fun UndoBar(message: String?, onUndo: () -> Unit, onDismiss: () -> Unit, modifie
         Text(message, color = tokens.modalText, fontSize = 13.5.sp, modifier = Modifier.weight(1f))
         Text(
             "UNDO",
-            color = tokens.accent,
+            color = tokens.accentLabel,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.clickable(onClick = onUndo).padding(start = 12.dp),

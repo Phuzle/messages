@@ -116,9 +116,9 @@ fun AppRoot(viewModel: AppViewModel) {
                         com.phuzle.labs.messages.ui.components.AppLogo(size = 56.dp)
                         Text("Messages is locked", color = tokens.textSecondary, fontSize = 14.sp)
                         Text(
-                            "Unlock", color = tokens.accentText, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                            "Unlock", color = tokens.onAccentDeep, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                             modifier = Modifier
-                                .background(tokens.accent, com.phuzle.labs.messages.ui.theme.ShapeMedium)
+                                .background(tokens.accentDeep, com.phuzle.labs.messages.ui.theme.ShapeMedium)
                                 .clickable(onClick = retry)
                                 .padding(horizontal = 20.dp, vertical = 11.dp),
                         )

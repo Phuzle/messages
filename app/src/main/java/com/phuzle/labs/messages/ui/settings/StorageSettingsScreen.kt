@@ -1,4 +1,5 @@
 package com.phuzle.labs.messages.ui.settings
+import com.phuzle.labs.messages.ui.theme.softElevation
 import com.phuzle.labs.messages.ui.components.topBarContentPadding
 
 import androidx.compose.foundation.background
@@ -43,7 +44,7 @@ fun StorageSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
     LaunchedEffect(Unit) { viewModel.loadStorageOverview() }
 
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = topBarContentPadding(76.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
         SettingsCard {
@@ -59,7 +60,7 @@ fun StorageSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
             )
         }
 
-        Column(Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium).padding(14.dp)) {
+        Column(Modifier.fillMaxWidth().softElevation(ShapeMedium).background(tokens.surface, ShapeMedium).padding(14.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 com.phuzle.labs.messages.ui.components.SettingsIconBadge(icon = Icons.Filled.Timer, modifier = Modifier.padding(end = 12.dp))
                 Column(Modifier.weight(1f)) {

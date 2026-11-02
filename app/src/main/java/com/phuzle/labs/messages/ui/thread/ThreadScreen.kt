@@ -53,11 +53,16 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.AppViewModel
 import com.phuzle.labs.messages.ui.components.AvatarBubble
+import com.phuzle.labs.messages.ui.theme.barElevation
+import com.phuzle.labs.messages.ui.theme.bubbleShape
+import com.phuzle.labs.messages.ui.theme.softElevation
 import com.phuzle.labs.messages.ui.components.BarInset
 import com.phuzle.labs.messages.ui.components.FlatTextField
 import com.phuzle.labs.messages.ui.components.GlassBar
@@ -172,8 +177,9 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
             // over it — it IS sticking, just invisibly. Shrinking the LazyColumn itself instead
             // makes its top edge (and thus the sticky pin point) land exactly where the header
             // should visually rest, just below the bar.
-            modifier = Modifier.fillMaxSize().padding(top = topBarContentPadding(70.dp), bottom = 84.dp, start = 14.dp, end = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxSize().padding(top = topBarContentPadding(78.dp), bottom = 96.dp, start = 16.dp, end = 16.dp),
+            // Spacing is per-bubble (3dp inside a run, 12dp between runs), see MessageBubble.
+            verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             if (state.isLoadingOlderMessages) {
                 item { MessageSkeletonRow(alignEnd = false) }
@@ -183,7 +189,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
             // that day's messages scroll past underneath — otherwise, opening a day with enough
             // messages to fill the screen means the only way to tell which day you're looking at
             // is to scroll all the way back up to its header.
-            listEntries.forEach { entry ->
+            listEntries.forEachIndexed { index, entry ->
                 when (entry) {
                     is ThreadListEntry.DateHeader -> {
                         stickyHeader(key = "date-${entry.label}", contentType = "date-header") {
@@ -191,9 +197,18 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                         }
                     }
                     is ThreadListEntry.Msg -> {
+                        // Run grouping is derived purely from the entries already on screen (same sender,
+                        // same day, within a few minutes): the last bubble of a run carries the tail and
+                        // timestamp, and the first gets the larger gap above it.
+                        val previous = (listEntries.getOrNull(index - 1) as? ThreadListEntry.Msg)?.message
+                        val next = (listEntries.getOrNull(index + 1) as? ThreadListEntry.Msg)?.message
+                        val startsRun = previous == null || !continuesRun(previous, entry.message)
+                        val endsRun = next == null || !continuesRun(entry.message, next)
                         item(key = entry.message.id, contentType = "message") {
                             MessageBubble(
                                 entry.message,
+                                startsRun = startsRun,
+                                endsRun = endsRun,
                                 matchedIndices = entry.matchedIndices,
                                 onLongPress = {
                                     // A message still waiting to send gets the restricted
@@ -218,10 +233,10 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
             }
         }
 
-        GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 56.dp, inset = BarInset.Top) {
+        GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 64.dp, inset = BarInset.Top) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (state.threadSearchActive) {
-                    Box(Modifier.size(36.dp).roundClickable(onClick = viewModel::closeThreadSearch), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(48.dp).roundClickable(onClick = viewModel::closeThreadSearch), contentAlignment = Alignment.Center) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
                     }
                     FlatTextField(
@@ -232,18 +247,24 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                         focusRequester = threadSearchFocusRequester,
                     )
                 } else {
-                    Box(Modifier.size(36.dp).roundClickable(onClick = viewModel::goBack), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(48.dp).roundClickable(onClick = viewModel::goBack), contentAlignment = Alignment.Center) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
                     }
                     Row(
                         modifier = Modifier.weight(1f).clickable(onClick = viewModel::openThreadInfo).padding(start = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        AvatarBubble(thread.category, thread.avatarColor, thread.isBusiness, size = 34.dp, photoUri = thread.photoUri)
-                        Text(thread.displayName, color = tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        AvatarBubble(thread.category, thread.avatarColor, thread.isBusiness, size = 40.dp, photoUri = thread.photoUri)
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                thread.displayName, color = tokens.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold,
+                                maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                            Text(thread.kindLabel, color = tokens.textTertiary, fontSize = 12.5.sp, maxLines = 1)
+                        }
                     }
-                    Box(Modifier.size(36.dp).roundClickable(onClick = viewModel::toggleThreadOverflowMenu), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(48.dp).roundClickable(onClick = viewModel::toggleThreadOverflowMenu), contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
                     }
                 }
@@ -267,17 +288,17 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
         )
 
         if (thread.isReplyable && !thread.isBlocked) {
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(tokens.surface).navigationBarsPadding()) {
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().barElevation(atTop = true).background(tokens.surface).navigationBarsPadding()) {
                 if (state.settings.showCharCount) {
                     Text(
                         "${state.threadInput.length} characters", color = tokens.textTertiary, fontSize = 11.sp,
-                        modifier = Modifier.padding(start = 14.dp, top = 4.dp),
+                        modifier = Modifier.padding(start = 16.dp, top = 6.dp),
                     )
                 }
                 state.threadCustomScheduleMillis?.let { millis ->
                     Row(
                         modifier = Modifier
-                            .padding(start = 14.dp, top = 6.dp)
+                            .padding(start = 16.dp, top = 8.dp)
                             .clip(com.phuzle.labs.messages.ui.theme.ShapePill)
                             .background(tokens.accentSoft, com.phuzle.labs.messages.ui.theme.ShapePill)
                             .clickable(onClick = { viewModel.setThreadCustomSchedule(null) })
@@ -290,9 +311,9 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                         // background, not this translucent tint (see ComposeScreen).
                         Text(
                             com.phuzle.labs.messages.ui.format.formatScheduleTime(millis),
-                            color = tokens.accent, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold,
+                            color = tokens.accentLabel, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold,
                         )
-                        Icon(Icons.Filled.Close, contentDescription = "Clear schedule", tint = tokens.accent, modifier = Modifier.size(12.dp))
+                        Icon(Icons.Filled.Close, contentDescription = "Clear schedule", tint = tokens.accentLabel, modifier = Modifier.size(12.dp))
                     }
                 }
                 Row(
@@ -301,10 +322,10 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Box(
-                        Modifier.size(40.dp).background(tokens.surfaceAlt, CircleShape).roundClickable(onClick = scheduleState::start),
+                        Modifier.size(48.dp).background(tokens.surfaceAlt, CircleShape).roundClickable(onClick = scheduleState::start),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(Icons.Filled.CalendarMonth, contentDescription = "Schedule send", tint = tokens.textSecondary, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Filled.CalendarMonth, contentDescription = "Schedule send", tint = tokens.textSecondary, modifier = Modifier.size(20.dp))
                     }
                     FlatTextField(
                         value = state.threadInput,
@@ -316,15 +337,15 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                     )
                     Box(
                         Modifier
-                            .size(40.dp)
-                            .background(if (canSend) tokens.accent else tokens.surfaceAlt, CircleShape)
+                            .size(48.dp)
+                            .background(if (canSend) tokens.accentDeep else tokens.surfaceAlt, CircleShape)
                             .let { if (canSend) it.roundClickable(onClick = viewModel::sendThreadMessage) else it },
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             if (state.threadCustomScheduleMillis != null) Icons.Filled.Schedule else Icons.AutoMirrored.Filled.Send,
                             contentDescription = if (state.threadCustomScheduleMillis != null) "Schedule" else "Send",
-                            tint = if (canSend) tokens.accentText else tokens.textTertiary, modifier = Modifier.size(18.dp),
+                            tint = if (canSend) tokens.onAccentDeep else tokens.textTertiary, modifier = Modifier.size(20.dp),
                         )
                     }
                 }
@@ -336,7 +357,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
             ) {
                 Text(
                     if (thread.isBlocked) "You've blocked this sender" else "This sender doesn't accept replies",
-                    color = tokens.textTertiary, fontSize = 12.5.sp,
+                    color = tokens.textTertiary, fontSize = 13.5.sp,
                 )
             }
         }
@@ -348,12 +369,12 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
         val scrollToLatestScope = rememberCoroutineScope()
         androidx.compose.animation.AnimatedVisibility(
             visible = showScrollToLatest,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = if (thread.isReplyable && !thread.isBlocked) 86.dp else 70.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = if (thread.isReplyable && !thread.isBlocked) 100.dp else 76.dp),
             enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(),
             exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(),
         ) {
             Box(
-                Modifier.size(40.dp).background(tokens.surface, CircleShape).border(1.dp, tokens.border, CircleShape)
+                Modifier.size(48.dp).background(tokens.surface, CircleShape).border(1.dp, tokens.border, CircleShape)
                     .roundClickable(onClick = {
                         scrollToLatestScope.launch { listState.animateScrollToItem((listEntries.size - 1).coerceAtLeast(0)) }
                     }),
@@ -411,25 +432,35 @@ private fun DateSeparator(label: String) {
     // screen background) to fully mask that message instead of letting it show through around
     // the pill.
     Row(
-        Modifier.fillMaxWidth().background(tokens.bg).padding(vertical = 6.dp),
+        Modifier.fillMaxWidth().background(tokens.bg).padding(top = 6.dp, bottom = 6.dp),
         horizontalArrangement = Arrangement.Center,
     ) {
         Text(
             label,
-            color = tokens.textTertiary,
-            fontSize = 11.5.sp,
+            color = tokens.textSecondary,
+            fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier
-                .background(tokens.surfaceAlt, RoundedCornerShape(8.dp))
-                .padding(horizontal = 12.dp, vertical = 5.dp),
+                .background(tokens.surfaceAlt, com.phuzle.labs.messages.ui.theme.ShapePill)
+                .padding(horizontal = 14.dp, vertical = 6.dp),
         )
     }
 }
+
+/** Two bubbles belong to one run when they share a sender and sit within a few minutes of each other. */
+private const val RUN_GAP_MILLIS = 5 * 60 * 1000L
+
+private fun continuesRun(earlier: MessageUi, later: MessageUi): Boolean =
+    earlier.isMine == later.isMine &&
+        !isDifferentDay(later.timestamp, earlier.timestamp) &&
+        later.timestamp - earlier.timestamp in 0..RUN_GAP_MILLIS
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MessageBubble(
     message: MessageUi,
+    startsRun: Boolean,
+    endsRun: Boolean,
     onLongPress: () -> Unit,
     matchedIndices: Set<Int> = emptySet(),
     onOpenUrl: (String) -> Unit = {},
@@ -438,17 +469,54 @@ private fun MessageBubble(
     onCopyEntity: (String) -> Unit = {},
 ) {
     val tokens = MessagesTheme.tokens
-    val bg = if (message.isScheduled) tokens.surfaceAlt else if (message.isMine) tokens.accent else tokens.surfaceAlt
-    val fg = if (message.isScheduled) tokens.textSecondary else if (message.isMine) tokens.accentText else tokens.textPrimary
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (message.isMine) Arrangement.End else Arrangement.Start) {
+    val dark = MessagesTheme.isDark
+    val shape = bubbleShape(isMine = message.isMine, hasTail = endsRun)
+    // A message still waiting to send is an outlined placeholder (dashed, accent-labelled, with a
+    // clock) so it reads as "not sent yet" at a glance instead of looking like a received message.
+    val scheduled = message.isScheduled
+    val bg = when {
+        scheduled -> androidx.compose.ui.graphics.Color.Transparent
+        message.isMine -> tokens.accentDeep
+        dark -> tokens.surfaceAlt
+        else -> tokens.surface
+    }
+    val fg = when {
+        scheduled -> tokens.textSecondary
+        message.isMine -> tokens.onAccentDeep
+        else -> tokens.textPrimary
+    }
+    val maxBubbleWidth = (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp * 0.78f).dp
+    val dashColor = tokens.accentLabel
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    Row(
+        Modifier.fillMaxWidth().padding(top = if (startsRun) 12.dp else 3.dp),
+        horizontalArrangement = if (message.isMine) Arrangement.End else Arrangement.Start,
+    ) {
         Column(
             modifier = Modifier
-                .widthIn(max = 280.dp)
-                .background(bg, RoundedCornerShape(16.dp))
+                .widthIn(max = maxBubbleWidth)
+                .then(if (!scheduled && !message.isMine) Modifier.softElevation(shape) else Modifier)
+                .background(bg, shape)
+                .then(
+                    if (scheduled) {
+                        Modifier.drawBehind {
+                            drawOutline(
+                                outline = shape.createOutline(size, layoutDirection, density),
+                                color = dashColor,
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                    width = 1.5.dp.toPx(),
+                                    pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 8f)),
+                                ),
+                            )
+                        }
+                    } else {
+                        Modifier
+                    },
+                )
                 .combinedClickable(onClick = {}, onLongClick = withLongPressHaptic(onLongPress))
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .padding(horizontal = 16.dp, vertical = 11.dp),
         ) {
-            Text(highlightedText(message.text, matchedIndices), color = fg, fontSize = 14.sp, lineHeight = 19.sp)
+            Text(highlightedText(message.text, matchedIndices), color = fg, fontSize = 15.sp, lineHeight = 22.sp)
             if (message.detectedEntities.isNotEmpty()) {
                 com.phuzle.labs.messages.ui.components.MessageEntityChips(
                     entities = message.detectedEntities,
@@ -461,12 +529,23 @@ private fun MessageBubble(
                 )
             }
             // Right-aligned regardless of which side the bubble itself is on — the timestamp
-            // reads as metadata about the message, not body text, so it doesn't follow the
-            // Column's natural (left) reading order the way the message text and entity chips do.
-            Text(
-                message.timeLabel, color = fg.copy(alpha = 0.65f), fontSize = 10.sp,
-                modifier = Modifier.align(Alignment.End).padding(top = 4.dp),
-            )
+            // reads as metadata about the message, not body text. Shown on the last bubble of a
+            // run only (and always on a scheduled one, where it says when the message will send).
+            if (scheduled) {
+                Row(
+                    Modifier.align(Alignment.End).padding(top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Icon(Icons.Filled.Schedule, contentDescription = null, tint = dashColor, modifier = Modifier.size(13.dp))
+                    Text(message.timeLabel, color = dashColor, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+                }
+            } else if (endsRun) {
+                Text(
+                    message.timeLabel, color = fg.copy(alpha = 0.7f), fontSize = 11.sp,
+                    modifier = Modifier.align(Alignment.End).padding(top = 4.dp),
+                )
+            }
         }
     }
 }
