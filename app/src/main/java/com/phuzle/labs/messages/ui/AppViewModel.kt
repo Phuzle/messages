@@ -82,6 +82,10 @@ private data class Ephemeral(
      * Storage's "Recycle Bin" row) instead of the drawer, so [AppViewModel.goBack] can return to
      * that sub-page instead of falling all the way back to the dashboard. */
     val returnToSettingsSub: SettingsSub? = null,
+    /** True when ThreadInfo was opened straight from the Messages list (avatar tap) rather than
+     * from inside the thread, so [AppViewModel.goBack] returns to the list instead of landing in a
+     * conversation the user never opened. */
+    val threadInfoOpenedFromList: Boolean = false,
     val activeTab: DashboardTab = DashboardTab.Messages,
     val activeThreadId: String? = null,
     val olderMessages: List<MessageEntity> = emptyList(),
@@ -788,7 +792,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     }
     fun openArchivedScreen() = settingsAwareNav(PushedScreen.Archived)
     fun openThreadInfo() {
-        ephemeral.update { it.copy(pushedScreen = PushedScreen.ThreadInfo, threadInfoFirstContactAt = null) }
+        ephemeral.update { it.copy(pushedScreen = PushedScreen.ThreadInfo, threadInfoFirstContactAt = null, threadInfoOpenedFromList = false) }
         viewModelScope.launch {
             val id = ephemeral.value.activeThreadId ?: return@launch
             val first = container.threadRepository.firstMessageTime(id)
@@ -800,7 +804,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
      * without opening the conversation first (unlike [openThreadById], this does not mark the
      * thread read — viewing someone's profile card isn't "reading" their messages). */
     fun openThreadInfoById(id: String) {
-        ephemeral.update { it.copy(activeThreadId = id, pushedScreen = PushedScreen.ThreadInfo, threadInfoFirstContactAt = null) }
+        ephemeral.update { it.copy(activeThreadId = id, pushedScreen = PushedScreen.ThreadInfo, threadInfoFirstContactAt = null, threadInfoOpenedFromList = true) }
         viewModelScope.launch {
             val first = container.threadRepository.firstMessageTime(id)
             ephemeral.update { it.copy(threadInfoFirstContactAt = first) }
@@ -941,6 +945,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         val eph = ephemeral.value
         when {
             eph.pushedScreen == PushedScreen.Compose -> closeCompose()
+            eph.pushedScreen == PushedScreen.ThreadInfo && eph.threadInfoOpenedFromList -> ephemeral.update {
+                it.copy(pushedScreen = null, activeThreadId = null, threadInfoOpenedFromList = false)
+            }
             eph.pushedScreen == PushedScreen.ThreadInfo -> ephemeral.update { it.copy(pushedScreen = PushedScreen.Thread) }
             // A thread opened from the (already-unlocked) Private Chats list should pop back
             // there, not all the way past it to the dashboard — see threadOpenedFromPrivateChats.

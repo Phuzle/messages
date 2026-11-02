@@ -53,6 +53,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.text.font.FontWeight
@@ -166,6 +167,13 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
         lastKnownEntryCount = listEntries.size
     }
 
+    // Height of whatever occupies the bottom edge (reply bar, or the "can't reply" banner), so the
+    // list reserves exactly that much instead of a fixed guess that left a dead gap above the
+    // slimmer banner.
+    val bottomDensity = androidx.compose.ui.platform.LocalDensity.current
+    var bottomBarPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val bottomBarHeight = with(bottomDensity) { bottomBarPx.toDp() }
+
     Box(Modifier.fillMaxSize().imePadding()) {
         LazyColumn(
             state = listState,
@@ -177,7 +185,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
             // over it — it IS sticking, just invisibly. Shrinking the LazyColumn itself instead
             // makes its top edge (and thus the sticky pin point) land exactly where the header
             // should visually rest, just below the bar.
-            modifier = Modifier.fillMaxSize().padding(top = topBarContentPadding(78.dp), bottom = 96.dp, start = 16.dp, end = 16.dp),
+            modifier = Modifier.fillMaxSize().padding(top = topBarContentPadding(78.dp), bottom = bottomBarHeight + 8.dp, start = 16.dp, end = 16.dp),
             // Spacing is per-bubble (3dp inside a run, 12dp between runs), see MessageBubble.
             verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
@@ -288,7 +296,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
         )
 
         if (thread.isReplyable && !thread.isBlocked) {
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().barElevation(atTop = true).background(tokens.surface).navigationBarsPadding()) {
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { bottomBarPx = it.height }.barElevation(atTop = true).background(tokens.surface).navigationBarsPadding()) {
                 if (state.settings.showCharCount) {
                     Text(
                         "${state.threadInput.length} characters", color = tokens.textTertiary, fontSize = 11.sp,
@@ -352,7 +360,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
             }
         } else {
             Box(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(tokens.surface).navigationBarsPadding().padding(14.dp),
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { bottomBarPx = it.height }.background(tokens.surface).navigationBarsPadding().padding(14.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
@@ -369,7 +377,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
         val scrollToLatestScope = rememberCoroutineScope()
         androidx.compose.animation.AnimatedVisibility(
             visible = showScrollToLatest,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = if (thread.isReplyable && !thread.isBlocked) 100.dp else 76.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = bottomBarHeight + 12.dp),
             enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(),
             exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut(),
         ) {
@@ -432,7 +440,7 @@ private fun DateSeparator(label: String) {
     // screen background) to fully mask that message instead of letting it show through around
     // the pill.
     Row(
-        Modifier.fillMaxWidth().background(tokens.bg).padding(top = 6.dp, bottom = 6.dp),
+        Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 6.dp),
         horizontalArrangement = Arrangement.Center,
     ) {
         Text(
