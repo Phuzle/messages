@@ -66,6 +66,9 @@ fun MessagesTheme(
             val controller = WindowCompat.getInsetsController(window, view)
             controller.isAppearanceLightStatusBars = !dark
             controller.isAppearanceLightNavigationBars = !dark
+            // The 3-button bar otherwise gets a system scrim stacked on top of the solid strip
+            // AppRoot draws behind it, which tints it a different shade from the app's bars.
+            if (android.os.Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
         }
     }
 

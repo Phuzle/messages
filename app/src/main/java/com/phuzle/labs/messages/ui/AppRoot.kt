@@ -3,7 +3,23 @@ package com.phuzle.labs.messages.ui
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import com.phuzle.labs.messages.ui.components.LocalConsumedNavBarInset
+import com.phuzle.labs.messages.ui.components.buttonNavBarHeight
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +51,7 @@ import com.phuzle.labs.messages.ui.components.UndoBar
 import com.phuzle.labs.messages.ui.components.UpdateAvailableDialog
 import com.phuzle.labs.messages.ui.dashboard.DashboardScreen
 import com.phuzle.labs.messages.ui.drafts.DraftsScreen
+import com.phuzle.labs.messages.ui.model.AppUiState
 import com.phuzle.labs.messages.ui.model.PushedScreen
 import com.phuzle.labs.messages.ui.model.SettingsSub
 import com.phuzle.labs.messages.ui.passbook.AccountDetailScreen
@@ -44,6 +61,17 @@ import com.phuzle.labs.messages.ui.settings.SettingsScreen
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.thread.ThreadInfoScreen
 import com.phuzle.labs.messages.ui.thread.ThreadScreen
+
+private const val NAV_ENTER_MS = 240
+private const val NAV_EXIT_MS = 160
+
+/** How deep a screen sits in the push stack, so a transition knows whether it is going forward
+ * (deeper) or back. Info is one level below the thread it describes. */
+private fun navDepth(screen: PushedScreen?): Int = when (screen) {
+    null -> 0
+    PushedScreen.ThreadInfo -> 2
+    else -> 1
+}
 
 @Composable
 fun AppRoot(viewModel: AppViewModel) {
@@ -128,20 +156,66 @@ fun AppRoot(viewModel: AppViewModel) {
             return@MessagesTheme
         }
 
+        // With 3-button navigation the nav bar's buttons sit directly over whatever is drawn
+        // behind them, so scrolling content ran underneath them and the last rows could not be
+        // reached. Reserve that strip as a solid surface and lay the screens out above it;
+        // gesture navigation reports no tappable inset, so it keeps drawing edge-to-edge.
+        val buttonNavHeight = buttonNavBarHeight()
+        // Last state each screen was shown with — a screen that is animating out must keep
+        // rendering what it showed (e.g. the thread whose id was just cleared by Back).
+        val lastStateFor = remember { HashMap<PushedScreen?, AppUiState>() }
+
         Box(Modifier.fillMaxSize().background(tokens.bg)) {
-            when (state.pushedScreen) {
-                null -> DashboardScreen(state, viewModel)
-                PushedScreen.Thread -> ThreadScreen(state, viewModel)
-                PushedScreen.ThreadInfo -> ThreadInfoScreen(state, viewModel)
-                PushedScreen.Compose -> ComposeScreen(state, viewModel)
-                PushedScreen.Settings -> SettingsScreen(state, viewModel)
-                PushedScreen.RecycleBin -> RecycleBinScreen(state, viewModel)
-                PushedScreen.Archived -> ArchivedScreen(state, viewModel)
-                PushedScreen.PrivateChats -> PrivateChatsScreen(state, viewModel)
-                PushedScreen.Drafts -> DraftsScreen(state, viewModel)
-                PushedScreen.AccountDetail -> AccountDetailScreen(state, viewModel)
-                PushedScreen.BackupList -> com.phuzle.labs.messages.ui.settings.BackupListScreen(viewModel)
-                PushedScreen.ScheduledMessages -> com.phuzle.labs.messages.ui.scheduled.ScheduledMessagesScreen(viewModel)
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(bottom = buttonNavHeight)
+                    .consumeWindowInsets(PaddingValues(bottom = buttonNavHeight)),
+            ) {
+                CompositionLocalProvider(LocalConsumedNavBarInset provides buttonNavHeight) {
+                    AnimatedContent(
+                        targetState = state.pushedScreen,
+                        transitionSpec = {
+                            val forward = navDepth(targetState) > navDepth(initialState)
+                            val backward = navDepth(targetState) < navDepth(initialState)
+                            // The deeper screen is opaque and travels on top, so only it slides over
+                            // (or away from) its parent, which just drifts a little underneath —
+                            // cross-fading the two would show both screens' text through each other.
+                            val spec = when {
+                                forward -> slideInHorizontally(tween(NAV_ENTER_MS, easing = FastOutSlowInEasing)) { it } togetherWith
+                                    slideOutHorizontally(tween(NAV_ENTER_MS, easing = FastOutSlowInEasing)) { -it / 5 }
+                                backward -> slideInHorizontally(tween(NAV_ENTER_MS, easing = FastOutSlowInEasing)) { -it / 5 } togetherWith
+                                    slideOutHorizontally(tween(NAV_ENTER_MS, easing = FastOutSlowInEasing)) { it }
+                                else -> fadeIn(tween(NAV_ENTER_MS)) togetherWith fadeOut(tween(NAV_EXIT_MS))
+                            }
+                            // The screen that is deeper in the stack always travels on top.
+                            spec.apply { targetContentZIndex = if (backward) -1f else 1f }
+                        },
+                        label = "screen",
+                    ) { screen ->
+                        val shown = if (screen == state.pushedScreen) state.also { lastStateFor[screen] = it } else lastStateFor[screen] ?: state
+                        Box(Modifier.fillMaxSize().background(tokens.bg)) {
+                            when (screen) {
+                                null -> DashboardScreen(shown, viewModel)
+                                PushedScreen.Thread -> ThreadScreen(shown, viewModel)
+                                PushedScreen.ThreadInfo -> ThreadInfoScreen(shown, viewModel)
+                                PushedScreen.Compose -> ComposeScreen(shown, viewModel)
+                                PushedScreen.Settings -> SettingsScreen(shown, viewModel)
+                                PushedScreen.RecycleBin -> RecycleBinScreen(shown, viewModel)
+                                PushedScreen.Archived -> ArchivedScreen(shown, viewModel)
+                                PushedScreen.PrivateChats -> PrivateChatsScreen(shown, viewModel)
+                                PushedScreen.Drafts -> DraftsScreen(shown, viewModel)
+                                PushedScreen.AccountDetail -> AccountDetailScreen(shown, viewModel)
+                                PushedScreen.BackupList -> com.phuzle.labs.messages.ui.settings.BackupListScreen(viewModel)
+                                PushedScreen.ScheduledMessages -> com.phuzle.labs.messages.ui.scheduled.ScheduledMessagesScreen(viewModel)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (buttonNavHeight > 0.dp) {
+                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(buttonNavHeight).background(tokens.surface))
             }
 
             NavDrawer(

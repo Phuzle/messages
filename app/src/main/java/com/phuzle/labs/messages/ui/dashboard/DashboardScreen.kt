@@ -106,7 +106,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
     val tokens = MessagesTheme.tokens
     val context = androidx.compose.ui.platform.LocalContext.current
     val isMessages = state.activeTab == DashboardTab.Messages
-    val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val navBarInset = com.phuzle.labs.messages.ui.components.remainingNavBarInset()
     // Closed-testing-only — see AppViewModel.dismissFeedbackBanner for the "comes back tomorrow"
     // behavior. A real first item in the list below (scrolls with everything else, shown for
     // every category filter), not a fixed overlay — so unlike the header, it needs no special
