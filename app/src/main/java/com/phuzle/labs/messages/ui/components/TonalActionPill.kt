@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -26,7 +27,7 @@ import com.phuzle.labs.messages.ui.theme.ShapePill
 
 /**
  * The small inline action next to a row or inside a card (Restore, Unblock, Export...): a 40dp tonal
- * accent pill inside a 48dp tap target. Replaces the old outlined 8-9dp-radius mini buttons.
+ * accent pill inside a 48dp tap target ([fillWidth] stretches it for side-by-side or full-width use). Replaces the old outlined 8-9dp-radius mini buttons.
  */
 @Composable
 fun TonalActionPill(
@@ -35,6 +36,7 @@ fun TonalActionPill(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     enabled: Boolean = true,
+    fillWidth: Boolean = false,
 ) {
     val tokens = MessagesTheme.tokens
     val content = if (enabled) tokens.accentLabel else tokens.textTertiary
@@ -43,7 +45,7 @@ fun TonalActionPill(
         contentAlignment = Alignment.Center,
     ) {
         Row(
-            modifier = Modifier.height(40.dp).background(if (enabled) tokens.accentSoft else tokens.surfaceAlt, ShapePill).padding(horizontal = 16.dp),
+            modifier = (if (fillWidth) Modifier.fillMaxWidth() else Modifier).height(40.dp).background(if (enabled) tokens.accentSoft else tokens.surfaceAlt, ShapePill).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
         ) {

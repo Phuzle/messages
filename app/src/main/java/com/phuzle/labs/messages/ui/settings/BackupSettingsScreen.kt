@@ -147,10 +147,10 @@ fun BackupSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                 )
                 Text(lastBackupLabel("Local", settings.lastLocalBackupAt), color = tokens.textTertiary, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
                 Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TonalActionPill("Export a copy", onClick = viewModel::requestExportBackup, modifier = Modifier.weight(1f))
-                    TonalActionPill("Restore from file", onClick = viewModel::requestRestoreFromFile, modifier = Modifier.weight(1f))
+                    TonalActionPill("Export a copy", onClick = viewModel::requestExportBackup, modifier = Modifier.weight(1f), fillWidth = true)
+                    TonalActionPill("Restore from file", onClick = viewModel::requestRestoreFromFile, modifier = Modifier.weight(1f), fillWidth = true)
                 }
-                TonalActionPill("View & restore backups", onClick = viewModel::openBackupList, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+                TonalActionPill("View & restore backups", onClick = viewModel::openBackupList, modifier = Modifier.fillMaxWidth().padding(top = 4.dp), fillWidth = true)
             }
         }
 
