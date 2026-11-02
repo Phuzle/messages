@@ -1,4 +1,6 @@
 package com.phuzle.labs.messages.ui.settings
+import com.phuzle.labs.messages.ui.theme.softElevation
+import com.phuzle.labs.messages.ui.components.TonalActionPill
 import com.phuzle.labs.messages.ui.components.topBarContentPadding
 
 import androidx.compose.foundation.background
@@ -60,18 +62,18 @@ fun BackupListScreen(viewModel: AppViewModel) {
                 icon = Icons.Filled.CloudQueue,
                 title = "No backups yet",
                 detail = "Back up locally or to Google Drive from Backup & Restore, then any snapshot you make will show up here to restore from.",
-                modifier = Modifier.padding(top = topBarContentPadding(68.dp)),
+                modifier = Modifier.padding(top = topBarContentPadding(76.dp)),
             )
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = topBarContentPadding(68.dp), bottom = 24.dp, start = 16.dp, end = 16.dp),
+                contentPadding = PaddingValues(top = topBarContentPadding(76.dp), bottom = 24.dp, start = 16.dp, end = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 if (listState.loading) {
                     item {
                         Row(Modifier.fillMaxWidth().padding(vertical = 20.dp), horizontalArrangement = Arrangement.Center) {
-                            CircularProgressIndicator(color = tokens.accent, modifier = Modifier.padding(end = 8.dp))
+                            CircularProgressIndicator(color = tokens.accentLabel, modifier = Modifier.padding(end = 8.dp))
                         }
                     }
                 }
@@ -149,7 +151,7 @@ fun BackupListScreen(viewModel: AppViewModel) {
 private fun BackupRow(title: String, onRestore: () -> Unit, busy: Boolean = false, disabled: Boolean = false) {
     val tokens = MessagesTheme.tokens
     Row(
-        Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium).padding(14.dp),
+        Modifier.fillMaxWidth().softElevation(ShapeMedium).background(tokens.surface, ShapeMedium).padding(14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -157,16 +159,10 @@ private fun BackupRow(title: String, onRestore: () -> Unit, busy: Boolean = fals
             title, color = if (disabled) tokens.textTertiary else tokens.textPrimary, fontSize = 13.5.sp,
             fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f),
         )
-        Row(
-            modifier = Modifier.border(1.dp, tokens.border, RoundedCornerShape(9.dp))
-                .clickable(enabled = !disabled, onClick = onRestore).padding(horizontal = 16.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (busy) {
-                CircularProgressIndicator(color = tokens.textPrimary, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-            } else {
-                Text("Restore", color = if (disabled) tokens.textTertiary else tokens.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            }
+        if (busy) {
+            CircularProgressIndicator(color = tokens.textPrimary, strokeWidth = 2.dp, modifier = Modifier.padding(horizontal = 16.dp).size(18.dp))
+        } else {
+            TonalActionPill("Restore", onClick = onRestore, enabled = !disabled)
         }
     }
 }

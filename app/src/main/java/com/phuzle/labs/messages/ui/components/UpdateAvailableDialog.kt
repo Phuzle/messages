@@ -48,7 +48,7 @@ fun UpdateAvailableDialog(update: UpdateInfoUi?, onUpdate: () -> Unit, onDismiss
                 .padding(horizontal = 22.dp, vertical = 26.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Icon(Icons.Filled.SystemUpdate, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(IconSizes.Large).padding(bottom = 12.dp))
+            Icon(Icons.Filled.SystemUpdate, contentDescription = null, tint = tokens.accentLabel, modifier = Modifier.size(IconSizes.Large).padding(bottom = 12.dp))
             Text("Update Ready", color = tokens.modalText, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             Text(
                 update.message,
@@ -59,7 +59,7 @@ fun UpdateAvailableDialog(update: UpdateInfoUi?, onUpdate: () -> Unit, onDismiss
             )
             Button(
                 onClick = onUpdate,
-                colors = ButtonDefaults.buttonColors(containerColor = tokens.accent, contentColor = tokens.accentText),
+                colors = ButtonDefaults.buttonColors(containerColor = tokens.accentDeep, contentColor = tokens.onAccentDeep),
                 shape = ShapeMedium,
                 modifier = Modifier.fillMaxWidth(),
             ) {

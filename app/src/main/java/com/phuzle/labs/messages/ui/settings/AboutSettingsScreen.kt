@@ -1,5 +1,6 @@
 package com.phuzle.labs.messages.ui.settings
 
+import com.phuzle.labs.messages.ui.theme.softElevation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -44,13 +45,12 @@ fun AboutSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .navigationBarsPadding()
-            .padding(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
+            .padding(top = topBarContentPadding(76.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
         Column(
-            Modifier.fillMaxWidth().background(tokens.surface, com.phuzle.labs.messages.ui.theme.ShapeMedium)
-                .border(1.dp, tokens.border, com.phuzle.labs.messages.ui.theme.ShapeMedium)
-                .padding(20.dp),
+            Modifier.fillMaxWidth().softElevation(com.phuzle.labs.messages.ui.theme.ShapeMedium).background(tokens.surface, com.phuzle.labs.messages.ui.theme.ShapeMedium)
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             com.phuzle.labs.messages.ui.components.AppLogo(size = 56.dp, cornerRadius = 14.dp)
@@ -122,9 +122,8 @@ fun AboutSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
         Column {
             SectionLabel("Made by", Modifier.padding(bottom = 8.dp))
             Column(
-                Modifier.fillMaxWidth().background(tokens.surface, com.phuzle.labs.messages.ui.theme.ShapeMedium)
-                    .border(1.dp, tokens.border, com.phuzle.labs.messages.ui.theme.ShapeMedium)
-                    .padding(14.dp),
+                Modifier.fillMaxWidth().softElevation(com.phuzle.labs.messages.ui.theme.ShapeMedium).background(tokens.surface, com.phuzle.labs.messages.ui.theme.ShapeMedium)
+                    .padding(16.dp),
             ) {
                 Text("Made with care by the Phuzle team.", color = tokens.textPrimary, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
                 Text(

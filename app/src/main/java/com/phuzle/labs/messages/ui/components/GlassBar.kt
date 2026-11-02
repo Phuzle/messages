@@ -10,17 +10,17 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
+import com.phuzle.labs.messages.ui.theme.barElevation
 
 /** Which system bar this bar sits flush against, so it can pad its content clear of it. */
 enum class BarInset { None, Top, Bottom }
 
 /**
  * The app's solid, gently-elevated top/bottom bar — a One UI-style opaque surface with a soft
- * drop shadow, not a translucent glass tint (the earlier frosted-glass look read as messy/see-
+ * drop shadow (a 1dp hairline in Dark/Midnight, where a shadow wouldn't show), not a translucent glass tint (the earlier frosted-glass look read as messy/see-
  * through against scrolling content, especially on the bottom nav).
  *
  * The background always extends into the system bar area (edge-to-edge is mandatory as of API 35);
@@ -30,7 +30,7 @@ enum class BarInset { None, Top, Bottom }
 @Composable
 fun GlassBar(
     modifier: Modifier = Modifier,
-    height: Dp = 52.dp,
+    height: Dp = 64.dp,
     inset: BarInset = BarInset.None,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -43,7 +43,7 @@ fun GlassBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(elevation = 6.dp)
+            .barElevation(atTop = inset == BarInset.Bottom)
             .background(tokens.surface)
             .then(insetModifier)
             .height(height),

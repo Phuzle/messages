@@ -19,3 +19,17 @@ val MessagesShapes = Shapes(
     large = ShapeLarge,
     extraLarge = ShapeLarge,
 )
+
+private val BubbleCorner = 22.dp
+private val BubbleTail = 6.dp
+
+/**
+ * Chat bubble: all corners [BubbleCorner], except the bottom corner on the sender's side drops to a
+ * small tail radius on the last bubble of a run, so runs read as one voice and mine/theirs read apart.
+ */
+fun bubbleShape(isMine: Boolean, hasTail: Boolean): RoundedCornerShape = RoundedCornerShape(
+    topStart = BubbleCorner,
+    topEnd = BubbleCorner,
+    bottomStart = if (!isMine && hasTail) BubbleTail else BubbleCorner,
+    bottomEnd = if (isMine && hasTail) BubbleTail else BubbleCorner,
+)

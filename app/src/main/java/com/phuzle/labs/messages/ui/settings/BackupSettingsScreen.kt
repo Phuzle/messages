@@ -1,4 +1,9 @@
 package com.phuzle.labs.messages.ui.settings
+import com.phuzle.labs.messages.ui.theme.softElevation
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.wrapContentHeight
+import com.phuzle.labs.messages.ui.theme.barElevation
+import com.phuzle.labs.messages.ui.components.TonalActionPill
 import com.phuzle.labs.messages.ui.components.topBarContentPadding
 
 import androidx.compose.foundation.background
@@ -56,10 +61,10 @@ fun BackupSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
     Box(Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                .padding(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp, bottom = 108.dp),
+                .padding(top = topBarContentPadding(76.dp), start = 16.dp, end = 16.dp, bottom = 108.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
-            Column(Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium).padding(14.dp)) {
+            Column(Modifier.fillMaxWidth().softElevation(ShapeMedium).background(tokens.surface, ShapeMedium).padding(14.dp)) {
                 Text("Local backup frequency", color = tokens.textPrimary, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
                 Text(
                     "Runs automatically in the background — the Backup Now button below is just for an on-demand snapshot.",
@@ -75,7 +80,7 @@ fun BackupSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
             // shows up once a real Google account is actually signed in — see
             // GoogleDriveBackupManager's doc comment for the Google Cloud Console setup this needs to
             // fully work (Drive API enabled + this account added as an OAuth test user).
-            Column(Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium).padding(14.dp)) {
+            Column(Modifier.fillMaxWidth().softElevation(ShapeMedium).background(tokens.surface, ShapeMedium).padding(14.dp)) {
                 if (settings.googleAccountEmail == null) {
                     Text("Google Drive backup", color = tokens.textPrimary, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
                     Text(
@@ -83,10 +88,10 @@ fun BackupSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                         color = tokens.textTertiary, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
                     )
                     Text(
-                        "Connect Google Drive", color = tokens.accentText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                        "Connect Google Drive", color = tokens.onAccentDeep, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth().background(tokens.accent, RoundedCornerShape(9.dp))
-                            .clickable(onClick = viewModel::requestDriveSignIn).padding(vertical = 11.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).background(tokens.accentDeep, ShapeMedium)
+                            .clickable(onClick = viewModel::requestDriveSignIn).wrapContentHeight(Alignment.CenterVertically),
                     )
                 } else {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -134,7 +139,7 @@ fun BackupSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                 }
             }
 
-            Column(Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium).padding(14.dp)) {
+            Column(Modifier.fillMaxWidth().softElevation(ShapeMedium).background(tokens.surface, ShapeMedium).padding(14.dp)) {
                 Text("Local backup", color = tokens.textPrimary, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
                 Text(
                     "Saved to Downloads/Messages Backups on this device, so it's still there to restore from even if the app itself is uninstalled.",
@@ -142,28 +147,10 @@ fun BackupSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                 )
                 Text(lastBackupLabel("Local", settings.lastLocalBackupAt), color = tokens.textTertiary, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
                 Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "Export a copy", color = tokens.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.weight(1f)
-                            .border(1.dp, tokens.border, RoundedCornerShape(9.dp))
-                            .clickable(onClick = viewModel::requestExportBackup).padding(vertical = 11.dp),
-                    )
-                    Text(
-                        "Restore from file", color = tokens.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.weight(1f)
-                            .border(1.dp, tokens.border, RoundedCornerShape(9.dp))
-                            .clickable(onClick = viewModel::requestRestoreFromFile).padding(vertical = 11.dp),
-                    )
+                    TonalActionPill("Export a copy", onClick = viewModel::requestExportBackup, modifier = Modifier.weight(1f), fillWidth = true)
+                    TonalActionPill("Restore from file", onClick = viewModel::requestRestoreFromFile, modifier = Modifier.weight(1f), fillWidth = true)
                 }
-                Text(
-                    "View & restore backups", color = tokens.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
-                        .border(1.dp, tokens.border, RoundedCornerShape(9.dp))
-                        .clickable(onClick = viewModel::openBackupList).padding(vertical = 11.dp),
-                )
+                TonalActionPill("View & restore backups", onClick = viewModel::openBackupList, modifier = Modifier.fillMaxWidth().padding(top = 4.dp), fillWidth = true)
             }
         }
 
@@ -172,22 +159,22 @@ fun BackupSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
         // two separate buttons the user had to tap one at a time.
         Box(
             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                .background(tokens.bg)
-                .border(1.dp, tokens.border, androidx.compose.ui.graphics.RectangleShape)
+                .barElevation(atTop = true)
+                .background(tokens.surface)
                 .navigationBarsPadding()
                 .padding(16.dp),
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().background(tokens.accent, ShapeMedium)
+                modifier = Modifier.fillMaxWidth().background(tokens.accentDeep, ShapeMedium)
                     .clickable(enabled = !busy, onClick = viewModel::backupNow)
-                    .padding(vertical = 14.dp),
+                    .heightIn(min = 52.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (busy) {
-                    CircularProgressIndicator(color = tokens.accentText, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                    CircularProgressIndicator(color = tokens.onAccentDeep, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
                 } else {
-                    Text("Backup Now", color = tokens.accentText, fontSize = 14.5.sp, fontWeight = FontWeight.Bold)
+                    Text("Backup Now", color = tokens.onAccentDeep, fontSize = 14.5.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

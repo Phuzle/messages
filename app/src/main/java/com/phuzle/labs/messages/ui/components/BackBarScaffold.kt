@@ -33,15 +33,15 @@ fun BackBarScaffold(
     val tokens = MessagesTheme.tokens
     Box(Modifier.fillMaxSize()) {
         content()
-        GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 56.dp, inset = BarInset.Top) {
+        GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 64.dp, inset = BarInset.Top) {
             if (topBarContent != null) {
                 topBarContent()
             } else {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(36.dp).roundClickable(onClick = onBack), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(48.dp).roundClickable(onClick = onBack), contentAlignment = Alignment.Center) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = tokens.textPrimary, modifier = Modifier.size(IconSizes.Medium))
                     }
-                    Text(title, color = tokens.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
+                    Text(title, color = tokens.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
                 }
             }
         }

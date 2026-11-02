@@ -35,7 +35,7 @@ fun SettingsHomeScreen(state: AppUiState, viewModel: AppViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp),
+            .padding(top = topBarContentPadding(76.dp), start = 16.dp, end = 16.dp),
     ) {
         SettingsCard {
             CATEGORIES.forEachIndexed { index, category ->

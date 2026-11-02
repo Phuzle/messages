@@ -31,6 +31,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.phuzle.labs.messages.ui.theme.softElevation
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -62,14 +65,14 @@ fun ThreadInfoScreen(state: AppUiState, viewModel: AppViewModel) {
 
     Box(Modifier.fillMaxSize()) {
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = topBarContentPadding(80.dp), start = 20.dp, end = 20.dp, bottom = 24.dp),
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = topBarContentPadding(88.dp), start = 20.dp, end = 20.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            AvatarBubble(thread.category, thread.avatarColor, thread.isBusiness, size = 76.dp, photoUri = thread.photoUri)
-            Text(thread.displayName, color = tokens.textPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
-            Text("${thread.kindLabel} · ${thread.category.label}", color = tokens.textTertiary, fontSize = 13.sp)
+            AvatarBubble(thread.category, thread.avatarColor, thread.isBusiness, size = 88.dp, photoUri = thread.photoUri)
+            Text(thread.displayName, color = tokens.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
+            Text("${thread.kindLabel} · ${thread.category.label}", color = tokens.textSecondary, fontSize = 14.sp, modifier = Modifier.padding(top = 2.dp))
 
-            Row(Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 ActionButton(
                     icon = Icons.Filled.Call,
                     label = "Call",
@@ -96,7 +99,7 @@ fun ThreadInfoScreen(state: AppUiState, viewModel: AppViewModel) {
             }
 
             Column(
-                Modifier.fillMaxWidth().padding(top = 20.dp).background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium),
+                Modifier.fillMaxWidth().padding(top = 24.dp).softElevation(ShapeMedium).background(tokens.surface, ShapeMedium).clip(ShapeMedium),
             ) {
                 InfoRow("Number", thread.sender, onLongClick = { viewModel.copyNumber(thread.sender) })
                 SettingsRowDivider()
@@ -118,17 +121,17 @@ fun ThreadInfoScreen(state: AppUiState, viewModel: AppViewModel) {
             TextActionRow(
                 icon = if (thread.isBlocked) Icons.Filled.LockOpen else Icons.Filled.Lock,
                 label = if (thread.isBlocked) "Unblock ${thread.displayName}" else "Block ${thread.displayName}",
-                color = if (thread.isBlocked) tokens.accent else tokens.danger,
+                color = if (thread.isBlocked) tokens.accentLabel else tokens.danger,
                 onClick = viewModel::toggleBlockCurrent,
             )
         }
 
-        GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 56.dp, inset = BarInset.Top) {
+        GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 64.dp, inset = BarInset.Top) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(36.dp).roundClickable(onClick = viewModel::goBack), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(48.dp).roundClickable(onClick = viewModel::goBack), contentAlignment = Alignment.Center) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
                 }
-                Text(thread.infoTitle, color = tokens.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
+                Text(thread.infoTitle, color = tokens.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
             }
         }
     }
@@ -139,14 +142,15 @@ private fun ActionButton(icon: ImageVector, label: String, onClick: () -> Unit, 
     val tokens = MessagesTheme.tokens
     Column(
         modifier = modifier
+            .softElevation(ShapeMedium)
             .background(tokens.surface, ShapeMedium)
-            .border(1.dp, tokens.border, ShapeMedium)
+            .clip(ShapeMedium)
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
+            .padding(vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(icon, contentDescription = label, tint = tokens.accent, modifier = Modifier.size(20.dp))
-        Text(label, color = tokens.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
+        Icon(icon, contentDescription = label, tint = tokens.accentLabel, modifier = Modifier.size(24.dp))
+        Text(label, color = tokens.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
@@ -157,14 +161,17 @@ private fun TextActionRow(icon: ImageVector, label: String, color: androidx.comp
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 12.dp)
-            .border(1.dp, tokens.border, ShapeMedium)
+            .softElevation(ShapeMedium)
+            .background(tokens.surface, ShapeMedium)
+            .clip(ShapeMedium)
             .clickable(onClick = onClick)
+            .heightIn(min = 52.dp)
             .padding(12.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
-        Text(label, color = color, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
+        Text(label, color = color, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
     }
 }
 
@@ -175,10 +182,10 @@ private fun InfoRow(label: String, value: String, onLongClick: (() -> Unit)? = n
     Row(
         modifier = Modifier.fillMaxWidth()
             .let { if (onLongClick != null) it.combinedClickable(onClick = {}, onLongClick = withLongPressHaptic(onLongClick)) else it }
-            .padding(13.dp),
+            .padding(horizontal = 16.dp, vertical = 15.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(label, color = tokens.textSecondary, fontSize = 13.sp)
-        Text(value, color = tokens.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Text(label, color = tokens.textSecondary, fontSize = 14.5.sp)
+        Text(value, color = tokens.textPrimary, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold)
     }
 }

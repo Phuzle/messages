@@ -24,7 +24,10 @@ will see the wrong color on.
 | `border` | The 1dp hairline on every bordered card |
 | `barBorder` | The hairline specifically under top bars / above bottom bars |
 | `textPrimary` / `textSecondary` / `textTertiary` | Title / body / caption text, in that order of emphasis |
-| `accent` / `accentSoft` / `accentText` | Brand color, its 16%-alpha tint (icon badges, selected chips), and the color to put *on* `accent` (usually white/near-black depending on theme) |
+| `accent` / `accentSoft` / `accentText` | The raw chosen accent, its 16%-alpha tint (selected chips, tonal icon badges), and the color to put *on* raw `accent`. Raw `accent` is now only for the Appearance swatches and cursors — everything else uses the derived tokens below |
+| `accentDeep` / `onAccentDeep` | The calm accent **fill** derived from `accent` (light/Sepia: mixed 40% toward `textPrimary`; dark/Midnight: mixed 60% toward `bg`) and the white/near-black that contrasts best on it. Use for sent bubbles, FAB, unread badges, switches, send/primary buttons |
+| `accentLabel` | Accent-coloured **text and icons** (and content on `accentSoft` tonal pills): `accentDeep` in light themes, `accent` in dark ones. Passes 4.5:1 on `surface` for all 6 accents × 4 themes |
+| `modalAccent` / `onModalAccent` | Primary button on the inverse-surface OTP modal (it uses the opposite theme's accent) |
 | `danger` | Destructive actions and debit amounts. Never hardcode red. |
 | `success` | Positive/credit amounts and success states. Never hardcode green. |
 | `inputBg` | Search bars and other inline text-input fills |
@@ -33,64 +36,81 @@ will see the wrong color on.
 If you need a color this table doesn't cover, that's a sign the token set is missing something —
 add it to `ThemeTokens` (and both branches of `buildTheme`) rather than hardcoding.
 
-## Shape — always `ShapeSmall` / `ShapeMedium` / `ShapeLarge` / `ShapePill` from `ui/theme/Shapes.kt`
+## Shape — always `ShapeSmall` / `ShapeMedium` / `ShapeLarge` / `ShapePill` from `ui/theme/Shapes.kt` (plus `bubbleShape` for chat bubbles)
 
 ```kotlin
 val ShapeSmall = RoundedCornerShape(14.dp)   // input fields, small chips, inline pills
 val ShapeMedium = RoundedCornerShape(20.dp)  // cards, primary buttons, sheets
-val ShapeLarge = RoundedCornerShape(28.dp)   // rarely used — large modal surfaces
+val ShapeLarge = RoundedCornerShape(28.dp)   // sheets, modals, filled text inputs
 val ShapePill = RoundedCornerShape(50)       // true stadium — selector chips, tag pills
 ```
+
+Chat bubbles use `bubbleShape(isMine, hasTail)` (22dp corners, 6dp tail on the sender's side of the last bubble of a run) — the only shape function outside the four above.
 
 Never write `RoundedCornerShape(9.dp)` or any other one-off radius — it's the single biggest
 source of screens visibly not matching each other. If none of the four fit, that's a sign to
 reconsider the design, not to invent a fifth radius.
 
-Zero elevation everywhere. No `Card`, no `Modifier.shadow()` on content surfaces (the top/bottom
-`GlassBar` is the one deliberate exception — see below). Flat fills + a 1dp `border` stroke is how
-this app shows "this is a distinct surface," not a shadow.
+## Elevation — one soft level, via `softElevation` / `barElevation` only
+
+There is exactly one elevation level. `Modifier.softElevation(shape)` (`ui/theme/Elevation.kt`) draws
+a soft shadow on Light/Sepia and a 1dp `border` hairline on Dark/Midnight, where a shadow would be
+invisible. It is used for: unread inbox rows, received chat bubbles, `SettingsCard` and other
+grouped info cards, contact-info tiles. `Modifier.barElevation()` is the same idea for full-width
+bars (`GlassBar`, the category chip strip, the reply bar, the Backup bottom bar). Never call
+`Modifier.shadow()` with ad-hoc values on content, and no Material `Card`. Read (non-elevated) rows
+and everything else stay flat.
 
 ## The two list/content patterns — pick the right one, don't invent a third
 
 **Flat row** — every repeating list: `ThreadRow`, Passbook account rows, transaction rows, drafts,
-archived, recycle bin. No card background, no border, no rounding. Full-width, `tokens.bg`
-background (or `tokens.accentSoft`/similar flat tint if the row needs to stand out — still no
-border/rounding), `padding(horizontal = 16.dp, vertical = 12.dp)`, leading icon/avatar + a
-`Column` of title/subtitle, trailing content right-aligned. Rows are visually separated by nothing
-but their own padding — no dividers between them, no gaps. This *is* the message list's look; if
-a screen looks like the message list, it's using this pattern correctly. (Passbook was rebuilt to
-match this exact pattern after it originally used cards — see git history if you need the
-before/after.)
+archived, recycle bin. Read rows have no card background and no border: `tokens.bg` background (or
+`tokens.accentSoft` when selected), `ShapeMedium` clip so the selected tint and ripple are rounded,
+`padding(horizontal = 16.dp, vertical = 12–14.dp)`, leading avatar (48–52dp) + a `Column` of
+title/subtitle, trailing content right-aligned, 4dp of outer padding between rows. **Unread**
+inbox rows are the one exception: they lift into an elevated `tokens.surface` card
+(`softElevation(ShapeMedium)`) with the time in `accentLabel`; that is the entire unread treatment
+besides the bold name and the count badge. Inbox previews are always **one line**.
 
-**Bordered card** (`SettingsCard` in `ui/components/SettingsRow.kt`) — grouped settings/info, never
-a repeating list: `background(tokens.surface, ShapeMedium).border(1.dp, tokens.border,
-ShapeMedium)`, wrapping a `Column` of `SettingsToggleRow`/`SettingsNavRow` (or custom content),
-separated internally by `SettingsRowDivider()`. Used for Settings screens, the Backup & Restore
-sections, the About screen's info panels — anywhere you're grouping a handful of *related but
-distinct* controls, not iterating a data list.
+**Soft card** (`SettingsCard` in `ui/components/SettingsRow.kt`) — grouped settings/info, never
+a repeating list: `softElevation(ShapeMedium)` + `background(tokens.surface, ShapeMedium)`, wrapping a
+`Column` of `SettingsToggleRow`/`SettingsNavRow` (or custom content), separated internally by
+`SettingsRowDivider()`. No `border` on top of it — `softElevation` already supplies the dark-theme
+hairline. Used for Settings screens, the Backup & Restore sections, the About screen's info panels —
+anywhere you're grouping a handful of *related but distinct* controls, not iterating a data list.
 
 If what you're building is a list of things → flat row. If it's a labeled group of controls or a
-single info panel → bordered card. Don't reach for `accentSoft` background + border + rounding on
+single info panel → soft card. Don't reach for `accentSoft` background + border + rounding on
 a single standalone element (a banner, a notice) just because it "needs to stand out" — that's a
 third pattern this app doesn't otherwise have; use a flat tinted row instead (see
 `DashboardScreen.FeedbackBanner` for the current example).
 
 ## Buttons
 
-- **Primary CTA** (`PrimaryButton`, `ui/components/PrimaryButton.kt`): full-width, `tokens.accent`
-  background, `ShapeMedium`, `tokens.accentText` label, bold ~14.5sp. This is a flat
+- **Primary CTA** (`PrimaryButton`, `ui/components/PrimaryButton.kt`): full-width, `tokens.accentDeep`
+  background, `ShapeMedium`, `tokens.onAccentDeep` label, bold 16sp, 52dp minimum height. This is a flat
   `Text().background().clickable().padding()` composable, not Material3's `Button` — Material3
   `Button`/`TextButton` bring their own elevation/ripple/internal-padding defaults that don't match
   this system and must not be used for primary actions (`DriveSignInPromptScreen` used to use
   `Button`/`TextButton`; don't reintroduce that).
-- **Secondary/text action**: `Text(...)` in `tokens.accent` or `tokens.textTertiary`, no
-  background, just `.clickable().padding()`. For a "Skip"/"Cancel"-style action under a primary
+- **Secondary/text action**: `Text(...)` in `tokens.accentLabel` or `tokens.textTertiary`, no
+  background, just `.clickable().padding()` with a 48dp minimum height. For a "Skip"/"Cancel"-style action under a primary
   button.
 - **Selector pill** (`PillButton`, `ui/components/PillButton.kt`): the soft-accent-tinted pill used
-  for theme/accent/swipe/schedule choices — `ShapePill`, border, active/inactive tint pair from
-  `pillOptionColors`.
-- **Icon-only tap target** (`roundClickable`, used throughout bars/rows): a 36–40dp square with a
-  centered icon, ripple clipped to a circle.
+  for theme/accent/swipe/schedule choices — `ShapePill`, 40dp visual inside a 48dp tap target,
+  border, active/inactive tint pair from `pillOptionColors`. Category chips (`CategoryChip`) follow
+  the same 40/48 rule with `categoryChipColors` (tonal active fill, no border).
+- **Toggle rows** (`SettingsToggleRow`): the whole 64dp-minimum row is tappable and calls the same
+  callback as the switch.
+- **Nav drawer** (`NavDrawer`): 52dp pill rows; the destination you are on (`DrawerItem.selected`)
+  gets an `accentSoft` fill and `accentLabel` content.
+- **OTP modal** uses a flat 52dp button on `modalAccent`, not Material `Button`, like every other CTA.
+- **Inline action pill** (`TonalActionPill`, `ui/components/TonalActionPill.kt`): the small
+  Restore / Unarchive / Unblock / Export action — 40dp `accentSoft` pill inside a 48dp tap target.
+  Replaces outlined mini-buttons with hand-rolled radii.
+- **Icon-only tap target** (`roundClickable`, used throughout bars/rows): a 48dp square with a
+  centered icon, ripple clipped to a circle. **Every tap target is at least 48dp** in each
+  dimension; if the visual is smaller (chips, pills, switches) the clickable area still pads to 48.
 
 ## Icon badges
 
@@ -108,11 +128,12 @@ No `Typography`/`MaterialTheme.typography` usage — every `Text` sets its own `
 
 | Role | Size | Weight |
 |---|---|---|
-| Screen/dialog title | 16–20sp | Bold |
-| Row/card title | 14–15.5sp | SemiBold |
-| Body / row subtitle | 13–13.5sp | Normal/Medium |
-| Caption / tertiary meta | 11–12.5sp | Normal, `textTertiary` |
-| Section label (all-caps) | 12–13sp | Bold, `letterSpacing = 0.4–0.5sp`, `textTertiary` |
+| Screen/dialog title | 18–22sp | Bold |
+| Row/card title | 15.5–17sp | SemiBold |
+| Body / row subtitle | 14–15sp | Normal/Medium |
+| Chat bubble text | 15sp / 22sp line | Normal |
+| Caption / tertiary meta | 11–13sp | Normal, `textTertiary` |
+| Section label (all-caps) | 12.5–13sp | Bold, `letterSpacing = 0.4–0.5sp`, `textTertiary` |
 
 ## Spacing
 
@@ -121,15 +142,24 @@ should stick to a 4dp-based scale: **4, 8, 12, 16, 20, 24, 32**. Prefer `Arrange
 over manual per-child `padding(top = n)` when laying out a `Column`/`Row` of siblings — it keeps
 the rhythm visible in one place instead of scattered across every child.
 
-Standard screen content padding: `horizontal = 16.dp`. Standard card internal padding: `14.dp`.
-Standard row padding: `horizontal = 16.dp, vertical = 12.dp` (flat rows) or `14.dp` all sides
-(card rows).
+Standard screen content padding: `horizontal = 16.dp`. Standard card internal padding: `16.dp`.
+Standard row padding: `horizontal = 16.dp, vertical = 12–14.dp` (flat rows) or `16.dp` all sides
+(card rows). Chat bubbles sit 3dp apart inside a run and 12dp apart between runs.
+
+## Chat bubbles
+
+`MessageBubble` (ThreadScreen.kt): sent = `accentDeep` / `onAccentDeep`; received = `surface` with
+`softElevation` (Light/Sepia) or `surfaceAlt` + hairline (Dark/Midnight). Max width 78% of the
+screen. Runs (same sender, same day, ≤5 minutes apart) are derived in `ThreadScreen` from the
+messages already on screen: only the last bubble of a run gets the 6dp tail corner and the
+timestamp. A message still waiting to send is a transparent bubble with a dashed `accentLabel`
+outline, a clock icon and its send time.
 
 ## Bars — `GlassBar` only
 
 Every top or bottom bar is `GlassBar` (`ui/components/GlassBar.kt`): solid `tokens.surface`
 background (not translucent — an earlier frosted-glass look read as messy over scrolling content),
-soft `6.dp` shadow, `BarInset.Top`/`.Bottom` to pad content clear of the system status/nav bar
+`barElevation()` (soft shadow, or a hairline in dark themes), 64dp default height, `BarInset.Top`/`.Bottom` to pad content clear of the system status/nav bar
 without shrinking the painted background. Don't build a one-off top bar `Row` inside a plain `Box`.
 
 ## Startup/status screens

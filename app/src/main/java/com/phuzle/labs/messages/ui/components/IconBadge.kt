@@ -25,7 +25,7 @@ fun IconBadge(
     size: Dp = 40.dp,
     iconSize: Dp = size * 0.45f,
     tint: Color = MessagesTheme.tokens.accentSoft,
-    iconColor: Color = MessagesTheme.tokens.accent,
+    iconColor: Color = MessagesTheme.tokens.accentLabel,
 ) {
     Box(
         modifier.size(size).background(tint, CircleShape),

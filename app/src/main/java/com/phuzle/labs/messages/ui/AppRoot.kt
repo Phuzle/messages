@@ -116,9 +116,9 @@ fun AppRoot(viewModel: AppViewModel) {
                         com.phuzle.labs.messages.ui.components.AppLogo(size = 56.dp)
                         Text("Messages is locked", color = tokens.textSecondary, fontSize = 14.sp)
                         Text(
-                            "Unlock", color = tokens.accentText, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                            "Unlock", color = tokens.onAccentDeep, fontSize = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                             modifier = Modifier
-                                .background(tokens.accent, com.phuzle.labs.messages.ui.theme.ShapeMedium)
+                                .background(tokens.accentDeep, com.phuzle.labs.messages.ui.theme.ShapeMedium)
                                 .clickable(onClick = retry)
                                 .padding(horizontal = 20.dp, vertical = 11.dp),
                         )
@@ -148,14 +148,14 @@ fun AppRoot(viewModel: AppViewModel) {
                 visible = state.showDrawer,
                 onDismiss = viewModel::closeDrawer,
                 items = listOfNotNull(
-                    DrawerItem("Inbox", DrawerIconType.Inbox, viewModel::openMessagesTab),
+                    DrawerItem("Inbox", DrawerIconType.Inbox, viewModel::openMessagesTab, selected = state.activeTab == com.phuzle.labs.messages.ui.model.DashboardTab.Messages),
                     DrawerItem("Archived", DrawerIconType.Archived, viewModel::openArchivedScreen),
                     DrawerItem("Drafts", DrawerIconType.Drafts, viewModel::openDraftsScreen),
                     if (com.phuzle.labs.messages.domain.model.FeatureFlags.PASSBOOK_AND_REMINDERS_ENABLED) {
-                        DrawerItem("Passbook", DrawerIconType.Passbook, viewModel::openPassbookTab)
+                        DrawerItem("Passbook", DrawerIconType.Passbook, viewModel::openPassbookTab, selected = state.activeTab == com.phuzle.labs.messages.ui.model.DashboardTab.Passbook)
                     } else null,
                     if (com.phuzle.labs.messages.domain.model.FeatureFlags.PASSBOOK_AND_REMINDERS_ENABLED) {
-                        DrawerItem("Reminders", DrawerIconType.Reminders, viewModel::openRemindersTab)
+                        DrawerItem("Reminders", DrawerIconType.Reminders, viewModel::openRemindersTab, selected = state.activeTab == com.phuzle.labs.messages.ui.model.DashboardTab.Reminders)
                     } else null,
                     DrawerItem("Scheduled Messages", DrawerIconType.ScheduledMessages, viewModel::openScheduledMessagesScreen),
                     DrawerItem("Private Chats", DrawerIconType.PrivateChats, viewModel::openPrivateChatsScreen),

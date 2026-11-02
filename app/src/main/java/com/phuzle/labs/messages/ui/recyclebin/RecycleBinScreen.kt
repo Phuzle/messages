@@ -1,4 +1,5 @@
 package com.phuzle.labs.messages.ui.recyclebin
+import com.phuzle.labs.messages.ui.components.TonalActionPill
 import com.phuzle.labs.messages.ui.components.bottomBarContentPadding
 import com.phuzle.labs.messages.ui.components.topBarContentPadding
 
@@ -75,10 +76,10 @@ fun RecycleBinScreen(state: AppUiState, viewModel: AppViewModel) {
                     onClose = viewModel::exitRecycleBinSelect,
                     onMenuClick = { showSelectionMenu = true },
                 ) {
-                    Box(Modifier.size(40.dp).roundClickable(onClick = viewModel::bulkRestoreSelected), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(48.dp).roundClickable(onClick = viewModel::bulkRestoreSelected), contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.Restore, contentDescription = "Restore", tint = tokens.textPrimary, modifier = Modifier.size(IconSizes.Medium))
                     }
-                    Box(Modifier.size(40.dp).roundClickable(onClick = { showBulkDeleteForeverConfirm = true }), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(48.dp).roundClickable(onClick = { showBulkDeleteForeverConfirm = true }), contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.DeleteForever, contentDescription = "Delete forever", tint = tokens.danger, modifier = Modifier.size(IconSizes.Medium))
                     }
                 }
@@ -90,13 +91,13 @@ fun RecycleBinScreen(state: AppUiState, viewModel: AppViewModel) {
                 icon = Icons.Filled.Delete,
                 title = "Recycle bin is empty",
                 detail = "Deleted chats and OTP codes stay here for 30 days before they're purged for good.",
-                modifier = Modifier.padding(top = topBarContentPadding(68.dp)),
+                modifier = Modifier.padding(top = topBarContentPadding(76.dp)),
             )
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 // See ArchivedScreen — a flat bottom padding rests the last row under the nav bar.
-                contentPadding = PaddingValues(top = topBarContentPadding(68.dp), bottom = bottomBarContentPadding(24.dp)),
+                contentPadding = PaddingValues(top = topBarContentPadding(76.dp), bottom = bottomBarContentPadding(24.dp)),
             ) {
                 item {
                     ListCountHeader(
@@ -194,15 +195,6 @@ private fun DeletedOtpMessageRow(item: DeletedOtpMessageUi, onRestore: () -> Uni
             }
             Text(item.body, color = tokens.textTertiary, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
         }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .border(1.dp, tokens.border, RoundedCornerShape(8.dp))
-                .clickable(onClick = onRestore)
-                .padding(horizontal = 12.dp, vertical = 7.dp),
-        ) {
-            Icon(Icons.Filled.Restore, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(14.dp))
-            Text("Restore", color = tokens.accent, fontSize = 12.5.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 5.dp))
-        }
+        TonalActionPill("Restore", onClick = onRestore, icon = Icons.Filled.Restore)
     }
 }

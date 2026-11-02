@@ -57,10 +57,10 @@ fun ArchivedScreen(state: AppUiState, viewModel: AppViewModel) {
                     onClose = viewModel::exitArchivedSelect,
                     onMenuClick = { showSelectionMenu = true },
                 ) {
-                    Box(Modifier.size(40.dp).roundClickable(onClick = viewModel::bulkUnarchiveSelected), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(48.dp).roundClickable(onClick = viewModel::bulkUnarchiveSelected), contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.Unarchive, contentDescription = "Unarchive", tint = tokens.textPrimary, modifier = Modifier.size(IconSizes.Medium))
                     }
-                    Box(Modifier.size(40.dp).roundClickable(onClick = { showBulkDeleteConfirm = true }), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(48.dp).roundClickable(onClick = { showBulkDeleteConfirm = true }), contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = tokens.danger, modifier = Modifier.size(IconSizes.Medium))
                     }
                 }
@@ -72,14 +72,14 @@ fun ArchivedScreen(state: AppUiState, viewModel: AppViewModel) {
                 icon = Icons.Filled.Archive,
                 title = "No archived chats",
                 detail = "Chats you archive from the inbox will show up here.",
-                modifier = Modifier.padding(top = topBarContentPadding(68.dp)),
+                modifier = Modifier.padding(top = topBarContentPadding(76.dp)),
             )
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 // bottomBarContentPadding, not a flat 24.dp: on a gesture-nav device the last row
                 // otherwise scrolls to a resting position underneath the navigation bar.
-                contentPadding = PaddingValues(top = topBarContentPadding(68.dp), bottom = bottomBarContentPadding(24.dp)),
+                contentPadding = PaddingValues(top = topBarContentPadding(76.dp), bottom = bottomBarContentPadding(24.dp)),
             ) {
                 item {
                     ListCountHeader(

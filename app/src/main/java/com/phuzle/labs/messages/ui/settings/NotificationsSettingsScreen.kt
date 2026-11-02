@@ -103,7 +103,7 @@ fun NotificationsSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
     var sheetChannel by remember { mutableStateOf<ChannelInfo?>(null) }
 
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = topBarContentPadding(76.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
         SettingsCard {
@@ -128,9 +128,9 @@ fun NotificationsSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        val dotColor = if (active) tokens.accent else androidx.compose.ui.graphics.Color.Transparent
+                        val dotColor = if (active) tokens.accentDeep else androidx.compose.ui.graphics.Color.Transparent
                         androidx.compose.foundation.layout.Box(
-                            Modifier.size(16.dp).background(dotColor, CircleShape).border(2.dp, if (active) tokens.accent else tokens.border, CircleShape),
+                            Modifier.size(16.dp).background(dotColor, CircleShape).border(2.dp, if (active) tokens.accentDeep else tokens.border, CircleShape),
                         )
                         Text(label, color = tokens.textPrimary, fontSize = 14.sp)
                     }

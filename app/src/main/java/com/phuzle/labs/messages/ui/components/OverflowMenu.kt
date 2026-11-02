@@ -36,7 +36,7 @@ fun OverflowMenu(visible: Boolean, onDismiss: () -> Unit, items: List<MenuItem>,
         Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 56.dp, end = 10.dp)
+                .padding(top = 64.dp, end = 10.dp)
                 .widthIn(min = 180.dp, max = 240.dp)
                 // A floating popover reads as a distinct layer above content in a way an inline
                 // list row doesn't — same deliberate exception to this app's zero-elevation rule

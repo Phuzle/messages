@@ -4,7 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -36,25 +37,26 @@ fun PrimaryButton(
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .background(tokens.accent, ShapeMedium)
-                .padding(vertical = 14.dp),
+                .background(tokens.accentDeep, ShapeMedium)
+                .heightIn(min = 52.dp),
             contentAlignment = Alignment.Center,
         ) {
-            CircularProgressIndicator(color = tokens.accentText, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+            CircularProgressIndicator(color = tokens.onAccentDeep, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
         }
         return
     }
     Text(
         label,
-        color = tokens.accentText,
-        fontSize = 14.5.sp,
+        color = if (enabled) tokens.onAccentDeep else tokens.textTertiary,
+        fontSize = 16.sp,
         fontWeight = FontWeight.Bold,
         textAlign = TextAlign.Center,
         modifier = modifier
             .fillMaxWidth()
-            .background(if (enabled) tokens.accent else tokens.surfaceAlt, ShapeMedium)
+            .background(if (enabled) tokens.accentDeep else tokens.surfaceAlt, ShapeMedium)
             .let { if (enabled) it.clickable(onClick = onClick) else it }
-            .padding(vertical = 14.dp),
+            .heightIn(min = 52.dp)
+            .wrapContentHeight(Alignment.CenterVertically),
     )
 }
 
@@ -71,6 +73,7 @@ fun SecondaryTextButton(label: String, onClick: () -> Unit, modifier: Modifier =
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
+            .heightIn(min = 48.dp)
+            .wrapContentHeight(Alignment.CenterVertically),
     )
 }

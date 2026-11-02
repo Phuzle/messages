@@ -21,7 +21,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.lerp
 import coil.compose.AsyncImage
+import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.domain.model.Category
 
 /** Business senders get a rounded-square avatar, personal contacts a circle — per the prototype.
@@ -37,7 +39,7 @@ fun AvatarBubble(
     color: Color,
     isBusiness: Boolean,
     modifier: Modifier = Modifier,
-    size: Dp = 44.dp,
+    size: Dp = 52.dp,
     photoUri: String? = null,
 ) {
     val shape = if (isBusiness) RoundedCornerShape(10.dp) else RoundedCornerShape(50)
@@ -51,7 +53,7 @@ fun AvatarBubble(
         return
     }
     Box(
-        modifier = modifier.size(size).background(color, shape),
+        modifier = modifier.size(size).background(mutedAvatarColor(color, MessagesTheme.isDark), shape),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -73,3 +75,10 @@ fun iconForCategory(category: Category): ImageVector = when (category) {
     Category.Others -> Icons.Filled.Business
     Category.Personal, Category.Unknown, Category.All -> Icons.Filled.Person
 }
+
+/**
+ * The per-sender palette is saturated; this pulls it toward a slate midtone at render time so a long
+ * inbox of avatars reads calm. The palette itself (and its deterministic per-sender hash) is untouched.
+ */
+private fun mutedAvatarColor(color: Color, dark: Boolean): Color =
+    lerp(color, if (dark) Color(0xFF4A516B) else Color(0xFF6F7794), 0.42f)

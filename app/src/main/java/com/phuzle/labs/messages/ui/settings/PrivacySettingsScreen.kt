@@ -1,4 +1,7 @@
 package com.phuzle.labs.messages.ui.settings
+import com.phuzle.labs.messages.ui.theme.softElevation
+import androidx.compose.foundation.layout.heightIn
+import com.phuzle.labs.messages.ui.components.TonalActionPill
 import com.phuzle.labs.messages.ui.components.topBarContentPadding
 
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -66,12 +69,12 @@ fun PrivacySettingsScreen(state: AppUiState, viewModel: AppViewModel) {
     var confirmDisable by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = topBarContentPadding(68.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = topBarContentPadding(76.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
         Column {
             SectionLabel("App lock", Modifier.padding(bottom = 8.dp))
-            Column(Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium).padding(14.dp)) {
+            Column(Modifier.fillMaxWidth().softElevation(ShapeMedium).background(tokens.surface, ShapeMedium).padding(14.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     com.phuzle.labs.messages.ui.components.SettingsIconBadge(icon = Icons.Filled.Lock, modifier = Modifier.padding(end = 12.dp))
                     Text("Require authentication to open app", color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -98,8 +101,8 @@ fun PrivacySettingsScreen(state: AppUiState, viewModel: AppViewModel) {
         Column {
             SectionLabel("Private chats", Modifier.padding(bottom = 8.dp))
             Row(
-                Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium)
-                    .clickable(onClick = viewModel::openPrivateChatsScreen).padding(14.dp),
+                Modifier.fillMaxWidth().softElevation(ShapeMedium).background(tokens.surface, ShapeMedium)
+                    .clickable(onClick = viewModel::openPrivateChatsScreen).heightIn(min = 64.dp).padding(16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -127,16 +130,7 @@ fun PrivacySettingsScreen(state: AppUiState, viewModel: AppViewModel) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(blocked.number, color = tokens.textPrimary, fontSize = 14.sp)
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .border(1.dp, tokens.border, androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
-                                    .clickable { viewModel.unblockNumber(blocked.number) }
-                                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                            ) {
-                                Icon(Icons.Filled.LockOpen, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(IconSizes.Small))
-                                Text("Unblock", color = tokens.accent, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 5.dp))
-                            }
+                            TonalActionPill("Unblock", onClick = { viewModel.unblockNumber(blocked.number) }, icon = Icons.Filled.LockOpen)
                         }
                     }
                 }

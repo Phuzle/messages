@@ -1,5 +1,6 @@
 package com.phuzle.labs.messages.ui.passbook
 
+import com.phuzle.labs.messages.ui.theme.softElevation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -66,7 +67,7 @@ fun AccountDetailScreen(state: AppUiState, viewModel: AppViewModel) {
                     icon = Icons.Filled.Lock,
                     title = "Locked",
                     detail = "Confirm it's you to view this account's details.",
-                    modifier = Modifier.padding(top = topBarContentPadding(68.dp)),
+                    modifier = Modifier.padding(top = topBarContentPadding(76.dp)),
                     actionLabel = "Try again",
                     onAction = retry,
                 )
@@ -74,11 +75,11 @@ fun AccountDetailScreen(state: AppUiState, viewModel: AppViewModel) {
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = topBarContentPadding(80.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
+                contentPadding = PaddingValues(top = topBarContentPadding(88.dp), start = 16.dp, end = 16.dp, bottom = 24.dp),
             ) {
                 item {
                     Column(
-                        Modifier.fillMaxWidth().background(tokens.surface, ShapeMedium).border(1.dp, tokens.border, ShapeMedium)
+                        Modifier.fillMaxWidth().softElevation(ShapeMedium).background(tokens.surface, ShapeMedium)
                             .padding(16.dp),
                     ) {
                         Text("Account ending $last4", color = tokens.textSecondary, fontSize = 13.sp)
