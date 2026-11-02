@@ -148,14 +148,14 @@ fun AppRoot(viewModel: AppViewModel) {
                 visible = state.showDrawer,
                 onDismiss = viewModel::closeDrawer,
                 items = listOfNotNull(
-                    DrawerItem("Inbox", DrawerIconType.Inbox, viewModel::openMessagesTab),
+                    DrawerItem("Inbox", DrawerIconType.Inbox, viewModel::openMessagesTab, selected = state.activeTab == com.phuzle.labs.messages.ui.model.DashboardTab.Messages),
                     DrawerItem("Archived", DrawerIconType.Archived, viewModel::openArchivedScreen),
                     DrawerItem("Drafts", DrawerIconType.Drafts, viewModel::openDraftsScreen),
                     if (com.phuzle.labs.messages.domain.model.FeatureFlags.PASSBOOK_AND_REMINDERS_ENABLED) {
-                        DrawerItem("Passbook", DrawerIconType.Passbook, viewModel::openPassbookTab)
+                        DrawerItem("Passbook", DrawerIconType.Passbook, viewModel::openPassbookTab, selected = state.activeTab == com.phuzle.labs.messages.ui.model.DashboardTab.Passbook)
                     } else null,
                     if (com.phuzle.labs.messages.domain.model.FeatureFlags.PASSBOOK_AND_REMINDERS_ENABLED) {
-                        DrawerItem("Reminders", DrawerIconType.Reminders, viewModel::openRemindersTab)
+                        DrawerItem("Reminders", DrawerIconType.Reminders, viewModel::openRemindersTab, selected = state.activeTab == com.phuzle.labs.messages.ui.model.DashboardTab.Reminders)
                     } else null,
                     DrawerItem("Scheduled Messages", DrawerIconType.ScheduledMessages, viewModel::openScheduledMessagesScreen),
                     DrawerItem("Private Chats", DrawerIconType.PrivateChats, viewModel::openPrivateChatsScreen),

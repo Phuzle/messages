@@ -100,6 +100,11 @@ third pattern this app doesn't otherwise have; use a flat tinted row instead (se
   for theme/accent/swipe/schedule choices — `ShapePill`, 40dp visual inside a 48dp tap target,
   border, active/inactive tint pair from `pillOptionColors`. Category chips (`CategoryChip`) follow
   the same 40/48 rule with `categoryChipColors` (tonal active fill, no border).
+- **Toggle rows** (`SettingsToggleRow`): the whole 64dp-minimum row is tappable and calls the same
+  callback as the switch.
+- **Nav drawer** (`NavDrawer`): 52dp pill rows; the destination you are on (`DrawerItem.selected`)
+  gets an `accentSoft` fill and `accentLabel` content.
+- **OTP modal** uses a flat 52dp button on `modalAccent`, not Material `Button`, like every other CTA.
 - **Inline action pill** (`TonalActionPill`, `ui/components/TonalActionPill.kt`): the small
   Restore / Unarchive / Unblock / Export action — 40dp `accentSoft` pill inside a 48dp tap target.
   Replaces outlined mini-buttons with hand-rolled radii.

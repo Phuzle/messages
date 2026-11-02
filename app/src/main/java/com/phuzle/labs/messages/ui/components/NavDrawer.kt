@@ -31,7 +31,8 @@ import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 import com.phuzle.labs.messages.ui.theme.ShapePill
 
-data class DrawerItem(val label: String, val icon: DrawerIconType, val onClick: () -> Unit)
+/** [selected] marks the destination the user is currently on, so the drawer can highlight it. */
+data class DrawerItem(val label: String, val icon: DrawerIconType, val onClick: () -> Unit, val selected: Boolean = false)
 
 @Composable
 fun NavDrawer(
@@ -71,7 +72,7 @@ fun NavDrawer(
                 )
             }
 
-            items.forEach { item -> DrawerRow(item, tokens.textPrimary) }
+            items.forEach { item -> DrawerRow(item, if (item.selected) tokens.accentLabel else tokens.textPrimary) }
 
             SettingsRowDivider(Modifier.padding(vertical = 12.dp))
 
@@ -87,6 +88,7 @@ private fun DrawerRow(item: DrawerItem, contentColor: Color) {
             .fillMaxWidth()
             .heightIn(min = 52.dp)
             .clip(ShapePill)
+            .background(if (item.selected) MessagesTheme.tokens.accentSoft else Color.Transparent)
             .clickable(onClick = item.onClick)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,

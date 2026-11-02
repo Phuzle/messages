@@ -87,6 +87,8 @@ fun SettingsToggleRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            // The whole row toggles (same callback as the switch), not just the 52dp track.
+            .clickable { onToggle(!checked) }
             .heightIn(min = 64.dp)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
