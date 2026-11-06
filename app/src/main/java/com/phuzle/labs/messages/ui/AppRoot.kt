@@ -17,6 +17,9 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.lazy.rememberLazyListState
+import com.phuzle.labs.messages.ui.dashboard.DashboardScrollState
+import com.phuzle.labs.messages.ui.thread.ThreadScrollStore
 import androidx.compose.runtime.remember
 import com.phuzle.labs.messages.ui.components.LocalConsumedNavBarInset
 import com.phuzle.labs.messages.ui.components.buttonNavBarHeight
@@ -81,11 +84,21 @@ fun AppRoot(viewModel: AppViewModel) {
     LaunchedEffect(Unit) {
         viewModel.toastEvents.collect { message -> Toast.makeText(context, message, Toast.LENGTH_SHORT).show() }
     }
+    LaunchedEffect(Unit) {
+        viewModel.shareEvents.collect { text ->
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+            }
+            runCatching { context.startActivity(Intent.createChooser(send, null)) }
+                .onFailure { Toast.makeText(context, "Nothing to share with", Toast.LENGTH_SHORT).show() }
+        }
+    }
 
     MessagesTheme(themeMode = state.themeMode, accentHex = state.settings.accentHex) {
         val tokens = MessagesTheme.tokens
 
-        BackHandler(enabled = state.undoMessage != null || state.updateInfo != null || state.driveRestoreAvailable || state.driveSignInNeededForRestore || state.driveNoBackupFoundEmail != null || state.markAllReadConfirmThreadIds != null || state.scheduledMessageActionTarget != null || state.scheduledMessageEdit != null || state.actionSheet != null || state.overflowMenuOpen || state.showDrawer || state.multiSelectThreadIds.isNotEmpty() || state.threadSearchActive || state.composeToSuggestions.isNotEmpty() || state.pushedScreen != null || state.searchQuery.isNotEmpty()) {
+        BackHandler(enabled = state.undoMessage != null || state.updateInfo != null || state.driveRestoreAvailable || state.driveSignInNeededForRestore || state.driveNoBackupFoundEmail != null || state.markAllReadConfirmThreadIds != null || state.scheduledMessageActionTarget != null || state.scheduledMessageEdit != null || state.actionSheet != null || state.overflowMenuOpen || state.searchFiltersOpen || state.selectedMessageIds.isNotEmpty() || state.showDrawer || state.multiSelectThreadIds.isNotEmpty() || state.threadSearchActive || state.composeToSuggestions.isNotEmpty() || state.pushedScreen != null || state.searchActive) {
             when {
                 state.undoMessage != null -> viewModel.dismissUndo()
                 state.updateInfo != null -> viewModel.dismissUpdate()
@@ -97,6 +110,8 @@ fun AppRoot(viewModel: AppViewModel) {
                 state.scheduledMessageActionTarget != null -> viewModel.closeScheduledMessageActions()
                 state.actionSheet != null -> viewModel.closeActionSheet()
                 state.overflowMenuOpen -> viewModel.closeOverflowMenu()
+                state.searchFiltersOpen -> viewModel.closeSearchFilters()
+                state.selectedMessageIds.isNotEmpty() -> viewModel.exitMessageSelection()
                 state.showDrawer -> viewModel.closeDrawer()
                 state.multiSelectThreadIds.isNotEmpty() -> viewModel.exitMultiSelect()
                 // Checked before pushedScreen since thread search lives inside the (pushed)
@@ -109,7 +124,7 @@ fun AppRoot(viewModel: AppViewModel) {
                 // Dashboard search has no pushedScreen of its own (it's inline on the root
                 // screen), so it needs its own fallback — otherwise back exits the app straight
                 // from a search instead of just clearing it first, like any other list search.
-                else -> viewModel.onSearchChange("")
+                else -> viewModel.exitSearch()
             }
         }
 
@@ -164,6 +179,17 @@ fun AppRoot(viewModel: AppViewModel) {
         // Last state each screen was shown with — a screen that is animating out must keep
         // rendering what it showed (e.g. the thread whose id was just cleared by Back).
         val lastStateFor = remember { HashMap<PushedScreen?, AppUiState>() }
+        // Scroll positions that must outlive their screen: a screen is disposed once something is
+        // pushed over it, so state kept inside it was lost — opening a message from deep in the
+        // list and coming back landed at the top; backing out of Contact info dropped you to the
+        // bottom of the conversation instead of where you were reading.
+        val inboxListState = rememberLazyListState()
+        val resultsListState = rememberLazyListState()
+        val dashboardScroll = remember { DashboardScrollState(inboxListState, resultsListState) }
+        val threadScroll = remember { ThreadScrollStore() }
+        LaunchedEffect(state.pushedScreen) {
+            if (state.pushedScreen != PushedScreen.Thread && state.pushedScreen != PushedScreen.ThreadInfo) threadScroll.clear()
+        }
 
         Box(Modifier.fillMaxSize().background(tokens.bg)) {
             Box(
@@ -196,8 +222,8 @@ fun AppRoot(viewModel: AppViewModel) {
                         val shown = if (screen == state.pushedScreen) state.also { lastStateFor[screen] = it } else lastStateFor[screen] ?: state
                         Box(Modifier.fillMaxSize().background(tokens.bg)) {
                             when (screen) {
-                                null -> DashboardScreen(shown, viewModel)
-                                PushedScreen.Thread -> ThreadScreen(shown, viewModel)
+                                null -> DashboardScreen(shown, viewModel, dashboardScroll)
+                                PushedScreen.Thread -> ThreadScreen(shown, viewModel, threadScroll)
                                 PushedScreen.ThreadInfo -> ThreadInfoScreen(shown, viewModel)
                                 PushedScreen.Compose -> ComposeScreen(shown, viewModel)
                                 PushedScreen.Settings -> SettingsScreen(shown, viewModel)
@@ -297,6 +323,7 @@ fun AppRoot(viewModel: AppViewModel) {
                 onArchive = viewModel::sheetArchive,
                 onTogglePrivate = viewModel::sheetTogglePrivate,
                 onDelete = viewModel::sheetDelete,
+                onShare = viewModel::shareSheetContact,
             )
 
             OtpModal(otp = state.otpModal, onCopy = viewModel::copyOtpCode, onDismiss = viewModel::closeOtpModal)

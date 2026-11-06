@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Lock
@@ -90,6 +91,12 @@ fun ThreadInfoScreen(state: AppUiState, viewModel: AppViewModel) {
                         },
                     )
                 }
+                ActionButton(
+                    icon = Icons.Filled.Share,
+                    label = "Share",
+                    modifier = Modifier.weight(1f),
+                    onClick = viewModel::shareCurrentContact,
+                )
                 ActionButton(
                     icon = Icons.Filled.Archive,
                     label = "Archive",

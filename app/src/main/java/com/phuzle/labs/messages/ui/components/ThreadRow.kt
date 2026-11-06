@@ -80,6 +80,7 @@ fun ThreadRow(
             false // never let the box actually remove itself; the backing list re-filters instead
         },
     )
+    val previewText = rememberHighlightedText(thread.preview, thread.previewMatch)
     val rightPanel = swipeActionMeta(swipeRightActionKey, thread.unread, tokens)
     val leftPanel = swipeActionMeta(swipeLeftActionKey, thread.unread, tokens)
 
@@ -176,7 +177,7 @@ fun ThreadRow(
             Column(modifier = Modifier.weight(1f).padding(start = 14.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
                     Text(
-                        highlightedText(thread.displayName, thread.displayNameMatch),
+                        rememberHighlightedText(thread.displayName, thread.displayNameMatch),
                         color = if (thread.unread) tokens.textPrimary else tokens.textSecondary,
                         fontWeight = thread.nameWeight,
                         fontSize = 16.sp,
@@ -207,10 +208,10 @@ fun ThreadRow(
                                 append("You")
                                 pop()
                                 append(": ")
-                                append(highlightedText(thread.preview, thread.previewMatch))
+                                append(previewText)
                             }
                         } else {
-                            highlightedText(thread.preview, thread.previewMatch)
+                            previewText
                         },
                         color = if (thread.unread) tokens.textPrimary.copy(alpha = 0.82f) else tokens.textSecondary,
                         fontSize = 14.sp,

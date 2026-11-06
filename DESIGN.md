@@ -194,6 +194,20 @@ progress state, a yes/no decision) — and must share one look:
   take the whole screen; horizontal keeps each row to roughly one line of vertical space per detail
   line. Unlike the header, these rows stay left-aligned — only the header block is centered.
 
+## Search mode
+
+- Entering search replaces the dashboard top bar (back arrow · expanded `inputBg` field with an X
+  clear button · Filters button); every other icon is hidden. The Filters button shows a dot when
+  any non-default filter is active.
+- Filter choices live in one bottom sheet (`SearchFiltersSheet`) made of pill-shaped
+  `FilterChip`-style choices — Sort, Category, Date, Direction. Active non-default filters are echoed
+  as removable chips under the bar (`SearchFilterSummary`); tapping one clears it.
+- Results are one row per **message** (`SearchResultRow`), not per thread, with the match bolded in a
+  snippet centered on the hit. Contacts are a separate section above Messages. Tapping a message
+  opens its thread scrolled to that message, which flashes a primary-colored outline briefly.
+- Ranking is a domain concern (`domain/search`), never a UI one: strong matches (whole word / word
+  start) first, newest-first within each band.
+
 ## Known debt
 
 Not everything in the app matches this doc yet — some Settings/Backup screens still have one-off

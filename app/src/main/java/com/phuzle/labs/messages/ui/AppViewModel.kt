@@ -16,7 +16,15 @@ import com.phuzle.labs.messages.data.prefs.AppSettings
 import com.phuzle.labs.messages.domain.model.Category
 import com.phuzle.labs.messages.domain.model.NotificationChannelIds
 import com.phuzle.labs.messages.domain.model.initialsFor
-import com.phuzle.labs.messages.domain.search.FuzzyMatcher
+import com.phuzle.labs.messages.domain.search.Ranked
+import com.phuzle.labs.messages.domain.search.SearchFilters
+import com.phuzle.labs.messages.domain.search.SearchMatcher
+import com.phuzle.labs.messages.domain.search.SearchRanking
+import com.phuzle.labs.messages.domain.search.SearchSort
+import com.phuzle.labs.messages.domain.share.ShareFormatter
+import com.phuzle.labs.messages.domain.share.ShareableContact
+import com.phuzle.labs.messages.domain.share.ShareableMessage
+import com.phuzle.labs.messages.ui.model.SearchResultUi
 import com.phuzle.labs.messages.ui.format.currentLocalEpochDay
 import com.phuzle.labs.messages.ui.format.formatCentsSigned
 import com.phuzle.labs.messages.ui.format.formatDueRelative
@@ -51,7 +59,13 @@ import com.phuzle.labs.messages.ui.model.UpdateInfoUi
 import com.phuzle.labs.messages.ui.theme.ThemeMode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.sample
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -92,6 +106,12 @@ private data class Ephemeral(
     val hasMoreOlderMessages: Boolean = true,
     val isLoadingOlderMessages: Boolean = false,
     val searchQuery: String = "",
+    val searchActive: Boolean = false,
+    val searchFilters: SearchFilters = SearchFilters(),
+    val searchFiltersOpen: Boolean = false,
+    val pendingScrollToMessageId: Long? = null,
+    val highlightMessageId: Long? = null,
+    val selectedMessageIds: Set<Long> = emptySet(),
     val activeCategory: Category = Category.All,
     val unreadOnly: Boolean = false,
     val showDrawer: Boolean = false,
@@ -209,10 +229,20 @@ private const val OLDER_MESSAGE_PAGE_SIZE = 30
 private const val TRIM_OLDER_MESSAGES_SLACK = 15
 /** How long a destructive action or an outgoing send stays undoable before it's committed for real. */
 private const val UNDO_WINDOW_MS = 6000L
+private const val SEARCH_DEBOUNCE_MS = 180L
+/** Hard cap on message rows pulled per search — beyond this, results say "showing newest N". */
+private const val SEARCH_ROW_LIMIT = 3000
+private const val SEARCH_CONTACT_LIMIT = 25
+private const val THREAD_SEARCH_LIMIT = 500
+/** How many messages before a search hit are loaded too, so the hit isn't the very top of the screen. */
+private const val SEARCH_CONTEXT_BEFORE = 12
+private const val HIGHLIGHT_MS = 1800L
+private const val MAX_HELD_OLDER_MESSAGES = 1500
+private const val ENTITY_CACHE_SIZE = 2000
 
 private data class PendingUndo(val message: String, val undo: suspend () -> Unit)
 
-@OptIn(ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     private val ephemeral = MutableStateFlow(Ephemeral())
@@ -271,56 +301,96 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     }.combine(container.threadRepository.observeUnreadCounts()) { (lists, blocked), counts ->
         ThreadsSnapshot(lists[0], lists[1], lists[2], lists[3], lists[4], blocked, counts.associate { it.threadId to it.count })
     }
+        // A history import or bulk action fires these Room flows in rapid bursts; rebuilding every
+        // list for each one starves the UI, so take the latest at most every 80ms. Shared so the
+        // several collectors below don't each open their own set of database observers.
+        .sample(80)
+        .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
-    /** Best match quality found for a thread across all its candidate rows — [nameQuality] is
-     * kept in its own band from [bodyQuality] so a contact-name match always outranks a
-     * message-body match regardless of either's absolute score (see the sort in [uiState]):
-     * searching a saved contact's name should surface that person's thread first, not whatever
-     * promotional blast happens to mention the same word in its body and was merely received more
-     * recently. [bestBodySnippet]/[bodyMatchIndices] remember *which* message actually produced
-     * [bodyQuality] — a match can come from anywhere in the thread's history (see
-     * observeSearchCandidates), not just its current last-message preview, so the row can show
-     * that message instead of the preview; otherwise the match has nothing visible backing it. */
-    private data class SearchRank(
-        val nameQuality: Int,
-        val bodyQuality: Int,
-        val nameMatchIndices: Set<Int> = emptySet(),
-        val bestBodySnippet: String? = null,
-        val bodyMatchIndices: Set<Int> = emptySet(),
-        /** Whether [bestBodySnippet] was sent by us — the swapped-in snippet needs its own "You:"
-         * prefix decision, since it isn't necessarily the thread's actual last message anymore. */
-        val bestBodyOutgoing: Boolean = false,
-    )
+    private data class SearchInput(val query: String, val filters: SearchFilters, val active: Boolean)
+    private class SearchOutput(val results: List<SearchResultUi>, val messageCount: Int, val truncated: Boolean)
 
-    /** Real search — fuzzy-matches (see FuzzyMatcher) against a thread's sender name *or any
-     * message in its full history*, not just the cached last-message preview. Null means "no
-     * active search, don't filter". */
-    private val searchRanking: Flow<Map<String, SearchRank>?> = ephemeral
-        .map { it.searchQuery.trim() }
+    /** Contacts first, then one entry per matching message — see [runSearch]. Null means "no active
+     * search"; while a new query is being computed the previous output stays in place (no flash of
+     * an empty/"no results" state between keystrokes). */
+    @OptIn(FlowPreview::class)
+    private val searchOutput: Flow<SearchOutput?> = ephemeral
+        .map { SearchInput(it.searchQuery.trim(), it.searchFilters, it.searchActive) }
         .distinctUntilChanged()
-        .flatMapLatest { query ->
-            if (query.isEmpty()) {
-                flowOf(null)
-            } else {
-                container.threadRepository.observeSearchCandidates().map { rows ->
-                    val ranks = mutableMapOf<String, SearchRank>()
-                    for (row in rows) {
-                        val nameMatch = FuzzyMatcher.match(query, row.displayName)
-                        val bodyMatch = row.body?.let { FuzzyMatcher.match(query, it) }
-                        if (nameMatch == null && bodyMatch == null) continue
-                        val existing = ranks[row.threadId] ?: SearchRank(0, 0)
-                        val betterName = (nameMatch?.quality ?: 0) > existing.nameQuality
-                        val betterBody = (bodyMatch?.quality ?: 0) > existing.bodyQuality
-                        ranks[row.threadId] = SearchRank(
-                            nameQuality = maxOf(existing.nameQuality, nameMatch?.quality ?: 0),
-                            bodyQuality = maxOf(existing.bodyQuality, bodyMatch?.quality ?: 0),
-                            nameMatchIndices = if (betterName) nameMatch!!.matchedIndices else existing.nameMatchIndices,
-                            bestBodySnippet = if (betterBody) row.body else existing.bestBodySnippet,
-                            bodyMatchIndices = if (betterBody) bodyMatch!!.matchedIndices else existing.bodyMatchIndices,
-                            bestBodyOutgoing = if (betterBody) row.outgoing else existing.bestBodyOutgoing,
-                        )
-                    }
-                    ranks
+        .debounce { if (it.query.isEmpty()) 0L else SEARCH_DEBOUNCE_MS }
+        .flatMapLatest { input ->
+            val restricted = input.filters.category != Category.All ||
+                input.filters.range != com.phuzle.labs.messages.domain.search.SearchRange.Any ||
+                input.filters.direction != com.phuzle.labs.messages.domain.search.SearchDirection.Any
+            if (!input.active || (input.query.isEmpty() && !restricted)) flowOf(null) else flow { emit(runSearch(input)) }
+        }
+
+    private suspend fun runSearch(input: SearchInput): SearchOutput {
+        val parsed = SearchMatcher.parse(input.query)
+        val filters = input.filters
+        val patterns = parsed?.let(SearchMatcher::likePatterns) ?: List(SearchMatcher.MAX_TOKENS) { "%" }
+        val rows = container.threadRepository.searchMessages(
+            patterns, filters.range.fromMillis(System.currentTimeMillis()), filters.direction.sqlValue,
+            if (filters.category == Category.All) "" else filters.category.name, SEARCH_ROW_LIMIT,
+        )
+
+        val ranked: List<Ranked<com.phuzle.labs.messages.data.db.dao.MessageSearchRow>> = if (parsed == null) {
+            // Filters only, no text: everything that passes them, newest (or oldest) first.
+            val none = SearchMatcher.Hit(SearchMatcher.Tier.TokensAnywhere, emptySet(), 0)
+            val ordered = if (filters.sort == SearchSort.Oldest) rows.sortedBy { it.timestamp } else rows
+            ordered.map { Ranked(it, none) }
+        } else {
+            SearchRanking.rank(parsed, rows, filters.sort, text = { it.body }, time = { it.timestamp })
+        }
+
+        val messageResults = ranked.map { (row, hit) ->
+            val snippet = SearchMatcher.snippet(row.body, hit)
+            SearchResultUi.Message(
+                messageId = row.messageId,
+                threadId = row.threadId,
+                displayName = row.displayName,
+                category = Category.fromStoredName(row.category),
+                isBusiness = row.isBusiness,
+                avatarColor = Color(row.avatarColor),
+                photoUri = row.photoUri,
+                snippet = snippet.text,
+                snippetMatch = snippet.indices,
+                outgoing = row.outgoing,
+                timeLabel = formatThreadListTime(row.timestamp),
+            )
+        }
+
+        val contactResults = if (parsed == null) emptyList() else {
+            val unread = container.threadRepository.observeUnreadCounts().first().associate { it.threadId to it.count }
+            val inbox = container.threadRepository.inboxOnce()
+                .filter { filters.category == Category.All || it.category == filters.category.name }
+            val byName = inbox.mapNotNull { t ->
+                val hit = SearchMatcher.match(parsed, t.displayName, allowFuzzy = true)
+                    ?: SearchMatcher.match(parsed, t.sender)?.copy(indices = emptySet())
+                hit?.let { Ranked(t, it) }
+            }.sortedWith(compareByDescending<Ranked<ThreadEntity>> { it.hit.tier.weight }.thenByDescending { it.item.lastMessageTime })
+            byName.take(SEARCH_CONTACT_LIMIT).map { (t, hit) ->
+                SearchResultUi.Contact(t.toThreadUi(unread[t.id] ?: 0).copy(displayNameMatch = if (t.displayName.isNotEmpty()) hit.indices else emptySet()))
+            }
+        }
+
+        return SearchOutput(contactResults + messageResults, messageResults.size, truncated = rows.size >= SEARCH_ROW_LIMIT)
+    }
+
+    /** In-conversation search over the open thread's *entire* history, not just the loaded pages. */
+    @OptIn(FlowPreview::class)
+    private val threadSearchOutput: Flow<List<MessageUi>> = ephemeral
+        .map { it.activeThreadId to it.threadSearchQuery.trim() }
+        .distinctUntilChanged()
+        .debounce { (_, query) -> if (query.isEmpty()) 0L else SEARCH_DEBOUNCE_MS }
+        .flatMapLatest { (threadId, query) ->
+            flow {
+                val parsed = if (threadId == null) null else SearchMatcher.parse(query)
+                if (parsed == null) {
+                    emit(emptyList())
+                } else {
+                    val rows = container.threadRepository.searchInThread(threadId!!, SearchMatcher.likePatterns(parsed), THREAD_SEARCH_LIMIT)
+                    emit(rows.filter { SearchMatcher.match(parsed, it.body) != null }.map(::toMessageUi))
                 }
             }
         }
@@ -338,17 +408,73 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         .flatMapLatest { id -> id?.let { container.threadRepository.observeRecentMessages(it, MESSAGE_PAGE_SIZE) } ?: flowOf(emptyList()) }
 
     /** Older pages loaded on-demand (see [loadOlderMessages]) are prepended in front of the live window. */
-    private val activeThreadMessages: Flow<List<MessageEntity>> = combine(recentThreadMessages, ephemeral) { recent, eph ->
-        (eph.olderMessages + recent.sortedBy { it.timestamp }).distinctBy { it.id }
+    private val activeThreadMessages: Flow<List<MessageEntity>> = combine(
+        recentThreadMessages,
+        ephemeral.map { it.olderMessages }.distinctUntilChanged(),
+    ) { recent, older -> (older + recent.sortedBy { it.timestamp }).distinctBy { it.id } }
+
+    /** Mapped to UI models on a background thread and on its own, so typing in the reply bar (or
+     * any other UI-state change) doesn't re-map every loaded message. */
+    private val threadMessagesUi: Flow<List<MessageUi>> = activeThreadMessages.map { list -> list.map(::toMessageUi) }
+
+    /** Link/phone/OTP detection is regex work; a message's body never changes, so remember the
+     * result instead of redoing it on every state rebuild. */
+    private val entityCache = object : LinkedHashMap<Pair<Long, Int>, List<com.phuzle.labs.messages.domain.text.DetectedEntity>>(256, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Pair<Long, Int>, List<com.phuzle.labs.messages.domain.text.DetectedEntity>>?) = size > ENTITY_CACHE_SIZE
+    }
+
+    private fun toMessageUi(it: MessageEntity): MessageUi {
+        val entities = synchronized(entityCache) {
+            entityCache.getOrPut(it.id to it.body.hashCode()) {
+                com.phuzle.labs.messages.domain.text.MessageEntityDetector.detect(it.body, container.regexRules.otpKeywords, container.regexRules.otpCodePattern)
+            }
+        }
+        return MessageUi(
+            id = it.id,
+            text = it.body,
+            timeLabel = if (it.scheduledFor != null && !it.sent) "Scheduled · ${it.scheduleLabel}" else formatMessageTime(it.timestamp),
+            timestamp = it.timestamp,
+            isMine = it.outgoing,
+            isScheduled = it.scheduledFor != null && !it.sent,
+            detectedEntities = entities,
+        )
+    }
+
+    private data class InboxUi(val categories: List<CategoryChipUi>, val threads: List<ThreadUi>, val hasUnread: Boolean)
+
+    /** The dashboard list, built only when the threads or the category/unread filter change —
+     * not on every unrelated UI-state change (a keystroke, a drawer toggle, ...). */
+    private val inboxUi: Flow<InboxUi> = combine(
+        threadsSnapshot,
+        ephemeral.map { it.activeCategory to it.unreadOnly }.distinctUntilChanged(),
+    ) { threads, (activeCategory, unreadOnly) ->
+        // Category chips only show up once the inbox actually has a message in them — a
+        // permanently empty chip (Personal on a phone with no known contacts yet, IPO for the
+        // ~all users who never get one, ...) is just clutter. Two exceptions: with zero messages
+        // total there's nothing to filter, so no chips at all (not even All); and once there's at
+        // least one message, Unknown stays visible even before it has one of its own, since it's
+        // the catch-all any future unclassifiable message lands in and shouldn't have to wait for
+        // that to happen to become reachable.
+        val categoriesWithThreads = threads.inbox.mapTo(mutableSetOf()) { Category.fromStoredName(it.category) }
+        val categories = if (threads.inbox.isEmpty()) {
+            emptyList()
+        } else {
+            Category.entries
+                .filter { it == Category.All || it == Category.Unknown || it in categoriesWithThreads }
+                .map { CategoryChipUi(it, it.label, it == activeCategory) }
+        }
+        val filtered = threads.inbox.filter { t ->
+            (activeCategory == Category.All || t.category == activeCategory.name) && (!unreadOnly || t.unread)
+        }.map { it.toThreadUi(threads.unreadCounts[it.id] ?: 0) }
+        InboxUi(categories, filtered, threads.inbox.any { it.unread })
     }
 
     private val baseUiState: Flow<AppUiState> = combine(
         threadsSnapshot,
         passbookSnapshot,
-        activeThreadMessages,
         container.settingsRepository.settingsFlow,
         ephemeral,
-    ) { threads, passbook, messages, settings, eph -> buildUiState(threads, passbook, messages, settings, eph) }
+    ) { threads, passbook, settings, eph -> buildUiState(threads, passbook, settings, eph) }
 
     val uiState: StateFlow<AppUiState> = baseUiState
         .combine(container.draftRepository.observeAll()) { state, drafts ->
@@ -373,38 +499,17 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 },
             )
         }
-        .combine(searchRanking) { state, ranks ->
-            if (ranks == null) {
-                state
-            } else {
-                // Name matches sort as a whole tier above body-only matches (a contact-name hit
-                // always wins, whatever its fuzzy score, over a promo blast that merely mentions
-                // the same word), then within a tier by match quality, then stable on the
-                // existing recency order for ties.
-                val ordered = state.threads
-                    .filter { ranks.containsKey(it.id) }
-                    .sortedWith(compareByDescending<ThreadUi> { ranks.getValue(it.id).nameQuality }
-                        .thenByDescending { ranks.getValue(it.id).bodyQuality })
-                    .map { t ->
-                        val rank = ranks.getValue(t.id)
-                        // A body match can come from any message in the thread's history, not
-                        // just its current last-message preview (see observeSearchCandidates) —
-                        // show the message that actually matched instead of the preview, or the
-                        // row displays unrelated text with no visible reason it matched at all.
-                        t.copy(
-                            displayNameMatch = rank.nameMatchIndices,
-                            preview = rank.bestBodySnippet ?: t.preview,
-                            previewMatch = rank.bodyMatchIndices,
-                            // Only swap in the matched message's own "You:" state when the
-                            // preview itself was swapped — otherwise this would incorrectly
-                            // override a name-only match's untouched (and already correct)
-                            // last-message preview with whatever bestBodyOutgoing defaults to.
-                            previewIsOutgoing = if (rank.bestBodySnippet != null) rank.bestBodyOutgoing else t.previewIsOutgoing,
-                        )
-                    }
-                state.copy(threads = ordered)
-            }
+        .combine(inboxUi) { state, inbox -> state.copy(categories = inbox.categories, threads = inbox.threads, hasUnread = inbox.hasUnread) }
+        .combine(threadMessagesUi) { state, messages -> state.copy(currentThreadMessages = messages) }
+        .combine(searchOutput) { state, out ->
+            if (out == null) state else state.copy(
+                searchResults = out.results, searchLoaded = true, searchMessageCount = out.messageCount, searchTruncated = out.truncated,
+            )
         }
+        .combine(threadSearchOutput) { state, hits -> if (hits.isEmpty() && state.threadSearchResults.isEmpty()) state else state.copy(threadSearchResults = hits) }
+        // Everything above (list building, regex detection, search ranking) used to run on the
+        // main thread; the UI only needs the finished state.
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppUiState())
 
     init {
@@ -474,36 +579,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private fun buildUiState(
         threads: ThreadsSnapshot,
         passbook: PassbookSnapshot,
-        messages: List<MessageEntity>,
         settings: AppSettings,
         eph: Ephemeral,
     ): AppUiState {
-        // Category chips only show up once the inbox actually has a message in them — a
-        // permanently empty chip (Personal on a phone with no known contacts yet, IPO for the
-        // ~all users who never get one, ...) is just clutter. Two exceptions: with zero messages
-        // total there's nothing to filter, so no chips at all (not even All); and once there's at
-        // least one message, Unknown stays visible even before it has one of its own, since it's
-        // the catch-all any future unclassifiable message lands in and shouldn't have to wait for
-        // that to happen to become reachable.
-        val categoriesWithThreads = threads.inbox.mapTo(mutableSetOf()) { Category.fromStoredName(it.category) }
-        val categories = if (threads.inbox.isEmpty()) {
-            emptyList()
-        } else {
-            Category.entries
-                .filter { it == Category.All || it == Category.Unknown || it in categoriesWithThreads }
-                .map { CategoryChipUi(it, it.label, it == eph.activeCategory) }
-        }
-
-        // Real text search (against full message history, not just the cached preview) is applied
-        // as a separate layer over this state — see searchMatchingIds — so only category/unread
-        // filtering happens here.
-        val filteredThreads = threads.inbox.filter { t ->
-            (eph.activeCategory == Category.All || t.category == eph.activeCategory.name) &&
-                (!eph.unreadOnly || t.unread)
-        }.map { it.toThreadUi(threads.unreadCounts[it.id] ?: 0) }
-
-        val hasUnread = threads.inbox.any { it.unread }
-
         // "Accounts" aren't separately stored — grouping the real transaction feed by last-4 is
         // the whole Layer-1-only story here (see PassbookRepository's doc comment).
         val accounts = passbook.transactions
@@ -547,20 +625,6 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 firstContactLabel = eph.threadInfoFirstContactAt?.let { formatThreadListTime(it) },
             )
         }
-        val currentThreadMessages = messages.map {
-            MessageUi(
-                id = it.id,
-                text = it.body,
-                timeLabel = if (it.scheduledFor != null && !it.sent) "Scheduled · ${it.scheduleLabel}" else formatMessageTime(it.timestamp),
-                timestamp = it.timestamp,
-                isMine = it.outgoing,
-                isScheduled = it.scheduledFor != null && !it.sent,
-                detectedEntities = com.phuzle.labs.messages.domain.text.MessageEntityDetector.detect(
-                    it.body, container.regexRules.otpKeywords, container.regexRules.otpCodePattern,
-                ),
-            )
-        }
-
         fun toDeleted(t: ThreadEntity) = DeletedThreadUi(
             t.id, t.displayName, initialsFor(t.displayName), androidx.compose.ui.graphics.Color(t.avatarColor), t.isBusiness,
             Category.fromStoredName(t.category), t.lastMessagePreview,
@@ -584,17 +648,19 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             settingsSub = eph.settingsSub,
             activeTab = eph.activeTab,
             searchQuery = eph.searchQuery,
+            searchActive = eph.searchActive,
+            searchFilters = eph.searchFilters,
+            searchFiltersOpen = eph.searchFiltersOpen,
+            pendingScrollToMessageId = eph.pendingScrollToMessageId,
+            highlightMessageId = eph.highlightMessageId,
+            selectedMessageIds = eph.selectedMessageIds,
             activeCategory = eph.activeCategory,
             unreadOnly = eph.unreadOnly,
-            categories = categories,
-            threads = filteredThreads,
-            hasUnread = hasUnread,
             accounts = accounts,
             transactions = transactions,
             reminders = reminders,
             selectedAccountLast4 = eph.selectedAccountLast4,
             currentThread = currentThread,
-            currentThreadMessages = currentThreadMessages,
             isLoadingOlderMessages = eph.isLoadingOlderMessages,
             hasMoreOlderMessages = eph.hasMoreOlderMessages,
             threadInput = eph.threadInput,
@@ -973,7 +1039,16 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun dismissFeedbackBanner() = viewModelScope.launch {
         container.settingsRepository.setFeedbackBannerDismissedDay(currentLocalEpochDay())
     }
-    fun onSearchChange(query: String) = ephemeral.update { it.copy(searchQuery = query) }
+    fun onSearchChange(query: String) = ephemeral.update { it.copy(searchQuery = query, searchActive = true) }
+    fun enterSearch() = ephemeral.update { it.copy(searchActive = true) }
+    /** The X in the search bar: empties the text first, and only leaves search mode once there is nothing left to clear. */
+    fun clearSearchText() = ephemeral.update {
+        if (it.searchQuery.isNotEmpty()) it.copy(searchQuery = "") else it.copy(searchActive = false, searchFilters = SearchFilters(), searchFiltersOpen = false)
+    }
+    fun exitSearch() = ephemeral.update { it.copy(searchActive = false, searchQuery = "", searchFilters = SearchFilters(), searchFiltersOpen = false) }
+    fun openSearchFilters() = ephemeral.update { it.copy(searchFiltersOpen = true, searchActive = true) }
+    fun closeSearchFilters() = ephemeral.update { it.copy(searchFiltersOpen = false) }
+    fun setSearchFilters(filters: SearchFilters) = ephemeral.update { it.copy(searchFilters = filters) }
 
     // endregion
 
@@ -985,6 +1060,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 pushedScreen = PushedScreen.Thread, activeThreadId = id, threadInput = "",
                 olderMessages = emptyList(), hasMoreOlderMessages = true, isLoadingOlderMessages = false,
                 threadOpenedFromPrivateChats = it.pushedScreen == PushedScreen.PrivateChats,
+                selectedMessageIds = emptySet(), pendingScrollToMessageId = null, highlightMessageId = null,
+                threadSearchActive = false, threadSearchQuery = "",
             )
         }
         // Opening the conversation is itself "reading" it — previously only the explicit
@@ -995,6 +1072,53 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             val thread = container.threadRepository.getThread(id) ?: return@launch
             if (thread.unread) container.threadRepository.toggleRead(id, true)
             container.messageNotifier.cancelForThread(id)
+        }
+    }
+
+    /**
+     * Opens [threadId] scrolled to one specific message — a search hit may be years back, well
+     * outside the 40-message live window. Loads the contiguous stretch from a little before the hit
+     * up to the live window (so the hit has real neighbours and nothing is skipped), and leaves
+     * older history to the usual load-on-scroll. The thread screen scrolls and flashes the hit
+     * (see pendingScrollToMessageId).
+     */
+    fun openThreadAtMessage(threadId: String, messageId: Long) {
+        viewModelScope.launch {
+            val repo = container.threadRepository
+            val target = repo.getMessage(messageId)
+            var older: List<MessageEntity> = emptyList()
+            var hasMore = true
+            if (target != null) {
+                val live = repo.observeRecentMessages(threadId, MESSAGE_PAGE_SIZE).first()
+                val oldestLive = live.minOfOrNull { it.timestamp }
+                if (oldestLive != null && target.timestamp < oldestLive) {
+                    val before = repo.olderMessagesThan(threadId, target.timestamp, SEARCH_CONTEXT_BEFORE)
+                    val fromTarget = repo.messagesBetween(threadId, target.timestamp, oldestLive)
+                    older = (before.sortedBy { it.timestamp } + fromTarget).distinctBy { it.id }
+                    hasMore = before.size == SEARCH_CONTEXT_BEFORE
+                }
+            }
+            ephemeral.update {
+                it.copy(
+                    pushedScreen = PushedScreen.Thread, activeThreadId = threadId, threadInput = "",
+                    olderMessages = older, hasMoreOlderMessages = hasMore, isLoadingOlderMessages = false,
+                    threadOpenedFromPrivateChats = false, selectedMessageIds = emptySet(),
+                    threadSearchActive = false, threadSearchQuery = "",
+                    pendingScrollToMessageId = messageId, highlightMessageId = null,
+                )
+            }
+            val thread = repo.getThread(threadId) ?: return@launch
+            if (thread.unread) repo.toggleRead(threadId, true)
+            container.messageNotifier.cancelForThread(threadId)
+        }
+    }
+
+    /** The thread screen has scrolled to the pending message — flash it briefly, then let it go. */
+    fun onScrolledToMessage(messageId: Long) {
+        ephemeral.update { it.copy(pendingScrollToMessageId = null, highlightMessageId = messageId) }
+        viewModelScope.launch {
+            delay(HIGHLIGHT_MS)
+            ephemeral.update { if (it.highlightMessageId == messageId) it.copy(highlightMessageId = null) else it }
         }
     }
 
@@ -1022,7 +1146,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     /** Releases loaded-older pages once the user has scrolled well back into the live window. */
     fun trimOlderMessages() = ephemeral.update {
-        if (it.olderMessages.isEmpty()) it else it.copy(olderMessages = emptyList(), hasMoreOlderMessages = true)
+        // Only once a *lot* of history is held — messages are small, and dropping pages that sit
+        // above the reader shifts everything under them (and re-triggers loading them straight
+        // back). Callers must also only trim while the reader is inside the live window.
+        if (it.olderMessages.size <= MAX_HELD_OLDER_MESSAGES) it else it.copy(olderMessages = emptyList(), hasMoreOlderMessages = true)
     }
 
     /** Overflow menu's "Mark all as read" — captures which threads are affected (whatever the
@@ -1404,6 +1531,81 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         val quote = if (target.text.length > 80) "${target.text.take(80)}…" else target.text
         ephemeral.update { it.copy(threadInput = "> $quote\n", messageActionTarget = null) }
     }
+
+    // endregion
+
+    // region ---- sharing & message selection ----
+
+    /** Text for the system share sheet; the root composable (AppRoot) launches the chooser. */
+    private val _shareEvents = MutableSharedFlow<String>(extraBufferCapacity = 2)
+    val shareEvents: SharedFlow<String> = _shareEvents.asSharedFlow()
+
+    private fun shareableFor(ids: Set<Long>): List<ShareableMessage> =
+        uiState.value.currentThreadMessages.filter { it.id in ids }.map { ShareableMessage(it.timestamp, it.isMine, it.text) }
+
+    fun shareSelectedMessage() {
+        val target = ephemeral.value.messageActionTarget ?: return
+        shareMessages(setOf(target.id))
+        closeMessageActions()
+    }
+
+    fun shareMessages(ids: Set<Long>) {
+        val thread = uiState.value.currentThread ?: return
+        val messages = shareableFor(ids)
+        if (messages.isEmpty()) return
+        _shareEvents.tryEmit(ShareFormatter.formatMessages(thread.displayName, messages))
+    }
+
+    fun shareSelectedMessages() {
+        shareMessages(ephemeral.value.selectedMessageIds)
+        exitMessageSelection()
+    }
+
+    fun copySelectedMessages() {
+        val thread = uiState.value.currentThread ?: return
+        val messages = shareableFor(ephemeral.value.selectedMessageIds)
+        if (messages.isEmpty()) return
+        container.copyToClipboard("Messages", ShareFormatter.formatMessages(thread.displayName, messages))
+        toast(if (messages.size == 1) "Message copied" else "${messages.size} messages copied")
+        exitMessageSelection()
+    }
+
+    fun startMessageSelection(messageId: Long) = ephemeral.update { it.copy(selectedMessageIds = setOf(messageId), messageActionTarget = null) }
+    fun toggleMessageSelection(messageId: Long) = ephemeral.update {
+        it.copy(selectedMessageIds = if (messageId in it.selectedMessageIds) it.selectedMessageIds - messageId else it.selectedMessageIds + messageId)
+    }
+    fun exitMessageSelection() = ephemeral.update { it.copy(selectedMessageIds = emptySet()) }
+    fun selectAllMessages() = ephemeral.update { it.copy(selectedMessageIds = uiState.value.currentThreadMessages.filter { m -> !m.isScheduled }.mapTo(mutableSetOf()) { m -> m.id }) }
+
+    /** Shares each thread's sender as "name, number" — used by the dashboard's multi-select and a thread's info page. */
+    fun shareContacts(threadIds: Collection<String>) {
+        viewModelScope.launch {
+            val contacts = threadIds.mapNotNull { id ->
+                container.threadRepository.getThread(id)?.let { ShareableContact(it.displayName, it.sender) }
+            }
+            if (contacts.isNotEmpty()) _shareEvents.tryEmit(ShareFormatter.formatContacts(contacts))
+        }
+    }
+
+    fun shareSelectedContacts() {
+        shareContacts(ephemeral.value.multiSelectThreadIds)
+        exitMultiSelect()
+    }
+
+    fun shareCurrentContact() {
+        val id = ephemeral.value.activeThreadId ?: return
+        shareContacts(listOf(id))
+    }
+
+    fun shareSheetContact() {
+        val id = ephemeral.value.actionSheetThreadId ?: return
+        closeActionSheet()
+        shareContacts(listOf(id))
+    }
+
+    // endregion
+
+    // region ---- per-message long-press actions (continued) ----
 
     fun forwardSelectedMessage() {
         val target = ephemeral.value.messageActionTarget ?: return
