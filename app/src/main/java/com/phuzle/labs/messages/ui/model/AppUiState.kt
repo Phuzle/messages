@@ -2,6 +2,7 @@ package com.phuzle.labs.messages.ui.model
 
 import com.phuzle.labs.messages.data.prefs.AppSettings
 import com.phuzle.labs.messages.domain.model.Category
+import com.phuzle.labs.messages.domain.search.SearchFilters
 import com.phuzle.labs.messages.ui.theme.ThemeMode
 
 data class SimOptionUi(val subscriptionId: Int, val label: String)
@@ -19,6 +20,16 @@ data class AppUiState(
     val activeTab: DashboardTab = DashboardTab.Messages,
 
     val searchQuery: String = "",
+    /** Search mode: the header collapses to just the search bar (with clear and Filters). */
+    val searchActive: Boolean = false,
+    val searchFilters: SearchFilters = SearchFilters(),
+    val searchFiltersOpen: Boolean = false,
+    val searchResults: List<SearchResultUi> = emptyList(),
+    /** True once results for the current query/filters have loaded (false while the first load runs). */
+    val searchLoaded: Boolean = false,
+    val searchMessageCount: Int = 0,
+    /** The message cap was hit, so older matches exist that are not listed. */
+    val searchTruncated: Boolean = false,
     val activeCategory: Category = Category.All,
     val unreadOnly: Boolean = false,
     val categories: List<CategoryChipUi> = emptyList(),
@@ -72,6 +83,14 @@ data class AppUiState(
     val threadOverflowMenuOpen: Boolean = false,
     val threadSearchActive: Boolean = false,
     val threadSearchQuery: String = "",
+    /** In-conversation search hits from the thread's full history (not just the loaded pages). */
+    val threadSearchResults: List<MessageUi> = emptyList(),
+    /** A search result was opened: scroll the thread to this message once it is on screen. */
+    val pendingScrollToMessageId: Long? = null,
+    /** The message to flash after that scroll, cleared automatically. */
+    val highlightMessageId: Long? = null,
+    /** Non-empty while selecting messages in the open thread (for sharing/copying). */
+    val selectedMessageIds: Set<Long> = emptySet(),
     val driveRestoreAvailable: Boolean = false,
     /** Silent sign-in couldn't determine whether a Drive backup exists (commonly a real Google
      * Play Services ApiException 4 / SIGN_IN_REQUIRED, not a bug — silent resolution for a scoped

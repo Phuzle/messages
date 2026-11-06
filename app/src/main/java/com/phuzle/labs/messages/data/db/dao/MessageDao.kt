@@ -138,6 +138,43 @@ interface MessageDao {
     @Query("UPDATE messages SET read = 1 WHERE threadId IN (:threadIds) AND outgoing = 0")
     suspend fun markThreadsRead(threadIds: List<String>)
 
+    /**
+     * Search pre-filter: every message that contains all (up to four) tokens, in the inbox only
+     * (archived, private and deleted conversations stay out of search, as before). Unused token
+     * slots are passed as `%`. This only narrows the candidates cheaply in SQLite — what counts as
+     * a strong or weak match, and the final order, is decided in Kotlin (see SearchRanking).
+     * [direction] is -1 for any, 0 for received, 1 for sent; [category] is `""` for any.
+     */
+    @Query(
+        "SELECT m.id AS messageId, m.threadId AS threadId, t.displayName AS displayName, t.category AS category, " +
+            "t.isBusiness AS isBusiness, t.avatarColor AS avatarColor, t.photoUri AS photoUri, " +
+            "m.body AS body, m.timestamp AS timestamp, m.outgoing AS outgoing " +
+            "FROM messages m JOIN threads t ON t.id = m.threadId " +
+            "WHERE m.deletedAt IS NULL AND m.sent = 1 AND t.deletedAt IS NULL AND t.archived = 0 AND t.isPrivate = 0 " +
+            "AND m.body LIKE :t1 ESCAPE '\\' AND m.body LIKE :t2 ESCAPE '\\' AND m.body LIKE :t3 ESCAPE '\\' AND m.body LIKE :t4 ESCAPE '\\' " +
+            "AND m.timestamp >= :fromTime AND (:direction = -1 OR m.outgoing = :direction) " +
+            "AND (:category = '' OR t.category = :category) " +
+            "ORDER BY m.timestamp DESC LIMIT :limit"
+    )
+    suspend fun searchMessages(
+        t1: String, t2: String, t3: String, t4: String,
+        fromTime: Long, direction: Int, category: String, limit: Int,
+    ): List<MessageSearchRow>
+
+    /** In-conversation search — the same token pre-filter, scoped to one thread's full history
+     * (not just whichever pages happen to be loaded), oldest first. */
+    @Query(
+        "SELECT * FROM messages WHERE threadId = :threadId AND deletedAt IS NULL AND sent = 1 " +
+            "AND body LIKE :t1 ESCAPE '\\' AND body LIKE :t2 ESCAPE '\\' AND body LIKE :t3 ESCAPE '\\' AND body LIKE :t4 ESCAPE '\\' " +
+            "ORDER BY timestamp ASC LIMIT :limit"
+    )
+    suspend fun searchInThread(threadId: String, t1: String, t2: String, t3: String, t4: String, limit: Int): List<MessageEntity>
+
+    /** Everything from [fromTimestamp] up to (not including) [beforeTimestamp] — used to load a
+     * contiguous stretch of history so a search result far back in a thread can be scrolled to. */
+    @Query("SELECT * FROM messages WHERE threadId = :threadId AND deletedAt IS NULL AND timestamp >= :fromTimestamp AND timestamp < :beforeTimestamp ORDER BY timestamp ASC")
+    suspend fun between(threadId: String, fromTimestamp: Long, beforeTimestamp: Long): List<MessageEntity>
+
     // region ---- system SMS provider sync (see SmsProviderSync / MessageEntity.systemSmsId) ----
 
     @Query("UPDATE messages SET systemSmsId = :systemSmsId WHERE id = :id")
@@ -175,6 +212,19 @@ interface MessageDao {
 
     // endregion
 }
+
+data class MessageSearchRow(
+    val messageId: Long,
+    val threadId: String,
+    val displayName: String,
+    val category: String,
+    val isBusiness: Boolean,
+    val avatarColor: Long,
+    val photoUri: String?,
+    val body: String,
+    val timestamp: Long,
+    val outgoing: Boolean,
+)
 
 data class ThreadUnreadCount(val threadId: String, val count: Int)
 

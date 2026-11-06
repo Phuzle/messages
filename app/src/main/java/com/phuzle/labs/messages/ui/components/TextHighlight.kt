@@ -35,3 +35,9 @@ fun highlightedText(text: String, matchedIndices: Set<Int>): AnnotatedString {
         if (runStart >= 0) addStyle(SpanStyle(fontWeight = FontWeight.Bold), runStart, runEnd + 1)
     }
 }
+
+/** [highlightedText] remembered per (text, indices) — building the span list on every
+ * recomposition of every visible row is wasted work while scrolling a long list. */
+@androidx.compose.runtime.Composable
+fun rememberHighlightedText(text: String, matchedIndices: Set<Int>): AnnotatedString =
+    androidx.compose.runtime.remember(text, matchedIndices) { highlightedText(text, matchedIndices) }

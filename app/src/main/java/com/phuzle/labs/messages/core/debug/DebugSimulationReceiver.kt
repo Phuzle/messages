@@ -43,6 +43,8 @@ import java.io.ByteArrayOutputStream
  *     -a com.phuzle.labs.messages.debug.SIMULATE_OUTGOING --es number "+15550100001" --es body "On my way!"
  *   adb shell am broadcast -n com.phuzle.labs.messages/.core.debug.DebugSimulationReceiver \
  *     -a com.phuzle.labs.messages.debug.SEED_CONTACT_PHOTO --es number "+15550100001" --ei color 0x6C5CE7
+ *   adb shell am broadcast -n com.phuzle.labs.messages/.core.debug.DebugSimulationReceiver \
+ *     -a com.phuzle.labs.messages.debug.SIMULATE_INCOMING_AT --es number "AX-BANK" --es body "hello" --el timestamp 1700000000000 --es category Transactions
  */
 class DebugSimulationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -62,6 +64,26 @@ class DebugSimulationReceiver : BroadcastReceiver() {
                             scheduledFor = null,
                             scheduleLabel = null,
                             nowMillis = System.currentTimeMillis(),
+                        )
+                    } finally {
+                        pendingResult.finish()
+                    }
+                }
+            }
+            ACTION_SIMULATE_INCOMING_AT -> {
+                // Inbound message with an explicit timestamp — for seeding old history (search by
+                // date, scroll-to-message in a long thread) that the live SMS path can't produce.
+                val number = intent.getStringExtra(EXTRA_NUMBER) ?: return
+                val body = intent.getStringExtra(EXTRA_BODY) ?: return
+                val timestamp = intent.getLongExtra(EXTRA_TIMESTAMP, System.currentTimeMillis())
+                val category = com.phuzle.labs.messages.domain.model.Category.fromStoredName(intent.getStringExtra(EXTRA_CATEGORY) ?: "Others")
+                val pendingResult = goAsync()
+                val container = context.appContainer
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        container.threadRepository.recordIncomingMessage(
+                            sender = number, displayName = intent.getStringExtra(EXTRA_NAME) ?: number, isBusiness = category != com.phuzle.labs.messages.domain.model.Category.Personal,
+                            category = category, body = body, timestampMillis = timestamp,
                         )
                     } finally {
                         pendingResult.finish()
@@ -124,6 +146,10 @@ class DebugSimulationReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_SIMULATE_OUTGOING = "com.phuzle.labs.messages.debug.SIMULATE_OUTGOING"
         const val ACTION_SEED_CONTACT_PHOTO = "com.phuzle.labs.messages.debug.SEED_CONTACT_PHOTO"
+        const val ACTION_SIMULATE_INCOMING_AT = "com.phuzle.labs.messages.debug.SIMULATE_INCOMING_AT"
+        private const val EXTRA_TIMESTAMP = "timestamp"
+        private const val EXTRA_CATEGORY = "category"
+        private const val EXTRA_NAME = "name"
         const val EXTRA_NUMBER = "number"
         const val EXTRA_BODY = "body"
         const val EXTRA_COLOR = "color"

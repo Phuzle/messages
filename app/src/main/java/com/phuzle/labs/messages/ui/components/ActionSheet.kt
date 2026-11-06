@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MarkEmailRead
 import androidx.compose.material.icons.filled.MarkEmailUnread
@@ -41,6 +42,7 @@ fun ActionSheet(
     onArchive: () -> Unit,
     onTogglePrivate: () -> Unit,
     onDelete: () -> Unit,
+    onShare: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (sheet == null) return
@@ -72,6 +74,7 @@ fun ActionSheet(
             )
             SettingsRowDivider()
             SheetAction(sheet.markReadLabel, tokens.textPrimary, if (sheet.markReadLabel == "Mark as read") Icons.Filled.MarkEmailRead else Icons.Filled.MarkEmailUnread, onMarkRead)
+            SheetAction("Share contact", tokens.textPrimary, Icons.Filled.Share, onShare)
             SheetAction("Archive", tokens.textPrimary, Icons.Filled.Archive, onArchive)
             SheetAction(sheet.privateLabel, tokens.textPrimary, if (sheet.privateLabel == "Move to Private") Icons.Filled.Lock else Icons.Filled.LockOpen, onTogglePrivate)
             SheetAction("Delete", tokens.danger, Icons.Filled.Delete, onDelete)

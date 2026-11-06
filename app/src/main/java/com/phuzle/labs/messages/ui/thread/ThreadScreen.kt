@@ -29,6 +29,9 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -75,7 +78,7 @@ import com.phuzle.labs.messages.ui.components.highlightedText
 import com.phuzle.labs.messages.ui.components.roundClickable
 import com.phuzle.labs.messages.ui.components.topBarContentPadding
 import com.phuzle.labs.messages.ui.components.withLongPressHaptic
-import com.phuzle.labs.messages.domain.search.FuzzyMatcher
+import com.phuzle.labs.messages.domain.search.SearchMatcher
 import com.phuzle.labs.messages.ui.format.formatDateSeparator
 import com.phuzle.labs.messages.ui.format.isDifferentDay
 import com.phuzle.labs.messages.ui.model.AppUiState
@@ -85,10 +88,14 @@ import com.phuzle.labs.messages.ui.theme.MessagesTheme
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
+fun ThreadScreen(state: AppUiState, viewModel: AppViewModel, scrollStore: ThreadScrollStore) {
     val tokens = MessagesTheme.tokens
     val thread = state.currentThread ?: return
-    val listState = rememberLazyListState()
+    // Coming back from Contact info re-creates this screen; its list state (and the fact that the
+    // initial scroll-to-latest already happened) must survive that or the reader is thrown to the
+    // bottom of the conversation.
+    val returningToThread = remember(thread.id) { scrollStore.has(thread.id) }
+    val listState = scrollStore.stateFor(thread.id)
     val latestState = rememberUpdatedState(state)
     val context = androidx.compose.ui.platform.LocalContext.current
     val threadSearchFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
@@ -105,10 +112,10 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
     LaunchedEffect(thread.id, listState) {
         snapshotFlow { listState.firstVisibleItemIndex }.collect { index ->
             val s = latestState.value
-            when {
-                index <= 3 && s.hasMoreOlderMessages && !s.isLoadingOlderMessages -> viewModel.loadOlderMessages()
-                index > 20 -> viewModel.trimOlderMessages()
-            }
+            // Older pages stay loaded once fetched (they are small): dropping them as soon as the
+            // reader moved a screen away both shifted the list under them and re-fetched the same
+            // pages when they scrolled back up.
+            if (index <= 3 && s.hasMoreOlderMessages && !s.isLoadingOlderMessages) viewModel.loadOlderMessages()
         }
     }
 
@@ -128,30 +135,52 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
     // available the instant this composable enters), so this fires once real content shows up
     // for this thread rather than immediately on thread.id changing. Guarded by
     // scrolledToBottomFor so it only happens once per thread open, not on every later message.
-    var scrolledToBottomFor by remember { mutableStateOf<String?>(null) }
+    var scrolledToBottomFor by remember { mutableStateOf<String?>(if (returningToThread) thread.id else null) }
     // Separately, after that initial landing, a *new* message extending the list should pull the
     // view down to it too — but only when the reader was already at (or basically at) the
     // bottom. Someone scrolled up rereading older history shouldn't get yanked down to the
     // newest message the instant one arrives; this mirrors how any other chat app behaves.
     var lastKnownEntryCount by remember { mutableIntStateOf(0) }
+    var skipNextCountCheck by remember { mutableStateOf(returningToThread) }
 
     val canSend = state.threadInput.isNotBlank()
     val scheduleState = com.phuzle.labs.messages.ui.components.rememberScheduleSendState()
-    val listEntries = remember(state.currentThreadMessages, state.threadSearchQuery) {
+    val listEntries = remember(state.currentThreadMessages, state.threadSearchQuery, state.threadSearchResults) {
         val query = state.threadSearchQuery.trim()
-        if (query.isEmpty()) {
+        val parsed = SearchMatcher.parse(query)
+        if (parsed == null) {
             buildThreadListEntries(state.currentThreadMessages)
         } else {
             // Searching within the conversation filters to just the matches — date headers would
             // just be clutter across a sparse, non-contiguous result set — with matched characters
-            // bolded the same way the dashboard's thread-list search does (see FuzzyMatcher).
-            val matches = state.currentThreadMessages.mapNotNull { m -> FuzzyMatcher.match(query, m.text)?.let { m to it.matchedIndices } }
+            // bolded. Hits come from the whole conversation (see AppViewModel.threadSearchOutput),
+            // not only the pages that happen to be loaded.
+            val matches = state.threadSearchResults.mapNotNull { m -> SearchMatcher.match(parsed, m.text)?.let { m to it.indices } }
             buildThreadListEntries(matches.map { it.first }, matches.associate { it.first.id to it.second }, showDateHeaders = false)
         }
     }
 
+    // A search result was opened: bring that message into view and flash it. Handled before (and
+    // instead of) the "land on the latest message" logic below, which must then stay out of the way.
+    LaunchedEffect(state.pendingScrollToMessageId, listEntries) {
+        val target = state.pendingScrollToMessageId ?: return@LaunchedEffect
+        val index = listEntries.indexOfFirst { it is ThreadListEntry.Msg && it.message.id == target }
+        if (index < 0) return@LaunchedEffect
+        // A couple of rows of context above the hit rather than pinning it to the very top edge.
+        listState.scrollToItem((index - 2).coerceAtLeast(0))
+        scrolledToBottomFor = thread.id
+        lastKnownEntryCount = listEntries.size
+        viewModel.onScrolledToMessage(target)
+    }
+
     LaunchedEffect(thread.id, listEntries.size) {
         if (listEntries.isEmpty()) return@LaunchedEffect
+        if (state.pendingScrollToMessageId != null) return@LaunchedEffect
+        if (skipNextCountCheck) {
+            skipNextCountCheck = false
+            lastKnownEntryCount = listEntries.size
+            return@LaunchedEffect
+        }
         if (scrolledToBottomFor != thread.id) {
             listState.scrollToItem(listEntries.size - 1)
             scrolledToBottomFor = thread.id
@@ -213,18 +242,30 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
                         val startsRun = previous == null || !continuesRun(previous, entry.message)
                         val endsRun = next == null || !continuesRun(entry.message, next)
                         item(key = entry.message.id, contentType = "message") {
+                            val selectionMode = state.selectedMessageIds.isNotEmpty()
                             MessageBubble(
                                 entry.message,
                                 startsRun = startsRun,
                                 endsRun = endsRun,
                                 matchedIndices = entry.matchedIndices,
+                                selected = entry.message.id in state.selectedMessageIds,
+                                highlighted = state.highlightMessageId == entry.message.id,
+                                onClick = {
+                                    when {
+                                        selectionMode -> viewModel.toggleMessageSelection(entry.message.id)
+                                        // A hit in the conversation-search list: leave search and show it in context.
+                                        state.threadSearchQuery.isNotBlank() -> viewModel.openThreadAtMessage(thread.id, entry.message.id)
+                                    }
+                                },
                                 onLongPress = {
                                     // A message still waiting to send gets the restricted
                                     // Edit/Delete sheet (see ScheduledMessageActionSheet) instead
                                     // of the normal Copy/Reply/Forward/Delete set — "reply" and
                                     // "forward" don't mean anything for something that hasn't
                                     // actually gone out yet.
-                                    if (entry.message.isScheduled) {
+                                    if (selectionMode) {
+                                        viewModel.toggleMessageSelection(entry.message.id)
+                                    } else if (entry.message.isScheduled) {
                                         viewModel.openScheduledMessageActions(entry.message.id, thread.id)
                                     } else {
                                         viewModel.openMessageActions(MessageActionTargetUi(entry.message.id, entry.message.text))
@@ -243,7 +284,24 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
 
         GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 64.dp, inset = BarInset.Top) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (state.threadSearchActive) {
+                if (state.selectedMessageIds.isNotEmpty()) {
+                    Box(Modifier.size(48.dp).roundClickable(onClick = viewModel::exitMessageSelection), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Close, contentDescription = "Cancel selection", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
+                    }
+                    Text(
+                        "${state.selectedMessageIds.size} selected", color = tokens.textPrimary, fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 4.dp),
+                    )
+                    Box(Modifier.size(48.dp).roundClickable(onClick = viewModel::selectAllMessages), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.SelectAll, contentDescription = "Select all", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
+                    }
+                    Box(Modifier.size(48.dp).roundClickable(onClick = viewModel::copySelectedMessages), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.ContentCopy, contentDescription = "Copy", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
+                    }
+                    Box(Modifier.size(48.dp).roundClickable(onClick = viewModel::shareSelectedMessages), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Share, contentDescription = "Share", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
+                    }
+                } else if (state.threadSearchActive) {
                     Box(Modifier.size(48.dp).roundClickable(onClick = viewModel::closeThreadSearch), contentAlignment = Alignment.Center) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
                     }
@@ -285,6 +343,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
             items = listOf(
                 MenuItem("Search in conversation", icon = Icons.Filled.Search, onClick = viewModel::openThreadSearch),
                 MenuItem("View contact info", icon = Icons.Filled.Info, onClick = { viewModel.closeThreadOverflowMenu(); viewModel.openThreadInfo() }),
+                MenuItem("Share contact", icon = Icons.Filled.Share, onClick = { viewModel.closeThreadOverflowMenu(); viewModel.shareCurrentContact() }),
                 MenuItem(
                     if (thread.isBlocked) "Unblock" else "Block",
                     icon = if (thread.isBlocked) Icons.Filled.LockOpen else Icons.Filled.Block,
@@ -401,6 +460,8 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel) {
             onReply = viewModel::replyQuotingSelectedMessage,
             onForward = viewModel::forwardSelectedMessage,
             onDelete = viewModel::deleteSelectedMessage,
+            onShare = viewModel::shareSelectedMessage,
+            onSelect = { state.messageActionTarget?.let { viewModel.startMessageSelection(it.id) } },
         )
     }
 
@@ -471,6 +532,9 @@ private fun MessageBubble(
     endsRun: Boolean,
     onLongPress: () -> Unit,
     matchedIndices: Set<Int> = emptySet(),
+    selected: Boolean = false,
+    highlighted: Boolean = false,
+    onClick: () -> Unit = {},
     onOpenUrl: (String) -> Unit = {},
     onCall: (String) -> Unit = {},
     onEmail: (String) -> Unit = {},
@@ -496,8 +560,17 @@ private fun MessageBubble(
     val maxBubbleWidth = (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp * 0.78f).dp
     val dashColor = tokens.accentLabel
     val density = androidx.compose.ui.platform.LocalDensity.current
+    // Flashes a message reached from a search result: a ring that fades out on its own.
+    val flash by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (highlighted) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(if (highlighted) 150 else 900),
+        label = "flash",
+    )
     Row(
-        Modifier.fillMaxWidth().padding(top = if (startsRun) 12.dp else 3.dp),
+        Modifier
+            .fillMaxWidth()
+            .padding(top = if (startsRun) 12.dp else 3.dp)
+            .then(if (selected) Modifier.background(tokens.accentSoft) else Modifier),
         horizontalArrangement = if (message.isMine) Arrangement.End else Arrangement.Start,
     ) {
         Column(
@@ -521,10 +594,11 @@ private fun MessageBubble(
                         Modifier
                     },
                 )
-                .combinedClickable(onClick = {}, onLongClick = withLongPressHaptic(onLongPress))
+                .then(if (flash > 0f) Modifier.border(2.dp, tokens.accentLabel.copy(alpha = flash), shape) else Modifier)
+                .combinedClickable(onClick = onClick, onLongClick = withLongPressHaptic(onLongPress))
                 .padding(horizontal = 16.dp, vertical = 11.dp),
         ) {
-            Text(highlightedText(message.text, matchedIndices), color = fg, fontSize = 15.sp, lineHeight = 22.sp)
+            Text(com.phuzle.labs.messages.ui.components.rememberHighlightedText(message.text, matchedIndices), color = fg, fontSize = 15.sp, lineHeight = 22.sp)
             if (message.detectedEntities.isNotEmpty()) {
                 com.phuzle.labs.messages.ui.components.MessageEntityChips(
                     entities = message.detectedEntities,

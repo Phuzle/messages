@@ -1,5 +1,6 @@
 package com.phuzle.labs.messages.ui.model
 
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import com.phuzle.labs.messages.domain.model.Category
@@ -35,12 +36,14 @@ enum class SwipeAction(val key: String, val label: String) {
 // genuinely theme-independent colors (the fixed avatar palette) are carried as Color here; the
 // rest is exposed as plain enums/booleans/keys for the composables to resolve at render time.
 
+@Immutable
 data class CategoryChipUi(
     val category: Category,
     val label: String,
     val active: Boolean,
 )
 
+@Immutable
 data class ThreadUi(
     val id: String,
     val sender: String,
@@ -69,6 +72,7 @@ data class ThreadUi(
     val previewMatch: Set<Int> = emptySet(),
 )
 
+@Immutable
 data class MessageUi(
     val id: Long,
     val text: String,
@@ -79,6 +83,7 @@ data class MessageUi(
     val detectedEntities: List<com.phuzle.labs.messages.domain.text.DetectedEntity> = emptyList(),
 )
 
+@Immutable
 data class CurrentThreadUi(
     val id: String,
     val sender: String,
@@ -96,6 +101,7 @@ data class CurrentThreadUi(
     val firstContactLabel: String?,
 )
 
+@Immutable
 data class AccountUi(
     val last4: String,
     val transactionCount: Int,
@@ -104,6 +110,7 @@ data class AccountUi(
     val selected: Boolean,
 )
 
+@Immutable
 data class TransactionUi(
     val id: String,
     val merchant: String,
@@ -113,8 +120,10 @@ data class TransactionUi(
     val isCredit: Boolean,
 )
 
+@Immutable
 data class ReminderUi(val id: String, val title: String, val detail: String, val timeLabel: String)
 
+@Immutable
 data class DeletedThreadUi(
     val id: String,
     val sender: String,
@@ -127,8 +136,10 @@ data class DeletedThreadUi(
 
 /** Recycle Bin's "Deleted OTP codes" — individually soft-deleted messages (see
  * MessageEntity.deletedAt), distinct from [DeletedThreadUi]'s whole-conversation deletes. */
+@Immutable
 data class DeletedOtpMessageUi(val id: Long, val senderName: String, val body: String, val timeLabel: String)
 
+@Immutable
 data class BlockedNumberUi(val number: String)
 
 data class PillOptionUi(val key: String, val label: String, val active: Boolean)
@@ -148,11 +159,15 @@ data class BackupListUiState(
     val restoringKey: String? = null,
 )
 
+@Immutable
 data class ContactSuggestionUi(val name: String, val number: String, val photoUri: String? = null)
+@Immutable
 data class DraftUi(val id: String, val to: String, val bodyPreview: String, val timeLabel: String)
+@Immutable
 data class MessageActionTargetUi(val id: Long, val text: String)
 
 /** A single row in the Scheduled Messages hub — see AppViewModel.scheduledMessages. */
+@Immutable
 data class ScheduledMessageUi(
     val id: Long,
     val threadId: String,
@@ -174,3 +189,34 @@ data class ScheduledMessageActionTargetUi(val id: Long, val threadId: String)
 /** The in-flight edit of a scheduled message's body/time — non-null while EditScheduledMessageDialog
  * is showing. [body] is a live copy the dialog edits locally before Save commits it. */
 data class ScheduledMessageEditUi(val messageId: Long, val threadId: String, val body: String, val scheduledFor: Long)
+
+/** One row of search results. Contacts (a sender whose *name* matched) come first, then one row
+ * per matching *message* — a thread with ten hits shows up ten times, each at its own date, instead
+ * of being collapsed behind its newest message. */
+@Immutable
+sealed interface SearchResultUi {
+    val key: String
+
+    @Immutable
+    data class Contact(val thread: ThreadUi) : SearchResultUi {
+        override val key: String get() = "c-${thread.id}"
+    }
+
+    @Immutable
+    data class Message(
+        val messageId: Long,
+        val threadId: String,
+        val displayName: String,
+        val category: Category,
+        val isBusiness: Boolean,
+        val avatarColor: Color,
+        val photoUri: String?,
+        /** One-line excerpt of the message with the match in view, see SearchMatcher.snippet. */
+        val snippet: String,
+        val snippetMatch: Set<Int>,
+        val outgoing: Boolean,
+        val timeLabel: String,
+    ) : SearchResultUi {
+        override val key: String get() = "m-$messageId"
+    }
+}

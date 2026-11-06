@@ -24,6 +24,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
+import com.phuzle.labs.messages.ui.model.SearchResultUi
+import com.phuzle.labs.messages.ui.components.SearchSectionHeader
+import com.phuzle.labs.messages.ui.components.SearchMessageRow
+import com.phuzle.labs.messages.ui.components.SearchFiltersSheet
+import com.phuzle.labs.messages.ui.components.PillButton
+import com.phuzle.labs.messages.domain.search.SearchSort
+import com.phuzle.labs.messages.domain.search.SearchRange
+import com.phuzle.labs.messages.domain.search.SearchFilters
+import com.phuzle.labs.messages.domain.search.SearchDirection
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -102,10 +118,17 @@ private const val FAB_SIZE = 56
 private const val FAB_MARGIN = 16
 
 @Composable
-fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
+fun DashboardScreen(state: AppUiState, viewModel: AppViewModel, scroll: DashboardScrollState) {
     val tokens = MessagesTheme.tokens
     val context = androidx.compose.ui.platform.LocalContext.current
     val isMessages = state.activeTab == DashboardTab.Messages
+    val filters = state.searchFilters
+    val filtersRestrict = filters.category != Category.All ||
+        filters.range != com.phuzle.labs.messages.domain.search.SearchRange.Any ||
+        filters.direction != com.phuzle.labs.messages.domain.search.SearchDirection.Any
+    // Search mode with something to look for: the list switches from one-row-per-conversation to
+    // one-row-per-matching-message.
+    val showResults = isMessages && state.searchActive && (state.searchQuery.isNotBlank() || filtersRestrict)
     val navBarInset = com.phuzle.labs.messages.ui.components.remainingNavBarInset()
     // Closed-testing-only — see AppViewModel.dismissFeedbackBanner for the "comes back tomorrow"
     // behavior. A real first item in the list below (scrolls with everything else, shown for
@@ -135,7 +158,15 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
 
     Box(Modifier.fillMaxSize()) {
         when (state.activeTab) {
-            DashboardTab.Messages -> if (state.threads.isEmpty()) {
+            DashboardTab.Messages -> if (showResults) {
+                SearchResults(
+                    state = state,
+                    viewModel = viewModel,
+                    listState = scroll.results,
+                    topPadding = topContentPadding,
+                    bottomPadding = bottomContentPadding,
+                )
+            } else if (state.threads.isEmpty()) {
                 Column(Modifier.fillMaxSize().padding(top = topContentPadding, bottom = bottomContentPadding)) {
                     if (showFeedbackBanner) {
                         FeedbackBanner(
@@ -158,7 +189,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                     )
                 }
             } else {
-                val listState = rememberLazyListState()
+                val listState = scroll.inbox
                 // Undoing an archive/delete brings a thread back near the top of a recency-sorted
                 // list, but LazyColumn's key-based scroll anchoring keeps whatever was already on
                 // screen pinned in place — so the restored thread can reappear scrolled out of
@@ -174,8 +205,13 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                 // after "Personal" scrolled you partway down, still showing wherever Personal's
                 // items happened to leave the offset). A filter change should always read from
                 // the top, like a fresh list.
+                // Skipped on the very first composition, and on every re-entry to this screen (coming
+                // back from a thread): the list state now outlives the screen, so "composed again"
+                // is not "the filter changed" — only an actual change from the last seen value is.
                 LaunchedEffect(state.activeCategory, state.unreadOnly) {
-                    listState.scrollToItem(0)
+                    val key = state.activeCategory to state.unreadOnly
+                    if (scroll.lastFilter != null && scroll.lastFilter != key) listState.scrollToItem(0)
+                    scroll.lastFilter = key
                 }
                 LazyColumn(
                     state = listState,
@@ -265,6 +301,10 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                         onMenuClick = { showSelectionMenu = true },
                     ) {
                         Box(
+                            Modifier.size(48.dp).roundClickable(onClick = viewModel::shareSelectedContacts),
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(Icons.Filled.Share, contentDescription = "Share contacts", tint = tokens.textPrimary, modifier = Modifier.size(20.dp)) }
+                        Box(
                             Modifier.size(48.dp).roundClickable(onClick = viewModel::bulkMarkReadSelected),
                             contentAlignment = Alignment.Center,
                         ) { Icon(Icons.Filled.MarkEmailRead, contentDescription = "Mark as read", tint = tokens.textPrimary, modifier = Modifier.size(20.dp)) }
@@ -305,6 +345,10 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                     }
                     return@GlassBar
                 }
+                if (isMessages && state.searchActive) {
+                    SearchModeBar(state, viewModel)
+                    return@GlassBar
+                }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         Modifier.size(48.dp).roundClickable(onClick = viewModel::toggleDrawer),
@@ -316,18 +360,15 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                             modifier = Modifier
                                 .weight(1f)
                                 .height(48.dp)
+                                .clip(ShapePill)
                                 .background(tokens.inputBg, ShapePill)
+                                .clickable(onClick = viewModel::enterSearch)
                                 .padding(horizontal = 16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             Icon(Icons.Filled.Search, contentDescription = null, tint = tokens.textTertiary, modifier = Modifier.size(20.dp))
-                            FlatTextField(
-                                value = state.searchQuery,
-                                onValueChange = viewModel::onSearchChange,
-                                placeholder = "Search messages",
-                                modifier = Modifier.weight(1f),
-                            )
+                            Text("Search messages", color = tokens.textTertiary, fontSize = 15.sp, maxLines = 1)
                         }
                         DashboardTab.Passbook -> Text("Passbook", color = tokens.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                         DashboardTab.Reminders -> Text("Reminders", color = tokens.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
@@ -355,7 +396,10 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
                     ) { Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = tokens.textPrimary, modifier = Modifier.size(22.dp)) }
                 }
             }
-            if (isMessages && state.categories.isNotEmpty()) {
+            if (isMessages && state.searchActive && filters.activeCount > 0) {
+                SearchFilterSummary(filters, viewModel)
+            }
+            if (isMessages && !state.searchActive && state.categories.isNotEmpty()) {
                 val categoryScrollState = rememberScrollState()
                 val coroutineScope = rememberCoroutineScope()
                 var rowWidth by remember { mutableIntStateOf(0) }
@@ -430,7 +474,7 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
             }
         }
 
-        Box(
+        if (!state.searchActive) Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(
@@ -457,6 +501,145 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel) {
             onSelectAll = { viewModel.selectAllThreads(state.threads.map { it.id }) },
             onInvertSelection = { viewModel.invertThreadSelection(state.threads.map { it.id }) },
         )
+
+        SearchFiltersSheet(
+            visible = state.searchFiltersOpen,
+            filters = filters,
+            categories = state.categories.map { it.category },
+            onChange = viewModel::setSearchFilters,
+            onDismiss = viewModel::closeSearchFilters,
+        )
+    }
+}
+
+/** Hoisted above the screen (see AppRoot) so scroll positions survive opening a thread and coming back. */
+class DashboardScrollState(val inbox: LazyListState, val results: LazyListState) {
+    var lastFilter: Pair<Category, Boolean>? = null
+}
+
+@Composable
+private fun SearchModeBar(state: AppUiState, viewModel: AppViewModel) {
+    val tokens = MessagesTheme.tokens
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    // Only for a fresh search — coming back from an opened result must not re-raise the keyboard.
+    LaunchedEffect(Unit) {
+        if (state.searchQuery.isEmpty()) {
+            focus.requestFocus()
+            keyboard?.show()
+        }
+    }
+    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(48.dp).roundClickable(onClick = viewModel::exitSearch), contentAlignment = Alignment.Center) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search", tint = tokens.textPrimary, modifier = Modifier.size(22.dp))
+        }
+        Row(
+            modifier = Modifier.weight(1f).height(48.dp).background(tokens.inputBg, ShapePill).padding(start = 16.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.Search, contentDescription = null, tint = tokens.textTertiary, modifier = Modifier.size(20.dp))
+            FlatTextField(
+                value = state.searchQuery,
+                onValueChange = viewModel::onSearchChange,
+                placeholder = "Search messages",
+                modifier = Modifier.weight(1f).padding(start = 10.dp),
+                focusRequester = focus,
+            )
+            if (state.searchQuery.isNotEmpty()) {
+                Box(Modifier.size(40.dp).roundClickable(onClick = viewModel::clearSearchText), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Close, contentDescription = "Clear search", tint = tokens.textSecondary, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+        Box(Modifier.size(48.dp).roundClickable(onClick = viewModel::openSearchFilters), contentAlignment = Alignment.Center) {
+            Icon(
+                Icons.Filled.Tune, contentDescription = "Search filters",
+                tint = if (state.searchFilters.activeCount > 0) tokens.accentLabel else tokens.textPrimary,
+                modifier = Modifier.size(22.dp),
+            )
+            if (state.searchFilters.activeCount > 0) {
+                Box(Modifier.align(Alignment.TopEnd).padding(top = 10.dp, end = 10.dp).size(9.dp).background(tokens.accentDeep, CircleShape))
+            }
+        }
+    }
+}
+
+/** The non-default filters as removable chips, so it is always visible what is narrowing the results. */
+@Composable
+private fun SearchFilterSummary(filters: SearchFilters, viewModel: AppViewModel) {
+    val tokens = MessagesTheme.tokens
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .barElevation()
+            .background(tokens.surface)
+            .horizontalScroll(rememberScrollState())
+            .padding(start = 12.dp, end = 12.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (filters.sort != SearchSort.BestMatch) PillButton("Sort: ${filters.sort.label}", true, { viewModel.setSearchFilters(filters.copy(sort = SearchSort.BestMatch)) }, icon = Icons.Filled.Close)
+        if (filters.category != Category.All) PillButton(filters.category.label, true, { viewModel.setSearchFilters(filters.copy(category = Category.All)) }, icon = Icons.Filled.Close)
+        if (filters.range != SearchRange.Any) PillButton(filters.range.label, true, { viewModel.setSearchFilters(filters.copy(range = SearchRange.Any)) }, icon = Icons.Filled.Close)
+        if (filters.direction != SearchDirection.Any) PillButton(filters.direction.label, true, { viewModel.setSearchFilters(filters.copy(direction = SearchDirection.Any)) }, icon = Icons.Filled.Close)
+    }
+}
+
+@Composable
+private fun SearchResults(
+    state: AppUiState,
+    viewModel: AppViewModel,
+    listState: LazyListState,
+    topPadding: androidx.compose.ui.unit.Dp,
+    bottomPadding: androidx.compose.ui.unit.Dp,
+) {
+    // A new query or filter set starts reading from the top; re-entering after opening a result
+    // (same query/filters) keeps the position.
+    val key = Triple(state.searchQuery.trim(), state.searchFilters, state.searchLoaded)
+    val lastKey = remember { androidx.compose.runtime.mutableStateOf<Any?>(null) }
+    LaunchedEffect(key) {
+        if (lastKey.value != null && lastKey.value != key) listState.scrollToItem(0)
+        lastKey.value = key
+    }
+    val contacts = remember(state.searchResults) { state.searchResults.filterIsInstance<SearchResultUi.Contact>() }
+    val messages = remember(state.searchResults) { state.searchResults.filterIsInstance<SearchResultUi.Message>() }
+    when {
+        !state.searchLoaded -> Box(Modifier.fillMaxSize().padding(top = topPadding))
+        state.searchResults.isEmpty() -> EmptyState(
+            icon = Icons.Filled.Search,
+            title = "No results",
+            detail = if (state.searchQuery.isNotBlank()) "Nothing matches “${state.searchQuery.trim()}”. Try fewer words, or loosen the filters." else "Nothing matches these filters.",
+            modifier = Modifier.padding(top = topPadding, bottom = bottomPadding),
+        )
+        else -> LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(top = topPadding, bottom = bottomPadding),
+        ) {
+            if (contacts.isNotEmpty()) {
+                item(key = "h-contacts", contentType = "header") { SearchSectionHeader("Contacts") }
+                items(contacts, key = { it.key }, contentType = { "contact" }) { result ->
+                    ThreadRow(
+                        thread = result.thread,
+                        swipeRightActionKey = "none",
+                        swipeLeftActionKey = "none",
+                        onOpen = { viewModel.openThreadById(result.thread.id) },
+                        onLongPress = {},
+                        onSwipeRight = {},
+                        onSwipeLeft = {},
+                    )
+                }
+            }
+            if (messages.isNotEmpty()) {
+                item(key = "h-messages", contentType = "header") {
+                    SearchSectionHeader(
+                        if (state.searchTruncated) "Messages · newest ${state.searchMessageCount}" else "Messages · ${state.searchMessageCount}",
+                    )
+                }
+                items(messages, key = { it.key }, contentType = { "message" }) { result ->
+                    SearchMessageRow(result, onClick = { viewModel.openThreadAtMessage(result.threadId, result.messageId) })
+                }
+            }
+        }
     }
 }
 

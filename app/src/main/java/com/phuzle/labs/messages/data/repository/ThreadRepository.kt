@@ -3,7 +3,7 @@ package com.phuzle.labs.messages.data.repository
 import com.phuzle.labs.messages.core.sms.SmsProviderSync
 import com.phuzle.labs.messages.data.db.dao.BlockedNumberDao
 import com.phuzle.labs.messages.data.db.dao.MessageDao
-import com.phuzle.labs.messages.data.db.dao.SearchCandidateRow
+import com.phuzle.labs.messages.data.db.dao.MessageSearchRow
 import com.phuzle.labs.messages.data.db.dao.SystemLinkedMessageRow
 import com.phuzle.labs.messages.data.db.dao.ThreadDao
 import com.phuzle.labs.messages.data.db.dao.ThreadUnreadCount
@@ -13,6 +13,7 @@ import com.phuzle.labs.messages.data.db.entity.ThreadEntity
 import com.phuzle.labs.messages.domain.model.AvatarPalette
 import com.phuzle.labs.messages.domain.model.Category
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 
 class ThreadRepository(
     private val threadDao: ThreadDao,
@@ -85,12 +86,16 @@ class ThreadRepository(
     ): Pair<ThreadEntity, MessageEntity> {
         val existing = threadDao.findBySender(sender)
         val thread = if (existing != null) {
+            // A late-delivered or backfilled message can be older than what the thread already
+            // shows; the list row must keep summarising the *latest* message, not whichever one
+            // happened to be inserted last.
+            val isNewest = timestampMillis >= existing.lastMessageTime
             val updated = existing.copy(
                 displayName = displayName,
                 photoUri = photoUri,
-                lastMessagePreview = body,
-                lastMessageOutgoing = false,
-                lastMessageTime = timestampMillis,
+                lastMessagePreview = if (isNewest) body else existing.lastMessagePreview,
+                lastMessageOutgoing = if (isNewest) false else existing.lastMessageOutgoing,
+                lastMessageTime = maxOf(timestampMillis, existing.lastMessageTime),
                 unread = true,
                 // A reply from a previously-deleted/archived sender surfaces back in the inbox.
                 deletedAt = null,
@@ -325,7 +330,20 @@ class ThreadRepository(
         smsProviderSync.delete(systemIds)
     }
 
-    fun observeSearchCandidates(): Flow<List<SearchCandidateRow>> = threadDao.observeSearchCandidates()
+    /** See MessageDao.searchMessages. [tokenPatterns] are the four LIKE patterns from SearchMatcher.likePatterns. */
+    suspend fun searchMessages(
+        tokenPatterns: List<String>, fromTime: Long, direction: Int, category: String, limit: Int,
+    ): List<MessageSearchRow> = messageDao.searchMessages(
+        tokenPatterns[0], tokenPatterns[1], tokenPatterns[2], tokenPatterns[3], fromTime, direction, category, limit,
+    )
+
+    suspend fun searchInThread(threadId: String, tokenPatterns: List<String>, limit: Int): List<MessageEntity> =
+        messageDao.searchInThread(threadId, tokenPatterns[0], tokenPatterns[1], tokenPatterns[2], tokenPatterns[3], limit)
+
+    suspend fun messagesBetween(threadId: String, fromTimestamp: Long, beforeTimestamp: Long): List<MessageEntity> =
+        messageDao.between(threadId, fromTimestamp, beforeTimestamp)
+
+    suspend fun inboxOnce(): List<ThreadEntity> = threadDao.observeInbox().first()
     suspend fun purgeOtpMessagesBefore(cutoffMillis: Long) = messageDao.purgeOtpMessagesBefore(cutoffMillis, System.currentTimeMillis())
 
     fun observeDeletedOtpMessages() = messageDao.observeDeletedOtpMessages()

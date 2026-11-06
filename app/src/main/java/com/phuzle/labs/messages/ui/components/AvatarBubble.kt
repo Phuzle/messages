@@ -44,8 +44,16 @@ fun AvatarBubble(
 ) {
     val shape = if (isBusiness) RoundedCornerShape(10.dp) else RoundedCornerShape(50)
     if (photoUri != null) {
+        // Request an image no larger than the avatar itself (the contact photo can be a large
+        // original) and let it sit in Coil's memory cache across scroll — a list full of full-size
+        // decodes is a main source of dropped frames while scrolling a long inbox.
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val px = with(androidx.compose.ui.platform.LocalDensity.current) { size.roundToPx() }
+        val request = androidx.compose.runtime.remember(photoUri, px) {
+            coil.request.ImageRequest.Builder(context).data(photoUri).size(px).memoryCacheKey("$photoUri@$px").crossfade(false).build()
+        }
         AsyncImage(
-            model = photoUri,
+            model = request,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = modifier.size(size).clip(shape),

@@ -14,6 +14,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.CheckCircleOutline
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -29,7 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.phuzle.labs.messages.ui.theme.IconSizes
 import com.phuzle.labs.messages.ui.theme.MessagesTheme
 
-/** The bottom sheet triggered by a long-press on a message bubble: copy/reply/forward/delete.
+/** The bottom sheet triggered by a long-press on a message bubble: copy/reply/forward/share/select/delete.
  * Same icon-plus-label row pattern as the dashboard thread-row long-press (see ActionSheet). */
 @Composable
 fun MessageActionSheet(
@@ -39,6 +41,8 @@ fun MessageActionSheet(
     onReply: () -> Unit,
     onForward: () -> Unit,
     onDelete: () -> Unit,
+    onShare: () -> Unit,
+    onSelect: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (!visible) return
@@ -66,6 +70,10 @@ fun MessageActionSheet(
             MessageActionRow("Reply", tokens.textPrimary, Icons.AutoMirrored.Filled.Reply, onReply)
             SettingsRowDivider()
             MessageActionRow("Forward", tokens.textPrimary, Icons.AutoMirrored.Filled.Send, onForward)
+            SettingsRowDivider()
+            MessageActionRow("Share", tokens.textPrimary, Icons.Filled.Share, onShare)
+            SettingsRowDivider()
+            MessageActionRow("Select", tokens.textPrimary, Icons.Outlined.CheckCircleOutline, onSelect)
             SettingsRowDivider()
             MessageActionRow("Delete", tokens.danger, Icons.Filled.Delete, onDelete)
         }
