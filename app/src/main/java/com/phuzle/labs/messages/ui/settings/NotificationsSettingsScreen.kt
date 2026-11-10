@@ -156,12 +156,12 @@ fun NotificationsSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
         }
     }
 
-    sheetChannel?.let { channel ->
-        val enabled = enabledFor(channel, settings)
-        val priority = priorityFor(channel, settings)
-        val sheetState = rememberModalBottomSheetState()
-        ModalBottomSheet(onDismissRequest = { sheetChannel = null }, sheetState = sheetState) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).navigationBarsPadding().padding(bottom = 12.dp)) {
+    val shownChannel = com.phuzle.labs.messages.ui.components.rememberLast(sheetChannel)
+    com.phuzle.labs.messages.ui.components.AppBottomSheet(visible = sheetChannel != null, onDismiss = { sheetChannel = null }) {
+        shownChannel?.let { channel ->
+            val enabled = enabledFor(channel, settings)
+            val priority = priorityFor(channel, settings)
+            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 14.dp, bottom = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
                     SettingsIconBadge(icon = iconForCategory(channel.category), modifier = Modifier.padding(end = 12.dp))
                     Text(channel.name, color = tokens.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)

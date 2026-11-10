@@ -1,6 +1,7 @@
 package com.phuzle.labs.messages.ui.dashboard
 
 import com.phuzle.labs.messages.ui.theme.softElevation
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -155,6 +156,9 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel, scroll: Dashboar
     // GlassBar's shadow clips its content by default, which would make the popup invisible and
     // untouchable the moment it's taller than the bar itself. See SelectionTopBar.kt.
     var showSelectionMenu by remember { mutableStateOf(false) }
+    // Hoisted out of the selection bar: an overlay nested inside GlassBar would be clipped to it.
+    var showBulkArchiveConfirm by remember { mutableStateOf(false) }
+    var showBulkDeleteConfirm by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize()) {
         when (state.activeTab) {
@@ -292,11 +296,30 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel, scroll: Dashboar
             Modifier.align(Alignment.TopCenter).onGloballyPositioned { headerHeightPx = it.size.height },
         ) {
             GlassBar(height = 64.dp, inset = BarInset.Top) {
-                if (state.multiSelectThreadIds.isNotEmpty()) {
-                    var showBulkArchiveConfirm by remember { mutableStateOf(false) }
-                    var showBulkDeleteConfirm by remember { mutableStateOf(false) }
+                val barMode = when {
+                    state.multiSelectThreadIds.isNotEmpty() -> DashboardBarMode.Selection
+                    isMessages && state.searchActive -> DashboardBarMode.Search
+                    else -> DashboardBarMode.Browse
+                }
+                // Kept through the bar's fade-out, once the selection itself is already empty.
+                val selectedCount = com.phuzle.labs.messages.ui.components.rememberLast(state.multiSelectThreadIds.size.takeIf { it > 0 }) ?: 0
+                androidx.compose.animation.AnimatedContent(
+                    targetState = barMode,
+                    modifier = Modifier.fillMaxWidth(),
+                    transitionSpec = {
+                        val intoSearch = targetState == DashboardBarMode.Search
+                        val outOfSearch = initialState == DashboardBarMode.Search
+                        val enterShift: (Int) -> Int = { width -> if (intoSearch) width / 10 else if (outOfSearch) -width / 10 else 0 }
+                        (androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220, delayMillis = 70)) +
+                            androidx.compose.animation.slideInHorizontally(androidx.compose.animation.core.tween(260), enterShift))
+                            .togetherWith(androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120)))
+                    },
+                    label = "dashboardBar",
+                ) { mode ->
+                when (mode) {
+                DashboardBarMode.Selection -> {
                     SelectionTopBar(
-                        count = state.multiSelectThreadIds.size,
+                        count = selectedCount,
                         onClose = viewModel::exitMultiSelect,
                         onMenuClick = { showSelectionMenu = true },
                     ) {
@@ -317,39 +340,9 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel, scroll: Dashboar
                             contentAlignment = Alignment.Center,
                         ) { Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = tokens.danger, modifier = Modifier.size(20.dp)) }
                     }
-
-                    if (showBulkArchiveConfirm) {
-                        androidx.compose.material3.AlertDialog(
-                            onDismissRequest = { showBulkArchiveConfirm = false },
-                            title = { Text("Archive ${state.multiSelectThreadIds.size} chats?") },
-                            confirmButton = {
-                                androidx.compose.material3.TextButton(onClick = { viewModel.bulkArchiveSelected(); showBulkArchiveConfirm = false }) {
-                                    Text("Archive")
-                                }
-                            },
-                            dismissButton = { androidx.compose.material3.TextButton(onClick = { showBulkArchiveConfirm = false }) { Text("Cancel") } },
-                        )
-                    }
-                    if (showBulkDeleteConfirm) {
-                        androidx.compose.material3.AlertDialog(
-                            onDismissRequest = { showBulkDeleteConfirm = false },
-                            title = { Text("Delete ${state.multiSelectThreadIds.size} chats?") },
-                            text = { Text("Deleted chats move to the Recycle Bin for 30 days before they're purged for good.") },
-                            confirmButton = {
-                                androidx.compose.material3.TextButton(onClick = { viewModel.bulkDeleteSelected(); showBulkDeleteConfirm = false }) {
-                                    Text("Delete", color = tokens.danger)
-                                }
-                            },
-                            dismissButton = { androidx.compose.material3.TextButton(onClick = { showBulkDeleteConfirm = false }) { Text("Cancel") } },
-                        )
-                    }
-                    return@GlassBar
                 }
-                if (isMessages && state.searchActive) {
-                    SearchModeBar(state, viewModel)
-                    return@GlassBar
-                }
-                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                DashboardBarMode.Search -> SearchModeBar(state, viewModel)
+                DashboardBarMode.Browse -> Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         Modifier.size(48.dp).roundClickable(onClick = viewModel::toggleDrawer),
                         contentAlignment = Alignment.Center,
@@ -395,11 +388,21 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel, scroll: Dashboar
                         contentAlignment = Alignment.Center,
                     ) { Icon(Icons.Filled.MoreVert, contentDescription = "More options", tint = tokens.textPrimary, modifier = Modifier.size(22.dp)) }
                 }
+                }
+                }
             }
-            if (isMessages && state.searchActive && filters.activeCount > 0) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isMessages && state.searchActive && filters.activeCount > 0,
+                enter = androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(200)) + androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(200)),
+                exit = androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(160)) + androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120)),
+            ) {
                 SearchFilterSummary(filters, viewModel)
             }
-            if (isMessages && !state.searchActive && state.categories.isNotEmpty()) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isMessages && !state.searchActive && state.categories.isNotEmpty(),
+                enter = androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(220)) + androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)),
+                exit = androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(180)) + androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120)),
+            ) {
                 val categoryScrollState = rememberScrollState()
                 val coroutineScope = rememberCoroutineScope()
                 var rowWidth by remember { mutableIntStateOf(0) }
@@ -495,6 +498,24 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel, scroll: Dashboar
             Icon(Icons.Filled.Add, contentDescription = "Compose", tint = tokens.onAccentDeep, modifier = Modifier.size(26.dp))
         }
 
+        com.phuzle.labs.messages.ui.components.AppDialog(
+            visible = showBulkArchiveConfirm,
+            onDismiss = { showBulkArchiveConfirm = false },
+            title = "Archive ${state.multiSelectThreadIds.size} chats?",
+            message = "They move to Archived and come back if a new message arrives.",
+            confirmLabel = "Archive",
+            onConfirm = { viewModel.bulkArchiveSelected(); showBulkArchiveConfirm = false },
+        )
+        com.phuzle.labs.messages.ui.components.AppDialog(
+            visible = showBulkDeleteConfirm,
+            onDismiss = { showBulkDeleteConfirm = false },
+            title = "Delete ${state.multiSelectThreadIds.size} chats?",
+            message = "Deleted chats move to the Recycle Bin for 30 days before they're purged for good.",
+            confirmLabel = "Delete",
+            onConfirm = { viewModel.bulkDeleteSelected(); showBulkDeleteConfirm = false },
+            destructive = true,
+        )
+
         SelectionOverflowMenu(
             visible = showSelectionMenu,
             onDismiss = { showSelectionMenu = false },
@@ -516,6 +537,8 @@ fun DashboardScreen(state: AppUiState, viewModel: AppViewModel, scroll: Dashboar
 class DashboardScrollState(val inbox: LazyListState, val results: LazyListState) {
     var lastFilter: Pair<Category, Boolean>? = null
 }
+
+private enum class DashboardBarMode { Selection, Search, Browse }
 
 @Composable
 private fun SearchModeBar(state: AppUiState, viewModel: AppViewModel) {

@@ -132,6 +132,7 @@ data class DeletedThreadUi(
     val isBusiness: Boolean,
     val category: Category,
     val preview: String,
+    val photoUri: String? = null,
 )
 
 /** Recycle Bin's "Deleted OTP codes" — individually soft-deleted messages (see

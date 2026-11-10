@@ -12,7 +12,15 @@ import com.phuzle.labs.messages.data.db.entity.MessageEntity
 import com.phuzle.labs.messages.data.db.entity.ThreadEntity
 import com.phuzle.labs.messages.data.prefs.SettingsRepository
 import com.phuzle.labs.messages.domain.model.Category
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Builds and posts the real notification for a categorized, just-arrived message: MessagingStyle
@@ -25,6 +33,23 @@ class MessageNotifier(
 ) {
     private val manager = NotificationManagerCompat.from(context)
 
+    /** One just-arrived message waiting to be shown. */
+    private class Incoming(val thread: ThreadEntity, val message: MessageEntity, val category: Category, val otpCode: String?)
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val queueLock = Mutex()
+    private val queue = ArrayList<Incoming>()
+    private var batch: CompletableDeferred<Unit>? = null
+
+    /**
+     * Messages that arrive in a burst (several SMS_DELIVER broadcasts within moments of each other)
+     * used to each post their own notification straight away — all on the same per-thread id, from
+     * concurrently running receivers. Android sheds notifications from an app that enqueues more
+     * than a handful per second, and replaces rather than stacks posts that share an id, so of five
+     * quick messages only one or two ever showed. They are now collected for a short window and
+     * posted once per conversation, carrying every message in the burst, a little apart from each
+     * other. The caller (the receiver, holding its goAsync result) waits until its batch is posted.
+     */
     suspend fun notifyIncoming(thread: ThreadEntity, message: MessageEntity, category: Category, otpCode: String?) {
         val settings = settingsRepository.settingsFlow.first()
         if (!settings.notificationsAllowed) return
@@ -33,14 +58,49 @@ class MessageNotifier(
             android.content.pm.PackageManager.PERMISSION_GRANTED
         ) return
 
-        val notificationId = thread.id.hashCode()
-        val builder = when (category) {
-            Category.Otp -> buildOtpNotification(thread, message, otpCode, settings.quickActionButtons)
-            Category.Personal -> buildPersonalNotification(thread, message, settings.quickActionButtons)
-            else -> buildPlainNotification(thread, message, category)
+        val done = queueLock.withLock {
+            queue += Incoming(thread, message, category, otpCode)
+            batch ?: CompletableDeferred<Unit>().also { created ->
+                batch = created
+                scope.launch {
+                    delay(COALESCE_WINDOW_MS)
+                    flush()
+                }
+            }
         }
-        applyLockScreenVisibility(builder, thread, category.channelId, settings.lockScreenVisibility)
-        manager.notify(notificationId, builder.build())
+        done.await()
+    }
+
+    private suspend fun flush() {
+        val (items, done) = queueLock.withLock {
+            val taken = queue.toList()
+            queue.clear()
+            val finished = batch
+            batch = null
+            taken to finished
+        }
+        try {
+            val settings = settingsRepository.settingsFlow.first()
+            val byThread = items.groupBy { it.thread.id }.values
+            byThread.forEachIndexed { index, group ->
+                runCatching { post(group, settings) }
+                if (index < byThread.size - 1) delay(POST_SPACING_MS)
+            }
+        } finally {
+            done?.complete(Unit)
+        }
+    }
+
+    private fun post(group: List<Incoming>, settings: com.phuzle.labs.messages.data.prefs.AppSettings) {
+        val last = group.last()
+        val thread = last.thread
+        val builder = when (last.category) {
+            Category.Otp -> buildOtpNotification(thread, group, settings.quickActionButtons)
+            Category.Personal -> buildPersonalNotification(thread, group, settings.quickActionButtons)
+            else -> buildPlainNotification(thread, group, last.category)
+        }
+        applyLockScreenVisibility(builder, thread, last.category.channelId, settings.lockScreenVisibility)
+        manager.notify(thread.id.hashCode(), builder.build())
     }
 
     /** Clears a thread's notification once it's been read in-app — opening the thread (or a new
@@ -92,21 +152,24 @@ class MessageNotifier(
 
     private fun buildOtpNotification(
         thread: ThreadEntity,
-        message: MessageEntity,
-        otpCode: String?,
+        group: List<Incoming>,
         withActions: Boolean,
     ): NotificationCompat.Builder {
+        val latest = group.last()
         val builder = NotificationCompat.Builder(context, Category.Otp.channelId)
             .setSmallIcon(com.phuzle.labs.messages.R.drawable.ic_stat_message)
             .setContentTitle(thread.displayName)
-            .setContentText(message.body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(message.body))
+            .setContentText(latest.message.body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(joinedBodies(group)))
             .setContentIntent(openThreadIntent(thread.id))
             .setAutoCancel(true)
+            .setWhen(latest.message.timestamp)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
 
-        if (withActions && otpCode != null) {
-            val copyIntent = Intent(context, CopyCodeReceiver::class.java).putExtra(CopyCodeReceiver.EXTRA_CODE, otpCode)
+        // The newest code is the one worth one-tap copying.
+        val code = group.lastOrNull { it.otpCode != null }?.otpCode
+        if (withActions && code != null) {
+            val copyIntent = Intent(context, CopyCodeReceiver::class.java).putExtra(CopyCodeReceiver.EXTRA_CODE, code)
             val pendingIntent = PendingIntent.getBroadcast(
                 context, thread.id.hashCode(), copyIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
@@ -118,7 +181,7 @@ class MessageNotifier(
 
     private fun buildPersonalNotification(
         thread: ThreadEntity,
-        message: MessageEntity,
+        group: List<Incoming>,
         withActions: Boolean,
     ): NotificationCompat.Builder {
         // thread.photoUri (the same one AvatarBubble renders in-app) never made it onto the
@@ -131,14 +194,17 @@ class MessageNotifier(
                 ?.let { senderBuilder.setIcon(it) }
         }
         val sender = senderBuilder.build()
-        val style = NotificationCompat.MessagingStyle(Person.Builder().setName("You").build())
-            .addMessage(message.body, message.timestamp, sender)
+        // Carry on the conversation already showing in the tray (if any) rather than starting it
+        // over, so a message that arrives a moment after another doesn't erase the first from view.
+        val style = existingStyle(thread.id) ?: NotificationCompat.MessagingStyle(Person.Builder().setName("You").build())
+        group.forEach { style.addMessage(it.message.body, it.message.timestamp, sender) }
 
         val builder = NotificationCompat.Builder(context, Category.Personal.channelId)
             .setSmallIcon(com.phuzle.labs.messages.R.drawable.ic_stat_message)
             .setStyle(style)
             .setContentIntent(openThreadIntent(thread.id))
             .setAutoCancel(true)
+            .setWhen(group.last().message.timestamp)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
 
         if (withActions) {
@@ -160,16 +226,41 @@ class MessageNotifier(
 
     private fun buildPlainNotification(
         thread: ThreadEntity,
-        message: MessageEntity,
+        group: List<Incoming>,
         category: Category,
-    ): NotificationCompat.Builder =
-        NotificationCompat.Builder(context, category.channelId)
+    ): NotificationCompat.Builder {
+        val latest = group.last()
+        return NotificationCompat.Builder(context, category.channelId)
             .setSmallIcon(com.phuzle.labs.messages.R.drawable.ic_stat_message)
             .setContentTitle(thread.displayName)
-            .setContentText(message.body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(message.body))
+            .setContentText(latest.message.body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(withEarlierUnread(thread.id, group)))
             .setContentIntent(openThreadIntent(thread.id))
             .setAutoCancel(true)
+            .setWhen(latest.message.timestamp)
+    }
+
+    /** A thread has one notification slot, so a new arrival replaces the last one. For the styles that
+     * can't carry a conversation, keep the earlier bodies that are still in the tray in front of the
+     * new ones, so five quick messages read as five rather than just the last. */
+    private fun withEarlierUnread(threadId: String, group: List<Incoming>): String {
+        val earlier = runCatching {
+            context.getSystemService(android.app.NotificationManager::class.java)
+                .activeNotifications.firstOrNull { it.id == threadId.hashCode() }
+                ?.notification?.extras?.getCharSequence(NotificationCompat.EXTRA_BIG_TEXT)?.toString()
+        }.getOrNull()
+        val all = (earlier?.split("\n\n")?.filter { it.isNotBlank() } ?: emptyList()) + group.map { it.message.body }
+        return all.takeLast(MAX_PLAIN_LINES).joinToString("\n\n")
+    }
+
+    private fun joinedBodies(group: List<Incoming>): String = group.joinToString("\n\n") { it.message.body }
+
+    /** The MessagingStyle of this thread's notification if it's still in the tray. */
+    private fun existingStyle(threadId: String): NotificationCompat.MessagingStyle? = runCatching {
+        val active = context.getSystemService(android.app.NotificationManager::class.java)
+            .activeNotifications.firstOrNull { it.id == threadId.hashCode() }?.notification ?: return null
+        NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(active)
+    }.getOrNull()
 
     private fun applyLockScreenVisibility(
         builder: NotificationCompat.Builder,
@@ -189,6 +280,15 @@ class MessageNotifier(
                 builder.setPublicVersion(publicVersion)
             }
         }
+    }
+
+    private companion object {
+        /** How long a burst of arrivals is gathered before being shown. */
+        private const val MAX_PLAIN_LINES = 6
+        private const val COALESCE_WINDOW_MS = 400L
+
+        /** Gap between posts for different conversations — Android sheds an app that enqueues more than ~5 a second. */
+        const val POST_SPACING_MS = 260L
     }
 
     private fun isChannelEnabled(category: Category, settings: com.phuzle.labs.messages.data.prefs.AppSettings) =

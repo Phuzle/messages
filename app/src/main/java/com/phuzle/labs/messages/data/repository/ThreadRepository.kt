@@ -1,6 +1,7 @@
 package com.phuzle.labs.messages.data.repository
 
 import com.phuzle.labs.messages.core.sms.SmsProviderSync
+import kotlinx.coroutines.sync.withLock
 import com.phuzle.labs.messages.data.db.dao.BlockedNumberDao
 import com.phuzle.labs.messages.data.db.dao.MessageDao
 import com.phuzle.labs.messages.data.db.dao.MessageSearchRow
@@ -83,7 +84,7 @@ class ThreadRepository(
         photoUri: String? = null,
         subscriptionId: Int? = null,
         systemSmsId: Long? = null,
-    ): Pair<ThreadEntity, MessageEntity> {
+    ): Pair<ThreadEntity, MessageEntity> = incomingLock.withLock {
         val existing = threadDao.findBySender(sender)
         val thread = if (existing != null) {
             // A late-delivered or backfilled message can be older than what the thread already
@@ -129,8 +130,12 @@ class ThreadRepository(
             subscriptionId = subscriptionId, systemSmsId = systemSmsId,
         )
         val id = messageDao.insert(message)
-        return thread to message.copy(id = id)
+        thread to message.copy(id = id)
     }
+
+    /** Several SMS_DELIVER broadcasts can be running at once; the find-then-update of a thread (and
+     * the creation of a new one for a first-time sender) must not interleave between them. */
+    private val incomingLock = kotlinx.coroutines.sync.Mutex()
 
     /** Compose / thread-reply path. When [scheduledFor] is set the message is queued, not sent yet.
      * [subscriptionId] is the SIM this was (or will be) sent from, when the caller resolved one. */

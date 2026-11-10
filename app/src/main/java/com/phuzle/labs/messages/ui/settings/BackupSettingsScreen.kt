@@ -180,19 +180,15 @@ fun BackupSettingsScreen(state: AppUiState, viewModel: AppViewModel) {
         }
     }
 
-    if (showDisconnectConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDisconnectConfirm = false },
-            title = { Text("Disconnect Google Drive?") },
-            text = { Text("You'll stop backing up to Drive automatically. Reconnecting later needs signing in again — nothing already backed up is deleted.") },
-            confirmButton = {
-                TextButton(onClick = { viewModel.disconnectGoogleDrive(); showDisconnectConfirm = false }) {
-                    Text("Disconnect", color = tokens.danger)
-                }
-            },
-            dismissButton = { TextButton(onClick = { showDisconnectConfirm = false }) { Text("Cancel") } },
-        )
-    }
+    com.phuzle.labs.messages.ui.components.AppDialog(
+        visible = showDisconnectConfirm,
+        onDismiss = { showDisconnectConfirm = false },
+        title = "Disconnect Google Drive?",
+        message = "You'll stop backing up to Drive automatically. Reconnecting later needs signing in again — nothing already backed up is deleted.",
+        confirmLabel = "Disconnect",
+        onConfirm = { viewModel.disconnectGoogleDrive(); showDisconnectConfirm = false },
+        destructive = true,
+    )
 }
 
 private fun lastBackupLabel(target: String, timestamp: Long?): String =

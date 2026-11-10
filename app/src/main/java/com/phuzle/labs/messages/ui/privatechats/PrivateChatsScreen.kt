@@ -144,17 +144,13 @@ fun PrivateChatsScreen(state: AppUiState, viewModel: AppViewModel) {
         )
     }
 
-    if (showBulkDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showBulkDeleteConfirm = false },
-            title = { Text("Delete ${selection.size} chats?") },
-            text = { Text("Deleted chats move to the Recycle Bin for 30 days before they're purged for good.") },
-            confirmButton = {
-                TextButton(onClick = { viewModel.bulkDeletePrivateSelected(); showBulkDeleteConfirm = false }) {
-                    Text("Delete", color = tokens.danger)
-                }
-            },
-            dismissButton = { TextButton(onClick = { showBulkDeleteConfirm = false }) { Text("Cancel") } },
-        )
-    }
+    com.phuzle.labs.messages.ui.components.AppDialog(
+        visible = showBulkDeleteConfirm,
+        onDismiss = { showBulkDeleteConfirm = false },
+        title = "Delete ${selection.size} chats?",
+        message = "Deleted chats move to the Recycle Bin for 30 days before they're purged for good.",
+        confirmLabel = "Delete",
+        onConfirm = { viewModel.bulkDeletePrivateSelected(); showBulkDeleteConfirm = false },
+        destructive = true,
+    )
 }

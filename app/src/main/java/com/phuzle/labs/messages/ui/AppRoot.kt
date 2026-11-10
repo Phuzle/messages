@@ -294,27 +294,21 @@ fun AppRoot(viewModel: AppViewModel) {
                 ),
             )
 
-            state.markAllReadConfirmThreadIds?.let { threadIds ->
-                androidx.compose.material3.AlertDialog(
-                    onDismissRequest = viewModel::dismissMarkAllAsReadConfirm,
-                    title = { Text("Mark all as read?") },
-                    text = {
-                        Text(
-                            if (state.activeCategory == com.phuzle.labs.messages.domain.model.Category.All) {
-                                "This marks all ${threadIds.size} conversation(s) in your inbox as read."
-                            } else {
-                                "This marks ${threadIds.size} conversation(s) in ${state.activeCategory.label} as read."
-                            },
-                        )
-                    },
-                    confirmButton = {
-                        androidx.compose.material3.TextButton(onClick = viewModel::confirmMarkAllAsRead) { Text("Mark as read") }
-                    },
-                    dismissButton = {
-                        androidx.compose.material3.TextButton(onClick = viewModel::dismissMarkAllAsReadConfirm) { Text("Cancel") }
-                    },
-                )
-            }
+            val markAllIds = state.markAllReadConfirmThreadIds
+            com.phuzle.labs.messages.ui.components.AppDialog(
+                visible = markAllIds != null,
+                onDismiss = viewModel::dismissMarkAllAsReadConfirm,
+                title = "Mark all as read?",
+                message = markAllIds?.let { ids ->
+                    if (state.activeCategory == com.phuzle.labs.messages.domain.model.Category.All) {
+                        "This marks all ${ids.size} conversation(s) in your inbox as read."
+                    } else {
+                        "This marks ${ids.size} conversation(s) in ${state.activeCategory.label} as read."
+                    }
+                },
+                confirmLabel = "Mark as read",
+                onConfirm = viewModel::confirmMarkAllAsRead,
+            )
 
             ActionSheet(
                 sheet = state.actionSheet,

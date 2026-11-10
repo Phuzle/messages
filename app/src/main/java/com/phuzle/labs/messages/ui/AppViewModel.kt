@@ -131,6 +131,9 @@ private data class Ephemeral(
      * no way to schedule a reply at all, only Compose did. Cleared once that reply is actually
      * sent/scheduled or the thread is left. */
     val threadCustomScheduleMillis: Long? = null,
+    /** The saved draft the reply bar's text came from (or was last saved as) — see
+     * [AppViewModel.persistThreadDraft]. Sending the reply deletes it. */
+    val threadDraftId: String? = null,
     val composeTo: String = "",
     val composeBody: String = "",
     val composeRecipients: List<ContactSuggestionUi> = emptyList(),
@@ -402,20 +405,30 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     /** The reactive "live window" — only the most recent [MESSAGE_PAGE_SIZE] rows, so an old
      * thread with thousands of messages doesn't get pulled into memory on open. */
-    private val recentThreadMessages: Flow<List<MessageEntity>> = ephemeral
+    /** A message list tagged with the thread it belongs to. [flatMapLatest] switching threads leaves
+     * the *previous* thread's list as the latest value until the new query emits, and the UI state is
+     * assembled from several independently-timed flows — so without the tag the thread screen could
+     * briefly be handed another conversation's messages, decide it had "arrived" and scroll to the
+     * end of *that* list, then be left stranded mid-thread when the real messages replaced it. */
+    private data class ThreadWindow<T>(val threadId: String?, val messages: List<T>)
+
+    private val recentThreadMessages: Flow<ThreadWindow<MessageEntity>> = ephemeral
         .map { it.activeThreadId }
         .distinctUntilChanged()
-        .flatMapLatest { id -> id?.let { container.threadRepository.observeRecentMessages(it, MESSAGE_PAGE_SIZE) } ?: flowOf(emptyList()) }
+        .flatMapLatest { id ->
+            if (id == null) flowOf(ThreadWindow(null, emptyList()))
+            else container.threadRepository.observeRecentMessages(id, MESSAGE_PAGE_SIZE).map { ThreadWindow(id, it) }
+        }
 
     /** Older pages loaded on-demand (see [loadOlderMessages]) are prepended in front of the live window. */
-    private val activeThreadMessages: Flow<List<MessageEntity>> = combine(
+    private val activeThreadMessages: Flow<ThreadWindow<MessageEntity>> = combine(
         recentThreadMessages,
         ephemeral.map { it.olderMessages }.distinctUntilChanged(),
-    ) { recent, older -> (older + recent.sortedBy { it.timestamp }).distinctBy { it.id } }
+    ) { recent, older -> ThreadWindow(recent.threadId, (older + recent.messages.sortedBy { it.timestamp }).distinctBy { it.id }) }
 
     /** Mapped to UI models on a background thread and on its own, so typing in the reply bar (or
      * any other UI-state change) doesn't re-map every loaded message. */
-    private val threadMessagesUi: Flow<List<MessageUi>> = activeThreadMessages.map { list -> list.map(::toMessageUi) }
+    private val threadMessagesUi: Flow<ThreadWindow<MessageUi>> = activeThreadMessages.map { w -> ThreadWindow(w.threadId, w.messages.map(::toMessageUi)) }
 
     /** Link/phone/OTP detection is regex work; a message's body never changes, so remember the
      * result instead of redoing it on every state rebuild. */
@@ -500,7 +513,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             )
         }
         .combine(inboxUi) { state, inbox -> state.copy(categories = inbox.categories, threads = inbox.threads, hasUnread = inbox.hasUnread) }
-        .combine(threadMessagesUi) { state, messages -> state.copy(currentThreadMessages = messages) }
+        .combine(threadMessagesUi) { state, window ->
+            // Only ever show the open thread's own messages (see ThreadWindow).
+            state.copy(currentThreadMessages = if (window.threadId != null && window.threadId == state.currentThread?.id) window.messages else emptyList())
+        }
         .combine(searchOutput) { state, out ->
             if (out == null) state else state.copy(
                 searchResults = out.results, searchLoaded = true, searchMessageCount = out.messageCount, searchTruncated = out.truncated,
@@ -627,7 +643,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
         fun toDeleted(t: ThreadEntity) = DeletedThreadUi(
             t.id, t.displayName, initialsFor(t.displayName), androidx.compose.ui.graphics.Color(t.avatarColor), t.isBusiness,
-            Category.fromStoredName(t.category), t.lastMessagePreview,
+            Category.fromStoredName(t.category), t.lastMessagePreview, t.photoUri,
         )
 
         val actionSheet = eph.actionSheetThreadId?.let { id ->
@@ -1009,6 +1025,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     fun goBack() {
         val eph = ephemeral.value
+        if (eph.pushedScreen == PushedScreen.Thread) persistThreadDraft(eph)
         when {
             eph.pushedScreen == PushedScreen.Compose -> closeCompose()
             eph.pushedScreen == PushedScreen.ThreadInfo && eph.threadInfoOpenedFromList -> ephemeral.update {
@@ -1055,9 +1072,13 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     // region ---- threads ----
 
     fun openThreadById(id: String) {
+        // Moving straight from one open thread to another (a notification tap) shouldn't drop what
+        // was typed in the first.
+        ephemeral.value.takeIf { it.pushedScreen == PushedScreen.Thread && it.activeThreadId != id }?.let(::persistThreadDraft)
         ephemeral.update {
             it.copy(
                 pushedScreen = PushedScreen.Thread, activeThreadId = id, threadInput = "",
+                threadCustomScheduleMillis = null, threadDraftId = null,
                 olderMessages = emptyList(), hasMoreOlderMessages = true, isLoadingOlderMessages = false,
                 threadOpenedFromPrivateChats = it.pushedScreen == PushedScreen.PrivateChats,
                 selectedMessageIds = emptySet(), pendingScrollToMessageId = null, highlightMessageId = null,
@@ -1073,7 +1094,44 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             if (thread.unread) container.threadRepository.toggleRead(id, true)
             container.messageNotifier.cancelForThread(id)
         }
+        prefillThreadDraft(id)
     }
+
+    /** Reopening a conversation that has a saved draft to this person shows it again in the reply
+     * bar — text and, if one was set, the send-later time — instead of an empty box. */
+    private fun prefillThreadDraft(threadId: String) = viewModelScope.launch {
+        val thread = container.threadRepository.getThread(threadId) ?: return@launch
+        val draft = container.draftRepository.observeAll().first().firstOrNull { d ->
+            val numbers = d.to.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            numbers.size == 1 && com.phuzle.labs.messages.domain.text.PhoneNumbers.same(numbers[0], thread.sender)
+        } ?: return@launch
+        ephemeral.update {
+            // Only if the reader is still in this thread and hasn't started typing something else.
+            if (it.activeThreadId == threadId && it.threadInput.isEmpty()) {
+                it.copy(threadInput = draft.body, threadCustomScheduleMillis = draft.scheduledFor, threadDraftId = draft.id)
+            } else it
+        }
+    }
+
+    /** Leaving a thread with unsent text keeps it as a draft (same as closing Compose does), and a
+     * draft the reader emptied out is discarded — with an undo, never silently. */
+    private fun persistThreadDraft(eph: Ephemeral) {
+        val threadId = eph.activeThreadId ?: return
+        val body = eph.threadInput.trim()
+        val draftId = eph.threadDraftId
+        viewModelScope.launch {
+            val thread = container.threadRepository.getThread(threadId) ?: return@launch
+            if (body.isEmpty()) {
+                val draft = draftId?.let { container.draftRepository.findById(it) } ?: return@launch
+                container.draftRepository.delete(draft.id)
+                offerUndo("Draft discarded") { container.draftRepository.save(draft.id, draft.to, draft.body, draft.scheduledFor) }
+                return@launch
+            }
+            container.draftRepository.save(draftId, thread.sender, body, eph.threadCustomScheduleMillis)
+            if (draftId == null) toast("Saved to drafts")
+        }
+    }
+
 
     /**
      * Opens [threadId] scrolled to one specific message — a search hit may be years back, well
@@ -1098,9 +1156,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                     hasMore = before.size == SEARCH_CONTEXT_BEFORE
                 }
             }
+            ephemeral.value.takeIf { it.pushedScreen == PushedScreen.Thread && it.activeThreadId != threadId }?.let(::persistThreadDraft)
             ephemeral.update {
                 it.copy(
                     pushedScreen = PushedScreen.Thread, activeThreadId = threadId, threadInput = "",
+                    threadCustomScheduleMillis = null, threadDraftId = null,
                     olderMessages = older, hasMoreOlderMessages = hasMore, isLoadingOlderMessages = false,
                     threadOpenedFromPrivateChats = false, selectedMessageIds = emptySet(),
                     threadSearchActive = false, threadSearchQuery = "",
@@ -1110,6 +1170,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             val thread = repo.getThread(threadId) ?: return@launch
             if (thread.unread) repo.toggleRead(threadId, true)
             container.messageNotifier.cancelForThread(threadId)
+            prefillThreadDraft(threadId)
         }
     }
 
@@ -1129,7 +1190,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         if (eph.isLoadingOlderMessages || !eph.hasMoreOlderMessages) return@launch
 
         ephemeral.update { it.copy(isLoadingOlderMessages = true) }
-        val oldestLoadedTimestamp = activeThreadMessages.first().firstOrNull()?.timestamp
+        val oldestLoadedTimestamp = activeThreadMessages.first().messages.firstOrNull()?.timestamp
         if (oldestLoadedTimestamp == null) {
             ephemeral.update { it.copy(isLoadingOlderMessages = false) }
             return@launch
@@ -1437,7 +1498,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 threadId, text, scheduledFor, scheduleLabel, System.currentTimeMillis(), subscriptionId,
             )
             container.scheduledMessageAlarmScheduler.schedule(message.id, scheduledFor)
-            ephemeral.update { it.copy(threadInput = "", threadCustomScheduleMillis = null) }
+            ephemeral.update { it.copy(threadInput = "", threadCustomScheduleMillis = null, threadDraftId = null) }
+            eph.threadDraftId?.let { container.draftRepository.delete(it) }
             toast("Scheduled for $scheduleLabel")
             return@launch
         }
@@ -1445,7 +1507,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         val message = container.threadRepository.appendOutgoingMessage(
             threadId, text, null, null, System.currentTimeMillis(), subscriptionId,
         )
-        ephemeral.update { it.copy(threadInput = "") }
+        ephemeral.update { it.copy(threadInput = "", threadDraftId = null) }
+        eph.threadDraftId?.let { container.draftRepository.delete(it) }
 
         val sendJob = viewModelScope.launch {
             delay(UNDO_WINDOW_MS)

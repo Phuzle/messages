@@ -44,35 +44,29 @@ private const val HOT_SWAP_WINDOW_MS = 30_000L
  * no indication it's about to (or already did) time out. */
 @Composable
 fun OtpModal(otp: OtpModalUi?, onCopy: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
-    if (otp == null) return
+    val shown = rememberLast(otp) ?: return
     val tokens = MessagesTheme.tokens
 
-    var remainingMs by remember(otp.expiresAtMillis) {
-        mutableLongStateOf((otp.expiresAtMillis - System.currentTimeMillis()).coerceAtLeast(0))
+    var remainingMs by remember(shown.expiresAtMillis) {
+        mutableLongStateOf((shown.expiresAtMillis - System.currentTimeMillis()).coerceAtLeast(0))
     }
-    LaunchedEffect(otp.expiresAtMillis) {
+    LaunchedEffect(shown.expiresAtMillis) {
         while (remainingMs > 0) {
             delay(250)
-            remainingMs = (otp.expiresAtMillis - System.currentTimeMillis()).coerceAtLeast(0)
+            remainingMs = (shown.expiresAtMillis - System.currentTimeMillis()).coerceAtLeast(0)
         }
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(tokens.overlayBg)
-            .padding(32.dp),
-        contentAlignment = Alignment.Center,
+    AppDialogHost(
+        visible = otp != null,
+        onDismiss = onDismiss,
+        modifier = modifier,
+        maxWidth = 296.dp,
+        contentPadding = Modifier.padding(start = 24.dp, end = 24.dp, top = 28.dp, bottom = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(
-            modifier = Modifier
-                .widthIn(max = 296.dp)
-                .background(tokens.modalBg, ShapeLarge)
-                .padding(start = 24.dp, end = 24.dp, top = 28.dp, bottom = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
             Text(
-                otp.senderLabel,
+                shown.senderLabel,
                 color = tokens.modalText.copy(alpha = 0.6f),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
@@ -80,7 +74,7 @@ fun OtpModal(otp: OtpModalUi?, onCopy: () -> Unit, onDismiss: () -> Unit, modifi
             )
             SelectionContainer {
                 Text(
-                    otp.code,
+                    shown.code,
                     color = tokens.modalText,
                     fontSize = 40.sp,
                     fontWeight = FontWeight.Bold,
@@ -91,7 +85,7 @@ fun OtpModal(otp: OtpModalUi?, onCopy: () -> Unit, onDismiss: () -> Unit, modifi
             }
             // Flat button like PrimaryButton (DESIGN.md: no Material `Button`), on the modal's own accent pair.
             Text(
-                if (otp.copied) "Copied ✓" else "Copy to Clipboard",
+                if (shown.copied) "Copied ✓" else "Copy to Clipboard",
                 color = tokens.onModalAccent,
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp,
@@ -119,6 +113,5 @@ fun OtpModal(otp: OtpModalUi?, onCopy: () -> Unit, onDismiss: () -> Unit, modifi
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 8.dp),
             )
-        }
     }
 }
