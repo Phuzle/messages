@@ -1,11 +1,13 @@
 package com.phuzle.labs.messages.ui.thread
 
 import android.content.Intent
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,6 +54,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -130,18 +133,13 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel, scrollStore: Thread
         if (!launched) android.widget.Toast.makeText(context, "No email app found", android.widget.Toast.LENGTH_SHORT).show()
     }
 
-    // Opening a conversation should land on the most recent message, like any other chat app —
-    // not at the top of whatever's currently loaded. Messages arrive asynchronously (a Flow, not
-    // available the instant this composable enters), so this fires once real content shows up
-    // for this thread rather than immediately on thread.id changing. Guarded by
-    // scrolledToBottomFor so it only happens once per thread open, not on every later message.
-    var scrolledToBottomFor by remember { mutableStateOf<String?>(if (returningToThread) thread.id else null) }
-    // Separately, after that initial landing, a *new* message extending the list should pull the
-    // view down to it too — but only when the reader was already at (or basically at) the
-    // bottom. Someone scrolled up rereading older history shouldn't get yanked down to the
-    // newest message the instant one arrives; this mirrors how any other chat app behaves.
-    var lastKnownEntryCount by remember { mutableIntStateOf(0) }
-    var skipNextCountCheck by remember { mutableStateOf(returningToThread) }
+    // "Pinned" means the reader is at the end of the conversation and wants to stay there: opening
+    // a thread lands on the latest message, and from then on anything that pushes the end out of
+    // view — a new message, older history prepended above, the reply bar growing, the keyboard
+    // opening — pulls the list back to it. Dragging the list unpins; scrolling back to the end
+    // pins again. A thread reopened from Contact info keeps wherever it was (see ThreadScrollStore),
+    // and one opened from a search result goes to that message instead (see below).
+    var pinned by remember(thread.id) { mutableStateOf(!returningToThread && state.pendingScrollToMessageId == null) }
 
     val canSend = state.threadInput.isNotBlank()
     val scheduleState = com.phuzle.labs.messages.ui.components.rememberScheduleSendState()
@@ -160,40 +158,18 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel, scrollStore: Thread
         }
     }
 
+    val entriesState = rememberUpdatedState(listEntries)
+
     // A search result was opened: bring that message into view and flash it. Handled before (and
-    // instead of) the "land on the latest message" logic below, which must then stay out of the way.
+    // instead of) the "stay at the end" logic below, which must then stay out of the way.
     LaunchedEffect(state.pendingScrollToMessageId, listEntries) {
         val target = state.pendingScrollToMessageId ?: return@LaunchedEffect
         val index = listEntries.indexOfFirst { it is ThreadListEntry.Msg && it.message.id == target }
         if (index < 0) return@LaunchedEffect
+        pinned = false
         // A couple of rows of context above the hit rather than pinning it to the very top edge.
         listState.scrollToItem((index - 2).coerceAtLeast(0))
-        scrolledToBottomFor = thread.id
-        lastKnownEntryCount = listEntries.size
         viewModel.onScrolledToMessage(target)
-    }
-
-    LaunchedEffect(thread.id, listEntries.size) {
-        if (listEntries.isEmpty()) return@LaunchedEffect
-        if (state.pendingScrollToMessageId != null) return@LaunchedEffect
-        if (skipNextCountCheck) {
-            skipNextCountCheck = false
-            lastKnownEntryCount = listEntries.size
-            return@LaunchedEffect
-        }
-        if (scrolledToBottomFor != thread.id) {
-            listState.scrollToItem(listEntries.size - 1)
-            scrolledToBottomFor = thread.id
-        } else if (state.threadSearchQuery.isBlank() && listEntries.size > lastKnownEntryCount) {
-            // Not a search-driven count change (see listEntries above) — a genuinely new message.
-            // LazyColumn doesn't reflow existing items when the list grows, so whatever was the
-            // last *visible* index right now still reflects where the reader was relative to the
-            // list's *old* end, before this item was appended.
-            val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            val wasAtBottom = lastVisibleIndex >= lastKnownEntryCount - 2
-            if (wasAtBottom) listState.animateScrollToItem(listEntries.size - 1)
-        }
-        lastKnownEntryCount = listEntries.size
     }
 
     // Height of whatever occupies the bottom edge (reply bar, or the "can't reply" banner), so the
@@ -202,6 +178,34 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel, scrollStore: Thread
     val bottomDensity = androidx.compose.ui.platform.LocalDensity.current
     var bottomBarPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val bottomBarHeight = with(bottomDensity) { bottomBarPx.toDp() }
+
+    LaunchedEffect(listState) {
+        listState.interactionSource.interactions.collect { if (it is DragInteraction.Start) pinned = false }
+    }
+    LaunchedEffect(listState) {
+        // Back at the very end after the reader's own scrolling: pin again.
+        snapshotFlow { !listState.isScrollInProgress && !listState.canScrollForward && listState.layoutInfo.totalItemsCount > 0 }
+            .collect { atEnd -> if (atEnd && latestState.value.pendingScrollToMessageId == null && latestState.value.threadSearchQuery.isBlank()) pinned = true }
+    }
+    LaunchedEffect(thread.id, listState) {
+        // The one rule that keeps the end in view: while pinned, anything that leaves content below
+        // the viewport scrolls back down. Instant (not animated) so it tracks the keyboard and the
+        // reply bar frame by frame; a new message's own animated scroll is left to finish first.
+        snapshotFlow { pinned && listState.canScrollForward && !listState.isScrollInProgress && latestState.value.threadSearchQuery.isBlank() }
+            .collectLatest { needs ->
+                if (needs) {
+                    val last = entriesState.value.lastIndex
+                    if (last >= 0) listState.scrollToItem(last)
+                }
+            }
+    }
+    // A message arriving while pinned eases down to it instead of jumping.
+    var lastEntryCount by remember(thread.id) { mutableIntStateOf(0) }
+    LaunchedEffect(thread.id, listEntries.size) {
+        val grew = lastEntryCount > 0 && listEntries.size > lastEntryCount
+        lastEntryCount = listEntries.size
+        if (grew && pinned && state.threadSearchQuery.isBlank()) listState.animateScrollToItem(listEntries.lastIndex)
+    }
 
     Box(Modifier.fillMaxSize().imePadding()) {
         LazyColumn(
@@ -283,13 +287,30 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel, scrollStore: Thread
         }
 
         GlassBar(modifier = Modifier.align(Alignment.TopCenter), height = 64.dp, inset = BarInset.Top) {
+            // 0 = selecting messages, 1 = searching the conversation, 2 = the normal header; the bar
+            // fades between them instead of snapping.
+            val headerMode = when {
+                state.selectedMessageIds.isNotEmpty() -> 0
+                state.threadSearchActive -> 1
+                else -> 2
+            }
+            val selectedCount = com.phuzle.labs.messages.ui.components.rememberLast(state.selectedMessageIds.size.takeIf { it > 0 }) ?: 0
+            androidx.compose.animation.AnimatedContent(
+                targetState = headerMode,
+                modifier = Modifier.fillMaxWidth(),
+                transitionSpec = {
+                    androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(200, delayMillis = 60))
+                        .togetherWith(androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120)))
+                },
+                label = "threadHeader",
+            ) { mode ->
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (state.selectedMessageIds.isNotEmpty()) {
+                if (mode == 0) {
                     Box(Modifier.size(48.dp).roundClickable(onClick = viewModel::exitMessageSelection), contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.Close, contentDescription = "Cancel selection", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
                     }
                     Text(
-                        "${state.selectedMessageIds.size} selected", color = tokens.textPrimary, fontSize = 18.sp,
+                        "$selectedCount selected", color = tokens.textPrimary, fontSize = 18.sp,
                         fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 4.dp),
                     )
                     Box(Modifier.size(48.dp).roundClickable(onClick = viewModel::selectAllMessages), contentAlignment = Alignment.Center) {
@@ -301,7 +322,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel, scrollStore: Thread
                     Box(Modifier.size(48.dp).roundClickable(onClick = viewModel::shareSelectedMessages), contentAlignment = Alignment.Center) {
                         Icon(Icons.Filled.Share, contentDescription = "Share", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
                     }
-                } else if (state.threadSearchActive) {
+                } else if (mode == 1) {
                     Box(Modifier.size(48.dp).roundClickable(onClick = viewModel::closeThreadSearch), contentAlignment = Alignment.Center) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Close search", tint = tokens.textPrimary, modifier = Modifier.size(20.dp))
                     }
@@ -335,6 +356,7 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel, scrollStore: Thread
                     }
                 }
             }
+            }
         }
 
         OverflowMenu(
@@ -356,31 +378,42 @@ fun ThreadScreen(state: AppUiState, viewModel: AppViewModel, scrollStore: Thread
 
         if (thread.isReplyable && !thread.isBlocked) {
             Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { bottomBarPx = it.height }.barElevation(atTop = true).background(tokens.surface).navigationBarsPadding()) {
-                if (state.settings.showCharCount) {
-                    Text(
-                        "${state.threadInput.length} characters", color = tokens.textTertiary, fontSize = 11.sp,
-                        modifier = Modifier.padding(start = 16.dp, top = 6.dp),
-                    )
-                }
-                state.threadCustomScheduleMillis?.let { millis ->
+                // Schedule time on the left, character count on the right, in one slim row that
+                // eases in and out — two stacked lines made the bar jump taller for each.
+                val scheduleMillis = state.threadCustomScheduleMillis
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = state.settings.showCharCount || scheduleMillis != null,
+                    enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+                    exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
+                ) {
                     Row(
-                        modifier = Modifier
-                            .padding(start = 16.dp, top = 8.dp)
-                            .clip(com.phuzle.labs.messages.ui.theme.ShapePill)
-                            .background(tokens.accentSoft, com.phuzle.labs.messages.ui.theme.ShapePill)
-                            .clickable(onClick = { viewModel.setThreadCustomSchedule(null) })
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        // Same accentSoft-background/accent-foreground pairing as Compose's own
-                        // schedule chip — accentText only reads correctly on the solid accent
-                        // background, not this translucent tint (see ComposeScreen).
-                        Text(
-                            com.phuzle.labs.messages.ui.format.formatScheduleTime(millis),
-                            color = tokens.accentLabel, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold,
-                        )
-                        Icon(Icons.Filled.Close, contentDescription = "Clear schedule", tint = tokens.accentLabel, modifier = Modifier.size(12.dp))
+                        if (scheduleMillis != null) {
+                            Row(
+                                modifier = Modifier
+                                    .clip(com.phuzle.labs.messages.ui.theme.ShapePill)
+                                    .background(tokens.accentSoft, com.phuzle.labs.messages.ui.theme.ShapePill)
+                                    .clickable(onClick = { viewModel.setThreadCustomSchedule(null) })
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                // Same accentSoft-background/accent-foreground pairing as Compose's own
+                                // schedule chip — accentText only reads correctly on the solid accent
+                                // background, not this translucent tint (see ComposeScreen).
+                                Text(
+                                    com.phuzle.labs.messages.ui.format.formatScheduleTime(scheduleMillis),
+                                    color = tokens.accentLabel, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold,
+                                )
+                                Icon(Icons.Filled.Close, contentDescription = "Clear schedule", tint = tokens.accentLabel, modifier = Modifier.size(12.dp))
+                            }
+                        }
+                        Spacer(Modifier.weight(1f))
+                        if (state.settings.showCharCount) {
+                            Text("${state.threadInput.length} chars", color = tokens.textTertiary, fontSize = 11.sp)
+                        }
                     }
                 }
                 Row(

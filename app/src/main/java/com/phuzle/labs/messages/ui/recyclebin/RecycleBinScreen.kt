@@ -148,33 +148,25 @@ fun RecycleBinScreen(state: AppUiState, viewModel: AppViewModel) {
         )
     }
 
-    if (showEmptyConfirm) {
-        AlertDialog(
-            onDismissRequest = { showEmptyConfirm = false },
-            title = { Text("Empty recycle bin?") },
-            text = { Text("This permanently deletes $totalCount item(s) and can't be undone.") },
-            confirmButton = {
-                TextButton(onClick = { viewModel.emptyRecycleBin(); showEmptyConfirm = false }) {
-                    Text("Empty bin", color = tokens.danger)
-                }
-            },
-            dismissButton = { TextButton(onClick = { showEmptyConfirm = false }) { Text("Cancel") } },
-        )
-    }
+    com.phuzle.labs.messages.ui.components.AppDialog(
+        visible = showEmptyConfirm,
+        onDismiss = { showEmptyConfirm = false },
+        title = "Empty recycle bin?",
+        message = "This permanently deletes $totalCount item(s) and can't be undone.",
+        confirmLabel = "Empty bin",
+        onConfirm = { viewModel.emptyRecycleBin(); showEmptyConfirm = false },
+        destructive = true,
+    )
 
-    if (showBulkDeleteForeverConfirm) {
-        AlertDialog(
-            onDismissRequest = { showBulkDeleteForeverConfirm = false },
-            title = { Text("Delete ${selection.size} chats forever?") },
-            text = { Text("This permanently deletes them and can't be undone.") },
-            confirmButton = {
-                TextButton(onClick = { viewModel.bulkDeleteForeverSelected(); showBulkDeleteForeverConfirm = false }) {
-                    Text("Delete forever", color = tokens.danger)
-                }
-            },
-            dismissButton = { TextButton(onClick = { showBulkDeleteForeverConfirm = false }) { Text("Cancel") } },
-        )
-    }
+    com.phuzle.labs.messages.ui.components.AppDialog(
+        visible = showBulkDeleteForeverConfirm,
+        onDismiss = { showBulkDeleteForeverConfirm = false },
+        title = "Delete ${selection.size} chats forever?",
+        message = "This permanently deletes them and can't be undone.",
+        confirmLabel = "Delete forever",
+        onConfirm = { viewModel.bulkDeleteForeverSelected(); showBulkDeleteForeverConfirm = false },
+        destructive = true,
+    )
 }
 
 @Composable

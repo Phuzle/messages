@@ -86,7 +86,7 @@ fun SimpleThreadRow(
                 )
             }
         } else {
-            AvatarBubble(item.category, item.avatarColor, item.isBusiness, size = 48.dp)
+            AvatarBubble(item.category, item.avatarColor, item.isBusiness, size = 48.dp, photoUri = item.photoUri)
         }
         Column(modifier = Modifier.weight(1f).padding(start = 14.dp)) {
             Text(item.sender, color = tokens.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)

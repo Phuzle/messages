@@ -208,6 +208,34 @@ progress state, a yes/no decision) — and must share one look:
 - Ranking is a domain concern (`domain/search`), never a UI one: strong matches (whole word / word
   start) first, newest-first within each band.
 
+## Sheets and dialogs — `ui/components/Overlays.kt` only
+
+Every popup is one of two shapes; never use Material `AlertDialog`, `ModalBottomSheet` or `Dialog` directly
+(the date/time pickers in `ScheduleSendPicker` are the one deliberate exception).
+
+- **`AppBottomSheet`** — pick an action or adjust options. Rows are `SheetActionRow` (56dp, icon + label,
+  danger color for destructive ones). Slides up over a fading scrim.
+- **`AppDialog`** — a yes/no question (`destructive = true` paints the confirm button in `danger`). Custom
+  forms use `AppDialogHost` with `DialogPrimaryButton` / `DialogSecondaryButton`. Fades and scales in.
+
+Both stay composed through their exit animation, close on scrim tap and system Back, and swallow taps on
+their own surface. Content derived from nullable state must go through `rememberLast` so it doesn't blank
+mid-exit.
+
+## Motion
+
+Anything that appears, disappears or swaps should ease rather than pop: overlays (above), the `OverflowMenu`,
+`UndoBar`, the dashboard and thread header modes (`AnimatedContent`), filter chips and the thread composer's
+schedule / character-count row (`AnimatedVisibility`), search enter/exit. Durations stay in the 140–260ms range.
+
+## Thread behaviour worth keeping
+
+- A thread opens pinned to its end and stays pinned while the keyboard or reply bar changes size, unless the
+  user scrolls away.
+- Text fields that grow inside a scroll container (`FlatTextField`) scroll to keep the caret visible.
+- A saved draft for a thread is pre-filled (with its schedule) when that thread opens; leaving with text
+  saves it ("Saved to drafts"), sending deletes it.
+
 ## Known debt
 
 Not everything in the app matches this doc yet — some Settings/Backup screens still have one-off

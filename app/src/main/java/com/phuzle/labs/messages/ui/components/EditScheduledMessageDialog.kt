@@ -17,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import com.phuzle.labs.messages.ui.format.formatScheduleTime
 import com.phuzle.labs.messages.ui.model.ScheduledMessageEditUi
 import com.phuzle.labs.messages.ui.theme.IconSizes
@@ -40,13 +39,7 @@ fun EditScheduledMessageDialog(
     val tokens = MessagesTheme.tokens
     val scheduleState = rememberScheduleSendState()
 
-    Dialog(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .widthIn(max = 340.dp)
-                .background(tokens.modalBg, ShapeMedium)
-                .padding(20.dp),
-        ) {
+    AppDialogHost(visible = true, onDismiss = onDismiss, maxWidth = 340.dp, contentPadding = Modifier.padding(20.dp)) {
             Text("Edit scheduled message", color = tokens.modalText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
 
             FlatTextField(
@@ -83,9 +76,8 @@ fun EditScheduledMessageDialog(
             // startup screen in this app uses (see PrimaryButton/SecondaryTextButton), not a
             // side-by-side row: SecondaryTextButton always fills its available width by design,
             // so pairing it with another button in a Row would have them fight over the same space.
-            PrimaryButton(label = "Save", onClick = onSave, modifier = Modifier.padding(top = 20.dp))
-            SecondaryTextButton(label = "Cancel", onClick = onDismiss)
-        }
+            DialogPrimaryButton("Save", onSave, modifier = Modifier.padding(top = 20.dp))
+            DialogSecondaryButton("Cancel", onDismiss)
     }
 
     ScheduleSendDialogs(scheduleState, onScheduled = onTimeChange)

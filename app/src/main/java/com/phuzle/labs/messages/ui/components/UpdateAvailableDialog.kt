@@ -32,42 +32,26 @@ import com.phuzle.labs.messages.ui.theme.ShapeMedium
  * is the one prompt this app still owns in the update process. */
 @Composable
 fun UpdateAvailableDialog(update: UpdateInfoUi?, onUpdate: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
-    if (update == null) return
+    val shown = rememberLast(update) ?: return
     val tokens = MessagesTheme.tokens
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(tokens.overlayBg)
-            .padding(32.dp),
-        contentAlignment = Alignment.Center,
+    AppDialogHost(
+        visible = update != null,
+        onDismiss = onDismiss,
+        modifier = modifier,
+        maxWidth = 300.dp,
+        contentPadding = Modifier.padding(horizontal = 22.dp, vertical = 26.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(
-            modifier = Modifier
-                .widthIn(max = 300.dp)
-                .background(tokens.modalBg, ShapeMedium)
-                .padding(horizontal = 22.dp, vertical = 26.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
             Icon(Icons.Filled.SystemUpdate, contentDescription = null, tint = tokens.accentLabel, modifier = Modifier.size(IconSizes.Large).padding(bottom = 12.dp))
             Text("Update Ready", color = tokens.modalText, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             Text(
-                update.message,
+                shown.message,
                 color = tokens.modalText.copy(alpha = 0.7f),
                 fontSize = 13.5.sp,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 8.dp, bottom = 18.dp),
             )
-            Button(
-                onClick = onUpdate,
-                colors = ButtonDefaults.buttonColors(containerColor = tokens.accentDeep, contentColor = tokens.onAccentDeep),
-                shape = ShapeMedium,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Restart Now", fontWeight = FontWeight.Bold, fontSize = 14.5.sp)
-            }
-            TextButton(onClick = onDismiss) {
-                Text("Later", color = tokens.modalText.copy(alpha = 0.55f), fontSize = 13.sp)
-            }
-        }
+            DialogPrimaryButton("Restart Now", onUpdate)
+            DialogSecondaryButton("Later", onDismiss)
     }
 }

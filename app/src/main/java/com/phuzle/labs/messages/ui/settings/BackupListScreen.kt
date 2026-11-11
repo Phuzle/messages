@@ -126,25 +126,19 @@ fun BackupListScreen(viewModel: AppViewModel) {
     }
 
     val target = pendingLocalRestore
-    if (target != null) {
-        AlertDialog(
-            onDismissRequest = { pendingLocalRestore = null },
-            title = { Text("Restore this backup?") },
-            text = {
-                Text(
-                    "This replaces everything currently on this device with the snapshot from " +
-                        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(target.timestampMillis)) +
-                        ". This can't be undone.",
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { viewModel.restoreLocalBackup(target.fileName); pendingLocalRestore = null }) {
-                    Text("Restore", color = tokens.danger)
-                }
-            },
-            dismissButton = { TextButton(onClick = { pendingLocalRestore = null }) { Text("Cancel") } },
-        )
-    }
+    com.phuzle.labs.messages.ui.components.AppDialog(
+        visible = target != null,
+        onDismiss = { pendingLocalRestore = null },
+        title = "Restore this backup?",
+        message = target?.let {
+            "This replaces everything currently on this device with the snapshot from " +
+                DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it.timestampMillis)) +
+                ". This can't be undone."
+        },
+        confirmLabel = "Restore",
+        onConfirm = { target?.let { viewModel.restoreLocalBackup(it.fileName) }; pendingLocalRestore = null },
+        destructive = true,
+    )
 }
 
 @Composable

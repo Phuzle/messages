@@ -42,25 +42,8 @@ fun SearchFiltersSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (!visible) return
     val tokens = MessagesTheme.tokens
-    Box(modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().background(tokens.overlayBg).clickable(onClick = onDismiss))
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .heightIn(max = 640.dp)
-                .background(tokens.surface, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                .navigationBarsPadding(),
-        ) {
-            Box(
-                Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(top = 10.dp)
-                    .size(width = 32.dp, height = 4.dp)
-                    .background(tokens.textTertiary.copy(alpha = 0.5f), RoundedCornerShape(4.dp)),
-            )
+    AppBottomSheet(visible = visible, onDismiss = onDismiss, modifier = modifier, maxHeight = 640.dp) {
             Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Search filters", color = tokens.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 if (filters.activeCount > 0) {
@@ -88,7 +71,6 @@ fun SearchFiltersSheet(
                     SearchDirection.entries.forEach { PillButton(it.label, filters.direction == it, { onChange(filters.copy(direction = it)) }) }
                 }
             }
-        }
     }
 }
 

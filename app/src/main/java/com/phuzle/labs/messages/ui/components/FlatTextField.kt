@@ -13,6 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,6 +23,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
@@ -68,10 +71,16 @@ fun FlatTextField(
         Modifier
     }
     val resolvedScrollState = scrollState ?: rememberScrollState()
+    // The multi-line field sits inside a manual verticalScroll (so a caller can hoist the scroll
+    // position), and that scroll container never followed the caret: after enough Enters the cursor
+    // slid below the visible area and typing carried on out of sight. The caret rect from the last
+    // text layout plus the viewport height are enough to scroll it back into view ourselves.
+    var viewportHeightPx by remember { mutableStateOf(0) }
+    var textLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
     var fieldModifier = when {
         singleLine -> Modifier.fillMaxWidth()
-        fillHeight -> Modifier.fillMaxSize().verticalScroll(resolvedScrollState)
-        else -> Modifier.fillMaxWidth().heightIn(max = maxHeight).verticalScroll(resolvedScrollState)
+        fillHeight -> Modifier.fillMaxSize().onSizeChanged { viewportHeightPx = it.height }.verticalScroll(resolvedScrollState)
+        else -> Modifier.fillMaxWidth().heightIn(max = maxHeight).onSizeChanged { viewportHeightPx = it.height }.verticalScroll(resolvedScrollState)
     }
     if (focusRequester != null) fieldModifier = fieldModifier.focusRequester(focusRequester)
 
@@ -89,6 +98,19 @@ fun FlatTextField(
         fieldValue = TextFieldValue(value, selection = TextRange(value.length))
     }
 
+    if (!singleLine) {
+        LaunchedEffect(fieldValue.selection.end, fieldValue.text.length, textLayout, viewportHeightPx) {
+            val layout = textLayout ?: return@LaunchedEffect
+            if (viewportHeightPx <= 0 || layout.layoutInput.text.text != fieldValue.text) return@LaunchedEffect
+            val caret = layout.getCursorRect(fieldValue.selection.end.coerceIn(0, fieldValue.text.length))
+            val top = resolvedScrollState.value
+            when {
+                caret.bottom > top + viewportHeightPx -> resolvedScrollState.scrollTo((caret.bottom - viewportHeightPx).toInt() + 1)
+                caret.top < top -> resolvedScrollState.scrollTo(caret.top.toInt().coerceAtLeast(0))
+            }
+        }
+    }
+
     Box(modifier = modifier.then(background), contentAlignment = if (filled || singleLine) Alignment.CenterStart else Alignment.TopStart) {
         if (value.isEmpty()) {
             Text(placeholder, color = placeholderColor ?: tokens.textTertiary, fontSize = fontSize)
@@ -100,6 +122,7 @@ fun FlatTextField(
                 if (new.text != value) onValueChange(new.text)
             },
             textStyle = textStyle,
+            onTextLayout = { textLayout = it },
             singleLine = singleLine,
             keyboardOptions = KeyboardOptions(imeAction = if (singleLine) ImeAction.Default else ImeAction.None),
             cursorBrush = SolidColor(tokens.accent),

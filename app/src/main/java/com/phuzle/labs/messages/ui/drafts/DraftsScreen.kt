@@ -75,19 +75,15 @@ fun DraftsScreen(state: AppUiState, viewModel: AppViewModel) {
         }
     }
 
-    if (showDeleteAllConfirm) {
-        val tokens = MessagesTheme.tokens
-        AlertDialog(
-            onDismissRequest = { showDeleteAllConfirm = false },
-            title = { Text("Delete all ${state.drafts.size} drafts?") },
-            confirmButton = {
-                TextButton(onClick = { viewModel.deleteAllDrafts(); showDeleteAllConfirm = false }) {
-                    Text("Delete all", color = tokens.danger)
-                }
-            },
-            dismissButton = { TextButton(onClick = { showDeleteAllConfirm = false }) { Text("Cancel") } },
-        )
-    }
+    com.phuzle.labs.messages.ui.components.AppDialog(
+        visible = showDeleteAllConfirm,
+        onDismiss = { showDeleteAllConfirm = false },
+        title = "Delete all ${state.drafts.size} drafts?",
+        message = "You can undo this right after.",
+        confirmLabel = "Delete all",
+        onConfirm = { viewModel.deleteAllDrafts(); showDeleteAllConfirm = false },
+        destructive = true,
+    )
 }
 
 /** Matches the flat, flush ThreadRow look — no card/border — so every list in the app reads the same. */
